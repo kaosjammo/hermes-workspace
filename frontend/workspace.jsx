@@ -74,7 +74,7 @@ function NavigationLabel({ item, context, descriptionId }) {
         context && h("small", { title: context.description }, context.caption),
         context && h("span", { className: "ws-title-reader", id: descriptionId }, context.description));
 }
-const Tree = memo(function Tree({ childrenByParent, contexts, parent = null, onOpen, selected }) {
+const Tree = memo(function Tree({ childrenByParent, contexts, parent = null, onOpen, selected, expansion, onToggle }) {
   return h(
     "ul",
     null,
@@ -86,7 +86,10 @@ const Tree = memo(function Tree({ childrenByParent, contexts, parent = null, onO
           item.kind === "folder"
             ? h(
                 "details",
-                { open: true },
+                { open: expansion.overrides.get(item.id) ?? expansion.defaultOpen,
+                  onToggle: event => {
+                    if (event.target === event.currentTarget) onToggle(item.id, event.currentTarget.open);
+                  } },
                 h(
                   "summary",
                   null,
@@ -106,7 +109,7 @@ const Tree = memo(function Tree({ childrenByParent, contexts, parent = null, onO
                     h(NavigationLabel, { item, context: contexts.get(item.id), descriptionId: `ws-tree-context-${item.id}` }),
                   ),
                 ),
-                h(Tree, { childrenByParent, contexts, parent: item.id, onOpen, selected }),
+                h(Tree, { childrenByParent, contexts, parent: item.id, onOpen, selected, expansion, onToggle }),
               )
             : h(
                 "div",
@@ -131,6 +134,26 @@ const Tree = memo(function Tree({ childrenByParent, contexts, parent = null, onO
       ),
   );
 });
+function FolderNavigation({ childrenByParent, contexts, onOpen, selected }) {
+  const treeId = useId();
+  // Navigation-only state survives query snapshots and document changes. New
+  // folders follow the last bulk action; individual disclosures stay independent.
+  const [expansion, setExpansion] = useState(() => ({ defaultOpen: true, overrides: new Map() }));
+  const onToggle = useCallback((id, open) => setExpansion(current => {
+    if ((current.overrides.get(id) ?? current.defaultOpen) === open) return current;
+    const overrides = new Map(current.overrides);
+    overrides.set(id, open);
+    return { ...current, overrides };
+  }), []);
+  const hasFolders = [...childrenByParent.values()].some(items => items.some(item => item.kind === "folder"));
+  return h("div", { className: "ws-folder-navigation" },
+    hasFolders && h("div", { className: "ws-tree-actions", role: "group", "aria-label": "Folder tree actions" },
+      h(Action, { variant: "ghost", "aria-controls": treeId,
+        onClick: () => setExpansion({ defaultOpen: true, overrides: new Map() }) }, "Expand all"),
+      h(Action, { variant: "ghost", "aria-controls": treeId,
+        onClick: () => setExpansion({ defaultOpen: false, overrides: new Map() }) }, "Collapse all")),
+    h("div", { id: treeId }, h(Tree, { childrenByParent, contexts, onOpen, selected, expansion, onToggle })));
+}
 function WorkspaceSource({ ctx, profile, sourceKey }) {
   // Retired in-flight queries must not report into a later mount's client.
   const queryInstance = useId();
@@ -544,7 +567,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
               destination: `${selected ?? 'home'}:${trash}`, onOpen: open, contexts: navContexts }),
             h("h2", null, "Folders and pages"),
             items.length
-              ? h(Tree, { childrenByParent, contexts: navContexts, onOpen: open, selected })
+              ? h(FolderNavigation, { childrenByParent, contexts: navContexts, onOpen: open, selected })
               : h("p", { className: "ws-empty" }, "Create your first page."),
             h("h2", null, "Recents"),
             h(

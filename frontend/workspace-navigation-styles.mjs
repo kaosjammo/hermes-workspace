@@ -5,6 +5,8 @@ export const workspaceNavigationStyles = `
 .ws-body > .ws-nav-resize { grid-column: 2; grid-row: 1; }
 .ws-body > .ws-work { grid-column: 3; grid-row: 1; }
 .ws-nav-content { min-width: 0; }
+.ws-tree-actions { display: flex; flex-wrap: wrap; gap: 2px 4px; margin-block: 0 6px; }
+.ws-tree-actions > [data-slot="button"] { min-height: 2rem; height: auto; padding: 4px 8px; }
 .ws-workspace-search { min-width: 0; }
 .ws-search-results { margin-block: 8px 16px; }
 .ws-search-results > p { margin: 8px 0; }
