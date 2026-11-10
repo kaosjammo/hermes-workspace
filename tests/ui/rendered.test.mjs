@@ -867,7 +867,7 @@ test("failed section consent retires the old approval and re-review requires exp
   await act(async () => root.render(h(Workspace, { ctx }))); await tick();
   await click(button("Section consent"));
   await click(document.getElementById("ws-bubble-consent-comment"));
-  await click(button("Revert section")); await tick(30);
+  await click(document.querySelector('button[aria-label="Revert changes: Review the shade"]')); await tick(30);
   assert.equal(reviews, 1); assert.equal(applications, 0);
   await click(button("Revert section")); await tick(30);
   assert.equal(applications, 1);

@@ -114,9 +114,9 @@ test("delete unresolved/resolved anchored/whole page/database/record only after 
     for (const anchored of [false, true]) {
       await render({ kind, comments: [comment("c1", { resolved, anchor: anchored ? { quote: "Synthetic", start: 0, end: 9 } : null, replies: [{ id: "reply", author: "agent", text: "Synthetic reply" }] }), comment("c2")],
         retained: { replies: { c1: "Remove this draft only", c2: "Keep other draft" } } });
-      await click("Delete comment"); let dialog = document.querySelector('[role="dialog"]');
+      await click("delete comment: Feedback c1"); let dialog = document.querySelector('[role="dialog"]');
       assert.match(dialog.textContent, /all its replies/); await click("Cancel", dialog); assert.equal(current.calls.length, 0);
-      await click("Delete comment"); dialog = document.querySelector('[role="dialog"]');
+      await click("delete comment: Feedback c1"); dialog = document.querySelector('[role="dialog"]');
       await click("Delete comment", dialog);
       assert.deepEqual(current.calls, [{ op: "delete_comment", payload: { id: "c1" } }]);
       assert.deepEqual(current.state.comments.map(c => c.id), ["c2"]);
@@ -130,7 +130,7 @@ test("delete unresolved/resolved anchored/whole page/database/record only after 
 
 test("delete refusal keeps saved discussion, replies and retained reply; locked blocks confirmation", async () => {
   await render({ fail: true, comments: [comment("c1")], retained: { replies: { c1: "Retry draft" } } });
-  await click("Delete comment"); await click("Delete comment", document.querySelector('[role="dialog"]'));
+  await click("delete comment: Feedback c1"); await click("Delete comment", document.querySelector('[role="dialog"]'));
   assert.ok(document.querySelector('[role="dialog"]')); assert.match(document.querySelector('[role="alert"]').textContent, /Synthetic refusal/);
   assert.equal(current.state.comments.length, 1); assert.equal(current.retained.replies.c1, "Retry draft");
   await act(async () => root.render(h(Harness, { locked: true, fail: true, comments: [comment("c1")], retained: current.retained })));

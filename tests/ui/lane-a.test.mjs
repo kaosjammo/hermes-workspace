@@ -656,10 +656,10 @@ try {
           if(await bubble.getAttribute('aria-expanded')!=='true')await bubble.click();
           snapshot=await savedState();assert.equal(snapshot.comments.find(c=>c.id===added[0].id).resolved,true);
         }
-        const card=page.locator('#ws-discussion-'+added[0].id);await card.getByRole('button',{name:'Delete comment',exact:true}).click();
+        const commentActions=bubble.locator('..').locator('.ws-comment-actions');await commentActions.getByRole('button',{name:'delete comment: '+text,exact:true}).click();
         let dialog=page.getByRole('dialog',{name:'Delete comment?',exact:true});await dialog.waitFor();assert.match(await dialog.innerText(),/all its replies/);
         const unchanged=(await savedState()).revision;await dialog.getByRole('button',{name:'Cancel',exact:true}).click();assert.equal((await savedState()).revision,unchanged,'cancel deletes nothing');
-        await card.getByRole('button',{name:'Delete comment',exact:true}).click();dialog=page.getByRole('dialog',{name:'Delete comment?',exact:true});
+        await commentActions.getByRole('button',{name:'delete comment: '+text,exact:true}).click();dialog=page.getByRole('dialog',{name:'Delete comment?',exact:true});
         if(resolved)await shot('resolved-delete-'+kind);
         await dialog.getByRole('button',{name:'Delete comment',exact:true}).click();await dialog.waitFor({state:'hidden'});
         snapshot=await savedState();assert.equal(snapshot.comments.some(c=>c.id===added[0].id),false);assert.equal(snapshot.items.find(i=>i.id===itemId).content,original);
@@ -681,8 +681,8 @@ try {
       await dialog.getByRole('button',{name:'Restore pre-run version',exact:true}).click();await dialog.waitFor({state:'hidden'});assert.match(await editor.innerText(),/Original passage/);assert.match(await editor.innerText(),/Outside content/);
       await open(f.section.item.title);await editor.focus();await editor.press('Control+End');await page.keyboard.type(' Later manual note.');await page.getByText('Content saved',{exact:true}).waitFor();
       const sectionBubble=page.locator('#ws-bubble-'+f.section.comment.id);if(await sectionBubble.getAttribute('aria-expanded')!=='true')await sectionBubble.click();
-      await page.locator('#ws-discussion-'+f.section.comment.id).getByRole('button',{name:'Revert section',exact:true}).click();
-      dialog=page.getByRole('dialog',{name:'Revert section after manual edits?',exact:true});await dialog.waitFor();assert.match(await dialog.innerText(),/unrelated change stays intact/);await shot('section-later-edit-confirm');
+      await sectionBubble.locator('..').getByRole('button',{name:'Revert changes: '+f.section.comment.text,exact:true}).click();
+      dialog=page.getByRole('dialog',{name:'Revert section after manual edits?',exact:true});await dialog.waitFor();assert.match(await dialog.innerText(),/every unrelated change and human reply stays intact/);await shot('section-later-edit-confirm');
       await dialog.getByRole('button',{name:'Revert section',exact:true}).click();await dialog.waitFor({state:'hidden'});
       const final=(await savedState()).items.find(i=>i.id===f.section.item.id);assert.match(final.content,/Original passage/);assert.match(final.content,/Outside content.*Later manual note/);assert.doesNotMatch(final.content,/Agent passage/);await shot('section-restored');
       receipt.recovery={positiveAttachmentUploadAndByteIdenticalDownload:true,preRunRestoreThroughPageActions:true,sectionOnlyRevertAfterExplicitLaterEditConfirmation:true,laterManualOutsideEditPreserved:true,scope:'Actual browser UI -> production HTTP/API/Store under synthetic owner admission; seeded saved runs are synthetic data, not native/provider execution.'};
