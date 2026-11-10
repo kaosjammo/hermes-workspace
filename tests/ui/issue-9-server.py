@@ -16,7 +16,7 @@ store=Store(home)
 original='<h2>Garden field notes</h2><p>North river.</p><p>South garden.</p>'+''.join(f'<p>Observation {i}: keep these surrounding notes.</p>'for i in range(30))
 config={}
 if not store.snapshot()['items']:
-    for name in ['Actions','Delete','Manual','Pending','Cumulative','Later','Detached','Legacy','Touch']:
+    for name in ['Actions','Delete','Manual','Pending','Cumulative','Later','Detached','Legacy','Touch','Stale','Authors']:
         page=store.execute('create_item',{'kind':'page','title':name+' garden','content':original})
         a,b=[store.execute('add_comment',{'item_id':page['id'],'text':label+' feedback '+name,'anchor':{'quote':quote,'prefix':'','suffix':''}})
             for label,quote in [('North','North river.'),('South','South garden.')]]
@@ -33,9 +33,14 @@ if not store.snapshot()['items']:
             second=store.begin_run(page['id'],'synthetic-native-'+name)
             after=after.replace('North stream.','North creek.')
             store.apply_run(second['id'],[{'item_id':page['id'],'patch':{'content':after}}],[{'comment_id':cid,'text':'Later operation '+cid}for cid in second['comment_ids']]);store.finish_run(second['id'],'completed')
-        if name in ['Manual','Delete']:
+        if name in ['Manual','Delete','Stale']:
             store.execute('update_item',{'id':page['id'],'patch':{'content':after.replace('North stream.','North manually edited stream.')+'<p>Keep my outside manual edit.</p>'}})
         if name=='Detached':store.execute('update_item',{'id':page['id'],'patch':{'content':'<p>Replaced whole passage manually.</p>'}})
+        if name=='Authors':
+            def author_fixture(state):
+                comment=next(c for c in state['comments']if c['id']==a['id'])
+                comment['replies'][0]['author_identity']={'kind':'human','id':'f'*64,'name':'庭 🌿 '*18}
+            store._transaction(author_fixture)
         if name=='Legacy':
             def legacy(state):
                 for version in state['versions']:
