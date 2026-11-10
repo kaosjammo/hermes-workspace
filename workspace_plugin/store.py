@@ -813,6 +813,39 @@ class Store:
             raise StoreError(reason or 'The saved change has no exact associated response; use saved history for recovery.',409)
         return links
 
+    def _section_geometry(self, state, comment, item, *, addressed=True):
+        """Follow effective run ancestry, independently of cleanup permission.
+
+        A full Restore clears the current generation and is a hard boundary.
+        Earlier cumulative generations in the SAME run are not ancestors: a
+        section revert restores that run's pre-run version, not an intermediate
+        operation. Uncertain effective changes never fall through to old text.
+        """
+        generations = {g['id']:(v,g) for v in state['versions'] if v['item_id']==item['id']
+                       for g in v.get('_section_provenance',[])}
+        ident, seen, reverted = item.get('_section_generation'), set(), False
+        if not ident:
+            raise SectionUnavailable('A full-page Restore or missing generation prevents exact passage recovery.')
+        while ident:
+            if ident in seen or ident not in generations:
+                raise SectionUnavailable('The effective passage history is incomplete or ambiguous.')
+            seen.add(ident)
+            version,generation = generations[ident]
+            change = next((c for c in generation['changes'] if c['comment_id']==comment['id']),None)
+            if change:
+                if not change.get('reverted_at'):
+                    plan = plan_revert(change,generation['post_content'],item['content'],_plain,_content)
+                    return {'anchor':addressed_anchor(change,plan,item['content'],_plain) if addressed else plan['anchor'],
+                            'highlight_generation_id':generation['id'],'highlight_change_id':change['id']}
+                reverted = True
+            ident = version['snapshot'].get('_section_generation')
+        if reverted:
+            # Only verified reverted ancestry can return to the precise original
+            # human selection. Never use this as a full-Restore/stale fallback.
+            locate_anchor(_plain(item['content']),comment['anchor'])
+            return {'anchor':copy.deepcopy(comment['anchor'])}
+        raise SectionUnavailable('No independently exact effective passage remains in this history.')
+
     def _section_view(self, state, comment):
         if not comment['anchor']:
             return None
@@ -830,29 +863,19 @@ class Store:
                 if item['deleted_at'] is not None:
                     return dict(result,status='unavailable',reason='Restore the page from Trash before reviewing this section.')
                 if item.get('_section_generation') != generation['id']:
-                    return dict(result,status='unavailable',reason='A later agent change or full-page Restore superseded this section.')
-                if change.get('reverted_at'):
-                    # Reverted history is durable. Planning another patch against
-                    # post-agent markup can fail precisely because it was restored.
-                    # Keep the original comment anchor's conservative mapping.
-                    return dict(result,status='reverted')
-                try:
-                    # Passage geometry is independent of response-deletion
-                    # authority (including imported and legacy associations).
-                    plan = plan_revert(change,generation['post_content'],item['content'],_plain,_content)
+                    result.update(status='unavailable',reason='A later agent change or full-page Restore superseded this section.')
+                elif change.get('reverted_at'):
+                    result['status'] = 'reverted'
+                else:
                     try:
-                        result['anchor'] = addressed_anchor(change,plan,item['content'],_plain)
-                        result['highlight_status'] = 'available'
-                    except SectionUnavailable as exc:
-                        result['highlight_status'] = 'unavailable'
-                        result['highlight_reason'] = str(exc)
-                except SectionUnavailable as exc:
-                    return dict(result,status='unavailable',reason=str(exc),highlight_reason=str(exc))
+                        self._section_plan(generation,change,item)
+                        self._section_responses(version,generation,change)
+                    except StoreError as exc:
+                        result.update(status='unavailable',reason=str(exc))
                 try:
-                    self._section_plan(generation,change,item)
-                    self._section_responses(version,generation,change)
-                except StoreError as exc:
-                    return dict(result,status='unavailable',reason=str(exc))
+                    result.update(self._section_geometry(state,comment,item),highlight_status='available')
+                except SectionUnavailable as exc:
+                    result['highlight_reason'] = str(exc)
                 return result
         return None
 
@@ -867,18 +890,14 @@ class Store:
             try:
                 locate_anchor(_plain(before),anchor)
             except SectionUnavailable:
-                # A later run may address a passage changed by an earlier run.
-                # Its pre-run snapshot retains that exact earlier generation.
-                old_generation = version['snapshot'].get('_section_generation')
-                for old in state['versions']:
-                    generation = next((g for g in old.get('_section_provenance',[]) if g['id']==old_generation),None)
-                    change = next((c for c in generation['changes'] if c['comment_id']==comment['id']),None) if generation else None
-                    if change:
-                        try:
-                            anchor = plan_revert(change,generation['post_content'],before,_plain,_content)['anchor']
-                        except SectionUnavailable:
-                            anchor_limitations.add(comment['id'])
-                        break
+                # The immediately preceding run may have changed only another
+                # passage. Follow the same effective ancestry, retaining the
+                # COMPLETE saved region for operation association, not merely
+                # the narrower addressed-word highlight.
+                try:
+                    anchor = self._section_geometry(state,comment,version['snapshot'],addressed=False)['anchor']
+                except SectionUnavailable:
+                    anchor_limitations.add(comment['id'])
             anchors[comment['id']] = copy.deepcopy(anchor)
         if not anchors and not item.get('_section_generation'):
             return
@@ -1771,7 +1790,8 @@ class Store:
                 parsed = datetime.fromisoformat(value)
                 if parsed.tzinfo is None:
                     raise ValueError()
-            except ValueError as exc:
+                return parsed.astimezone(timezone.utc)
+            except (ValueError,OverflowError) as exc:
                 raise StoreError('Timestamps must be ISO dates with timezone') from exc
 
         def item_shape(item, historical=False):
@@ -2025,16 +2045,26 @@ class Store:
             if receipt['removed_reply_ids'] != [entry.get('reply',{}).get('id') for entry in removed]:
                 raise StoreError('Section cleanup archive mismatch')
             linked_ids = [rid for link in links for rid in link['reply_ids']]
-            tombstoned = bool(comment_map[change['comment_id']].get('_deleted_at'))
+            comment = comment_map[change['comment_id']]
+            deleted_at = comment.get('_deleted_at')
+            cleanup_at, reverted_at = timestamp(version['created_at']),timestamp(change['reverted_at'])
+            if cleanup_at > reverted_at:
+                raise StoreError('Section cleanup checkpoint chronology is inconsistent')
+            deletion = timestamp(deleted_at) if deleted_at else None
+            if deletion and deletion < timestamp(comment['created_at']):
+                raise StoreError('Discussion deletion predates its creation')
             mode = receipt.get('cleanup_mode')
             if mode is not None and mode not in ('responses_archived','discussion_deleted'):
                 raise StoreError('Invalid section cleanup mode')
-            if mode == 'discussion_deleted' and (not tombstoned or removed):
-                raise StoreError('Deleted-discussion cleanup must reference its tombstone and remove no responses')
-            # Older empty receipts are legitimate only when the discussion was
-            # explicitly deleted already. Otherwise every associated ID must
-            # have its complete archived response in THIS unique checkpoint.
-            deleted_before = tombstoned and not removed and mode != 'responses_archived'
+            # Missing legacy mode is not evidence of deletion order. Empty
+            # archives require strictly earlier deletion in UTC; equal/coarse
+            # timestamps are ambiguous and cannot excuse lost response data.
+            deleted_before = (deletion is not None and deletion < cleanup_at and
+                              not removed and mode != 'responses_archived')
+            if mode == 'discussion_deleted' and not deleted_before:
+                raise StoreError('Deleted-discussion cleanup requires proven deletion before cleanup and no removed responses')
+            if removed and deletion is not None and deletion <= reverted_at:
+                raise StoreError('Archived responses conflict with the discussion deletion chronology')
             if (not deleted_before and set(receipt['removed_reply_ids']) != set(linked_ids)
                     or len(set(receipt['removed_reply_ids'])) != len(removed)):
                 raise StoreError('Section cleanup response archive is incomplete or unrelated')
