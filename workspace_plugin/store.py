@@ -824,6 +824,7 @@ class Store:
         generations = {g['id']:(v,g) for v in state['versions'] if v['item_id']==item['id']
                        for g in v.get('_section_provenance',[])}
         ident, seen, reverted = item.get('_section_generation'), set(), False
+        unchanged = None
         if not ident:
             raise SectionUnavailable('A full-page Restore or missing generation prevents exact passage recovery.')
         while ident:
@@ -838,7 +839,21 @@ class Store:
                     return {'anchor':addressed_anchor(change,plan,item['content'],_plain) if addressed else plan['anchor'],
                             'highlight_generation_id':generation['id'],'highlight_change_id':change['id']}
                 reverted = True
+            elif unchanged is None and generation.get('mapping_version') == 2 and comment['id'] in generation['anchors']:
+                # A cumulative roundtrip can omit this passage from changes.
+                # Prove that omission from validated before/post/anchor facts,
+                # then map the exact saved selection through both documents.
+                # Keep walking: an earlier effective change has a narrower
+                # addressed highlight, and broken ancestry must still refuse.
+                before,post = version['snapshot']['content'],generation['post_content']
+                captured = capture_sections(before,post,generation['anchors'],_plain,exact_boundaries=True)
+                if comment['id'] not in captured:
+                    anchor = map_anchor(before,post,generation['anchors'][comment['id']],_plain,_content)
+                    unchanged = {'anchor':map_anchor(post,item['content'],anchor,_plain,_content),
+                                 'highlight_generation_id':generation['id'],'highlight_basis':'no_effect'}
             ident = version['snapshot'].get('_section_generation')
+        if unchanged is not None:
+            return unchanged
         if reverted:
             # Only verified reverted ancestry can return to the precise original
             # human selection. Never use this as a full-Restore/stale fallback.
@@ -874,6 +889,8 @@ class Store:
                         result.update(status='unavailable',reason=str(exc))
                 try:
                     result.update(self._section_geometry(state,comment,item),highlight_status='available')
+                    if result['status'] == 'unavailable' and result.get('highlight_basis') == 'no_effect':
+                        result['reason'] = 'These recorded operations leave this passage unchanged; no eligible section change remains to revert.'
                 except SectionUnavailable as exc:
                     result['highlight_reason'] = str(exc)
                 return result
