@@ -232,7 +232,7 @@ function sanitizeHTML(html, doc = globalThis.document) {
 function commentAnchor(comment) {
   const change = comment.section_change;
   if (!change || change.status === "reverted") return comment.anchor;
-  if (change.status === "available" && change.anchor) return change.anchor;
+  if (change.anchor && (change.highlight_status === "available" || change.status === "available" && change.highlight_status !== "unavailable")) return change.anchor;
   return comment.anchor ? { ...comment.anchor, unavailable: true } : null;
 }
 function locateAnchor(text, anchor) {
