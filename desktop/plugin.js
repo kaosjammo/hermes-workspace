@@ -1,16 +1,16 @@
 // frontend/index.jsx
 import { createElement as h2 } from "react";
-import { ROUTES_AREA, SIDEBAR_NAV_AREA, host as host3, gatewayActivationEpoch as gatewayActivationEpoch3 } from "@hermes/plugin-sdk";
+import { ROUTES_AREA, SIDEBAR_NAV_AREA, host as host4, gatewayActivationEpoch as gatewayActivationEpoch3 } from "@hermes/plugin-sdk";
 
 // frontend/workspace.jsx
 import {
   useCallback as useCallback4,
-  useEffect as useEffect7,
+  useEffect as useEffect8,
   useId as useId6,
   useLayoutEffect as useLayoutEffect9,
-  useMemo as useMemo2,
-  useRef as useRef14,
-  useState as useState14,
+  useMemo as useMemo3,
+  useRef as useRef15,
+  useState as useState15,
   useSyncExternalStore,
   memo
 } from "react";
@@ -142,7 +142,7 @@ function navigationOrderPayload(state, request) {
 
 // frontend/workspace.jsx
 import {
-  host as host2,
+  host as host3,
   useValue,
   useQuery,
   useGatewayActivationEpoch,
@@ -1470,7 +1470,7 @@ var WorkspaceClient = class {
     if (this.value?.scope_id === state.scope_id && state.revision < this.value.revision)
       return;
     if (this.value?.scope_id !== state.scope_id) this.scopeVersion++;
-    this.value = state;
+    this.value = state.identity || this.value?.scope_id !== state.scope_id ? state : { ...state, identity: this.value?.identity };
     for (const fn of this.listeners) fn();
   }
   assertScope(scope) {
@@ -1590,7 +1590,7 @@ var WorkspaceClient = class {
       if (generation !== this.scopeVersion) throw new StaleWorkspaceError();
       if (response.state && response.state.scope_id !== scope)
         throw new StaleWorkspaceError();
-      if (response.state) this.accept(response.state);
+      if (response.state) this.accept(response.identity ? { ...response.state, identity: response.identity } : response.state);
       return response.result;
     };
     const result = this.queue.then(invoke);
@@ -5867,7 +5867,7 @@ function ScopeReviewDialog({
 }
 
 // frontend/comments.jsx
-import { useCallback as useCallback3, useEffect as useEffect6, useId as useId5, useLayoutEffect as useLayoutEffect8, useRef as useRef13, useState as useState13 } from "react";
+import { useCallback as useCallback3, useEffect as useEffect7, useId as useId5, useLayoutEffect as useLayoutEffect8, useRef as useRef14, useState as useState14 } from "react";
 import { Checkbox as Checkbox3, Textarea as Textarea2, Popover as Popover3, PopoverTrigger as PopoverTrigger3, PopoverContent as PopoverContent3, Tip as Tip2 } from "@hermes/plugin-sdk";
 
 // frontend/comment-bubbles.jsx
@@ -6228,6 +6228,15 @@ function ThreadPicker({ workflow, itemId, locked, onBound, onClose }) {
 // frontend/comment-styles.mjs
 var commentStyles = `
 .ws-comment-surfaces { display: contents; }
+.ws-author { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:100%; vertical-align:middle; }
+.ws-author-avatar { display:inline-flex; flex:0 0 20px; width:20px; height:20px; align-items:center; justify-content:center; border-radius:50%; overflow:hidden; background:var(--ui-bg-elevated); color:var(--ui-text-secondary); font-size:11px; font-weight:600; }
+.ws-author-avatar img { width:20px; height:20px; object-fit:cover; }
+.ws-author-name { min-width:0; overflow-wrap:anywhere; white-space:normal; text-align:left; color:var(--ui-text-primary); font-size:12px; line-height:1.4; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.ws-bubble-author { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:4px 8px; width:100%; min-width:0; }
+.ws-bubble-author .ws-author { flex:1 1 100px; }
+.ws-bubble-author .ws-bubble-context { flex:0 1 auto; }
+.ws-username-dialog { width:min(24rem,calc(100% - 24px)); }
+.ws-username-dialog input { width:100%; min-width:0; }
 .ws-anchor-recovery summary { cursor:pointer; color:var(--ui-text-secondary); }
 .ws-anchor-recovery blockquote { margin:8px 0 0; max-height:8rem; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
 .ws-anchor-recovery summary:focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; }
@@ -6258,6 +6267,217 @@ var commentStyles = `
 .ws-related-scope .ws-comment { padding:8px; margin-block:6px; }
 `;
 
+// frontend/identity.jsx
+import { createContext, useContext, useEffect as useEffect6, useMemo as useMemo2, useRef as useRef13, useState as useState13 } from "react";
+import { host } from "@hermes/plugin-sdk";
+import { Dialog as Dialog5, DialogContent as DialogContent5, DialogHeader as DialogHeader5, DialogTitle as DialogTitle5, DialogDescription as DialogDescription5, DialogFooter as DialogFooter5 } from "@hermes/plugin-sdk";
+
+// frontend/identity.mjs
+var MAX_AVATAR_BYTES = 256 * 1024;
+function boundedDimensions(bytes, mime) {
+  const b = (i) => bytes.charCodeAt(i), le = (i, n) => Array.from({ length: n }, (_, k) => b(i + k) * 2 ** (8 * k)).reduce((a, v) => a + v, 0);
+  let width, height;
+  if (mime === "image/png" && bytes.length >= 24 && bytes.slice(12, 16) === "IHDR") {
+    const be = (i) => b(i) * 2 ** 24 + b(i + 1) * 2 ** 16 + b(i + 2) * 256 + b(i + 3);
+    width = be(16);
+    height = be(20);
+  } else if (mime === "image/webp" && bytes.length >= 30) {
+    const kind = bytes.slice(12, 16);
+    if (kind === "VP8X") {
+      width = le(24, 3) + 1;
+      height = le(27, 3) + 1;
+    } else if (kind === "VP8 " && bytes.slice(23, 26) === "\x9D*") {
+      width = le(26, 2) & 16383;
+      height = le(28, 2) & 16383;
+    } else if (kind === "VP8L" && b(20) === 47) {
+      width = 1 + (le(21, 2) & 16383);
+      height = 1 + (le(22, 3) >> 6 & 16383);
+    }
+  } else if (mime === "image/jpeg") {
+    let i = 2;
+    while (i + 8 < bytes.length) {
+      if (b(i++) !== 255) return false;
+      while (b(i) === 255) i++;
+      const marker = b(i++);
+      if (marker === 217 || marker === 218) break;
+      if (marker === 1 || marker >= 208 && marker <= 215) continue;
+      const size = b(i) * 256 + b(i + 1);
+      if (size < 2 || i + size > bytes.length) return false;
+      if ([192, 193, 194, 195, 197, 198, 199, 201, 202, 203, 205, 206, 207].includes(marker)) {
+        height = b(i + 3) * 256 + b(i + 4);
+        width = b(i + 5) * 256 + b(i + 6);
+        break;
+      }
+      i += size;
+    }
+  }
+  return width > 0 && height > 0 && width <= 2048 && height <= 2048 && width * height <= 4194304;
+}
+function avatarData(result) {
+  if (result?.found !== true || !Number.isInteger(result.size) || result.size < 12 || result.size > MAX_AVATAR_BYTES) return null;
+  if (!["image/png", "image/jpeg", "image/webp"].includes(result.mime) || typeof result.data !== "string") return null;
+  const prefix = `data:${result.mime};base64,`;
+  if (!result.data.startsWith(prefix) || result.data.length > prefix.length + 4 * Math.ceil(MAX_AVATAR_BYTES / 3)) return null;
+  const encoded = result.data.slice(prefix.length);
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) return null;
+  let bytes;
+  try {
+    bytes = atob(encoded);
+  } catch {
+    return null;
+  }
+  if (bytes.length !== result.size) return null;
+  const starts = (...magic) => magic.every((n, i) => bytes.charCodeAt(i) === n);
+  const valid = result.mime === "image/png" ? starts(137, 80, 78, 71, 13, 10, 26, 10) : result.mime === "image/jpeg" ? starts(255, 216, 255) : bytes.slice(0, 4) === "RIFF" && bytes.slice(8, 12) === "WEBP";
+  return valid && boundedDimensions(bytes, result.mime) ? result.data : null;
+}
+function createIdentityBridge(client, host5) {
+  return async (author) => {
+    client.assertCurrent();
+    const state = client.snapshot(), source = state?.identity?.source_id;
+    const [connectionId, profile] = JSON.parse(client.owner);
+    if (!source || author?.kind !== "agent" || author.avatar_eligible !== true || author.source_id !== source || author.profile !== profile) return null;
+    const scope = state.scope_id, generation = client.scopeVersion;
+    const check = () => {
+      client.assertScope(scope);
+      if (client.scopeVersion !== generation || client.snapshot()?.identity?.source_id !== source)
+        throw new Error("Workspace author source changed.");
+    };
+    const routes = await host5.profileRoutes();
+    check();
+    const matches = routes.filter((route2) => route2.connectionId === connectionId && route2.profile === author.profile);
+    if (matches.length !== 1) return null;
+    const route = Object.freeze({ ...matches[0] });
+    const result = await host5.requestProfile(route, "profiles.get_asset", {
+      name: author.profile,
+      asset: "avatar",
+      profile: route.targetProfile
+    });
+    check();
+    return avatarData(result);
+  };
+}
+function authorName(entry) {
+  return entry?.author_identity?.name || (entry?.author === "agent" ? "Hermes" : "user");
+}
+
+// frontend/identity.jsx
+var IdentityContext = createContext(null);
+function IdentityProvider({ client, children }) {
+  const loadAvatar = useMemo2(() => createIdentityBridge(client, host), [client]);
+  return h(IdentityContext.Provider, { value: loadAvatar }, children);
+}
+function AuthorHeader({ entry }) {
+  const loadAvatar = useContext(IdentityContext), author = entry?.author_identity;
+  const name = authorName(entry), [loaded, setLoaded] = useState13(null);
+  const key = JSON.stringify(author);
+  const image = loaded && loaded.key === key ? loaded.data : null;
+  const pending = Boolean(loadAvatar && author?.kind === "agent" && (!loaded || loaded.key !== key));
+  useEffect6(() => {
+    let current = true;
+    setLoaded(null);
+    if (loadAvatar && author?.kind === "agent")
+      void loadAvatar(author).then((data) => {
+        if (current) setLoaded({ key, data });
+      }).catch(() => {
+        if (current) setLoaded({ key, data: null });
+      });
+    return () => {
+      current = false;
+    };
+  }, [loadAvatar, key]);
+  return h(
+    "span",
+    { className: "ws-author", title: name, "aria-busy": pending },
+    h("span", { className: "ws-author-avatar", "aria-hidden": true, "data-avatar-state": pending ? "loading" : image ? "image" : "fallback" }, image ? h("img", {
+      src: image,
+      alt: "",
+      width: 20,
+      height: 20,
+      referrerPolicy: "no-referrer",
+      onLoad: (e) => {
+        if (e.currentTarget.naturalWidth > 2048 || e.currentTarget.naturalHeight > 2048) setLoaded({ key, data: null });
+      },
+      onError: () => setLoaded({ key, data: null })
+    }) : h("span", null, Array.from(name)[0]?.toLocaleUpperCase() || "\u2022")),
+    h("strong", { className: "ws-author-name" }, name)
+  );
+}
+function UsernameDialog({ client, onClose, returnFocus }) {
+  const initial = client.snapshot()?.identity?.human?.name ?? "user";
+  const [value, setValue] = useState13(initial === "user" ? "" : initial);
+  const [busy, setBusy] = useState13(false), [error, setError] = useState13("");
+  const pending = useRef13(false), opener = useRef13(returnFocus ?? document.activeElement);
+  const save = async (name) => {
+    if (pending.current) return;
+    pending.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await client.command("set_username", { name });
+      onClose();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
+  };
+  return h(
+    Dialog5,
+    { open: true, onOpenChange: (open) => {
+      if (!open && !pending.current) onClose();
+    } },
+    h(
+      DialogContent5,
+      {
+        className: "ws-dialog ws-username-dialog",
+        style: { width: "min(24rem,calc(100% - 24px))" },
+        showCloseButton: !busy,
+        onCloseAutoFocus: (e) => {
+          e.preventDefault();
+          if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
+        }
+      },
+      h(
+        DialogHeader5,
+        null,
+        h(DialogTitle5, null, "Set username"),
+        h(DialogDescription5, null, "Shown on your comments and replies. Leave blank to use user.")
+      ),
+      h(
+        "form",
+        {
+          onSubmit: (e) => {
+            e.preventDefault();
+            void save(value);
+          },
+          onKeyDown: (e) => {
+            if (e.key === "Enter" && !isSubmitEnter2(e)) e.preventDefault();
+          }
+        },
+        h("label", { className: "ws-field" }, "Username", h(Input, {
+          value,
+          disabled: busy,
+          "aria-label": "Username",
+          "aria-invalid": Boolean(error),
+          "aria-describedby": error ? "ws-username-error" : void 0,
+          autoComplete: "off",
+          onChange: (e) => setValue(e.target.value)
+        })),
+        error && h("p", { id: "ws-username-error", role: "alert" }, error),
+        h(
+          DialogFooter5,
+          { className: "ws-dialog-footer" },
+          h(Action, { disabled: busy, onClick: () => void save("") }, "Reset to user"),
+          h(Action, { disabled: busy, onClick: onClose }, "Cancel"),
+          h(Action, { type: "submit", disabled: busy }, busy ? "Saving\u2026" : "Save")
+        )
+      )
+    )
+  );
+}
+
 // frontend/comments.jsx
 function Comment({
   comment,
@@ -6282,7 +6502,7 @@ function Comment({
   onDelete = () => {
   }
 }) {
-  const [reply, setReply] = useState13(retainedReply), [busy, setBusy] = useState13(false), [replyOpen, setReplyOpen] = useState13(Boolean(retainedReply));
+  const [reply, setReply] = useState14(retainedReply), [busy, setBusy] = useState14(false), [replyOpen, setReplyOpen] = useState14(Boolean(retainedReply));
   const location = locateAnchor(text, comment.anchor);
   return h(
     "article",
@@ -6300,7 +6520,8 @@ function Comment({
       h(
         "strong",
         null,
-        passageNumber ? `You \xB7 Comment ${passageNumber}` : "You"
+        h(AuthorHeader, { entry: comment }),
+        passageNumber ? ` \xB7 Comment ${passageNumber}` : ""
       ),
       h(
         "span",
@@ -6390,7 +6611,7 @@ function Comment({
       (reply2) => h(
         "div",
         { className: "ws-reply", key: reply2.id },
-        h("strong", null, reply2.author === "agent" ? "Hermes" : "You"),
+        h(AuthorHeader, { entry: reply2 }),
         h("p", null, reply2.text)
       )
     ),
@@ -6471,17 +6692,17 @@ function Comments({
   onRevertSection = () => {
   }
 }) {
-  const retained = useRef13(draftBuffer?.read()?.draft ?? {});
+  const retained = useRef14(draftBuffer?.read()?.draft ?? {});
   const composerId = useId5();
-  const resolvedControl = useRef13(null);
-  const resolvedAction = useRef13(null), composeFromOptions = useRef13(false);
-  const [optionsOpen, setOptionsOpen] = useState13(false);
-  const [deleting, setDeleting] = useState13(null);
-  const deletedIds = useRef13(/* @__PURE__ */ new Set());
-  const mutationInFlight = useRef13(false), composing = useRef13(false);
-  const revealFrame = useRef13(null);
-  const saveViewport = useRef13(null);
-  useEffect6(() => () => {
+  const resolvedControl = useRef14(null);
+  const resolvedAction = useRef14(null), composeFromOptions = useRef14(false);
+  const [optionsOpen, setOptionsOpen] = useState14(false);
+  const [deleting, setDeleting] = useState14(null);
+  const deletedIds = useRef14(/* @__PURE__ */ new Set());
+  const mutationInFlight = useRef14(false), composing = useRef14(false);
+  const revealFrame = useRef14(null);
+  const saveViewport = useRef14(null);
+  useEffect7(() => () => {
     window.cancelAnimationFrame?.(revealFrame.current);
     saveViewport.current?.stop();
   }, []);
@@ -6520,14 +6741,14 @@ function Comments({
       });
     }
   });
-  const [resolutionFocus, setResolutionFocus] = useState13(null);
-  const discussion = useRef13({
+  const [resolutionFocus, setResolutionFocus] = useState14(null);
+  const discussion = useRef14({
     text: typeof retained.current.text === "string" ? retained.current.text : "",
     targets: Array.isArray(retained.current.targets) ? retained.current.targets.filter((id) => typeof id === "string") : [],
     anchor: retained.current.anchor ?? null,
     replies: Object.fromEntries(Object.entries(retained.current.replies ?? {}).filter(([, value]) => typeof value === "string"))
   });
-  const retentionError = useRef13(null), [hasDraft, setHasDraft] = useState13(Boolean(draftBuffer?.read()));
+  const retentionError = useRef14(null), [hasDraft, setHasDraft] = useState14(Boolean(draftBuffer?.read()));
   const persist = (patch) => {
     discussion.current = { ...discussion.current, ...patch };
     const saved = discussion.current, meaningful = Boolean(saved.text || saved.targets.length || saved.anchor || Object.values(saved.replies).some(Boolean));
@@ -6542,12 +6763,12 @@ function Comments({
     }
   };
   const retainReply = (id, value) => persist({ replies: { ...discussion.current.replies, [id]: value } });
-  const [draft, setDraft] = useState13(discussion.current.text), [busy, setBusy] = useState13(false), [threads, setThreads] = useState13(false), [targets, setTargets] = useState13(discussion.current.targets);
-  const composer = useRef13(null), focusWholePage = useRef13(false);
-  const wholeScopeAction = useRef13(null);
-  const transferComposerFocus = useRef13(false);
-  const composerOwnsFocus = useRef13(false);
-  const composerAnchor = useRef13(anchor), focusComposerOnMount = useRef13(Boolean(anchor));
+  const [draft, setDraft] = useState14(discussion.current.text), [busy, setBusy] = useState14(false), [threads, setThreads] = useState14(false), [targets, setTargets] = useState14(discussion.current.targets);
+  const composer = useRef14(null), focusWholePage = useRef14(false);
+  const wholeScopeAction = useRef14(null);
+  const transferComposerFocus = useRef14(false);
+  const composerOwnsFocus = useRef14(false);
+  const composerAnchor = useRef14(anchor), focusComposerOnMount = useRef14(Boolean(anchor));
   if (composerAnchor.current !== anchor) {
     composerAnchor.current = anchor;
     focusComposerOnMount.current = Boolean(anchor);
@@ -6567,12 +6788,12 @@ function Comments({
       });
     }
   }, []);
-  useEffect6(() => {
+  useEffect7(() => {
     if (JSON.stringify(discussion.current.anchor) !== JSON.stringify(anchor ?? null)) persist({ anchor: anchor ?? null });
     if (anchor || focusWholePage.current) composer.current?.focus({ preventScroll: true });
     focusWholePage.current = false;
   }, [anchor]);
-  useEffect6(() => registerFlush?.(async () => {
+  useEffect7(() => registerFlush?.(async () => {
     if (retentionError.current) throw new UnsavedEditError("Feedback could not be retained. Copy or submit it before leaving.", () => composer.current?.focus());
   }), [registerFlush]);
   const cancel = () => {
@@ -6598,8 +6819,8 @@ function Comments({
   const currentCommentIds = new Set(state.comments.map((c) => c.id));
   for (const id of deletedIds.current) if (!currentCommentIds.has(id)) deletedIds.current.delete(id);
   const all = numberComments(state.comments.filter((c) => c.item_id === item.id && !deletedIds.current.has(c.id))).map((c) => ({ ...c, originalAnchor: c.anchor, anchor: commentAnchor(c) }));
-  const [pageComposerOpen, setPageComposerOpen] = useState13(Boolean(discussion.current.text || discussion.current.targets.length));
-  useEffect6(() => {
+  const [pageComposerOpen, setPageComposerOpen] = useState14(Boolean(discussion.current.text || discussion.current.targets.length));
+  useEffect7(() => {
     const reply = all.find((c) => discussion.current.replies[c.id]);
     if (reply && !activeComment) setActiveComment(reply.id);
   }, []);
@@ -6766,15 +6987,15 @@ function Comments({
           className: "ws-bubble-summary",
           variant: "ghost",
           "aria-expanded": selected,
-          "aria-label": `${context}: ${comment.text} \xB7 ${selected ? "Collapse thread" : "Open thread"}`,
+          "aria-label": `${context}: ${comment.text} \xB7 ${authorName(comment)} \xB7 ${selected ? "Collapse thread" : "Open thread"}`,
           "aria-controls": selected ? `ws-discussion-${comment.id}` : void 0,
           onClick: () => selected ? setActiveComment(null) : select(comment.id)
         },
-        !grouped && h(
+        h(
           "span",
-          { className: "ws-bubble-context" },
-          context,
-          ` \xB7 You${comment.resolved ? " \xB7 Resolved" : ""}`
+          { className: "ws-bubble-author" },
+          h(AuthorHeader, { entry: comment }),
+          h("span", { className: "ws-bubble-context" }, `${!grouped ? context : `Comment ${number}`}${comment.resolved ? " \xB7 Resolved" : ""}`)
         ),
         !selected && h("span", { className: "ws-bubble-preview" }, comment.text),
         h("span", { className: "ws-bubble-context" }, `${comment.replies.length} ${comment.replies.length === 1 ? "reply" : "replies"} \xB7 ${selected ? "Collapse thread" : "Open thread"}${discussion.current.replies[comment.id] ? " \xB7 Draft reply" : ""}`)
@@ -6997,14 +7218,14 @@ function Comments({
 }
 
 // frontend/workflow.js
-import { host, gatewayActivationEpoch } from "@hermes/plugin-sdk";
+import { host as host2, gatewayActivationEpoch } from "@hermes/plugin-sdk";
 function createWorkflowAdapter(ctx) {
   let disposed = false;
   const owners = /* @__PURE__ */ new Map();
   const creations = /* @__PURE__ */ new Map();
   let threadSelections = /* @__PURE__ */ new WeakMap();
   const selectedOwner = () => {
-    const owner = { connectionId: host.activeConnectionId(), profile: host.state.profile.get() };
+    const owner = { connectionId: host2.activeConnectionId(), profile: host2.state.profile.get() };
     if (!owner?.connectionId || !owner?.profile) throw new Error("Select a native Hermes profile first.");
     return { connectionId: owner.connectionId, profile: owner.profile };
   };
@@ -7015,7 +7236,7 @@ function createWorkflowAdapter(ctx) {
       throw new Error("Hermes profile or connection changed. Reopen Workspace before continuing.");
   };
   const routeFor = async (token) => {
-    const routes = await host.profileRoutes();
+    const routes = await host2.profileRoutes();
     check(token);
     const matches = routes.filter((r) => r.connectionId === token.owner.connectionId && r.profile === token.owner.profile);
     if (matches.length !== 1) throw new Error("The selected Hermes profile route is unavailable or ambiguous.");
@@ -7023,7 +7244,7 @@ function createWorkflowAdapter(ctx) {
   };
   const rpc = async (token, route, method, params) => {
     check(token);
-    const result = await host.requestProfile(route, method, { ...params, profile: route.targetProfile });
+    const result = await host2.requestProfile(route, method, { ...params, profile: route.targetProfile });
     check(token);
     return result;
   };
@@ -7155,7 +7376,7 @@ function createWorkflowAdapter(ctx) {
       const token = capture();
       const route = await routeFor(token);
       check(token);
-      await host.openSession(threadId, { route, intent: "tab", keepAllProfilesScope: true });
+      await host2.openSession(threadId, { route, intent: "tab", keepAllProfilesScope: true });
       check(token);
     },
     dispose() {
@@ -7171,12 +7392,12 @@ function createWorkflowAdapter(ctx) {
 
 // frontend/workspace.jsx
 var ownerNow = () => [
-  host2.activeConnectionId(),
-  host2.state.profile.get(),
+  host3.activeConnectionId(),
+  host3.state.profile.get(),
   gatewayActivationEpoch2()
 ];
 function Workspace({ ctx }) {
-  const profile = useValue(host2.state.profile), connection = useValue(host2.state.connectionId), epoch = useGatewayActivationEpoch();
+  const profile = useValue(host3.state.profile), connection = useValue(host3.state.connectionId), epoch = useGatewayActivationEpoch();
   const key = JSON.stringify([connection, profile, epoch]);
   return h(
     "div",
@@ -7297,7 +7518,7 @@ var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOp
 });
 function FolderNavigation({ childrenByParent, contexts, onOpen, selected, scope, reorder }) {
   const treeId = useId6();
-  const tree = useRef14(null), defaultOpen = useRef14(true);
+  const tree = useRef15(null), defaultOpen = useRef15(true);
   const initializeDisclosure = useCallback4((node) => {
     if (node) node.open = defaultOpen.current;
   }, []);
@@ -7307,9 +7528,9 @@ function FolderNavigation({ childrenByParent, contexts, onOpen, selected, scope,
       node.open = open;
     });
   }, []);
-  const [mode, setMode] = useState14(false), [pending, setPending] = useState14(false), [feedback, setFeedback] = useState14({ text: "", failed: false }), [target, setTarget] = useState14(null);
-  const busy = useRef14(false), drag = useRef14(null), serial = useRef14(0), toggle = useRef14(null), mounted = useRef14(true);
-  const restoreOrderFocus = useRef14(null);
+  const [mode, setMode] = useState15(false), [pending, setPending] = useState15(false), [feedback, setFeedback] = useState15({ text: "", failed: false }), [target, setTarget] = useState15(null);
+  const busy = useRef15(false), drag = useRef15(null), serial = useRef15(0), toggle = useRef15(null), mounted = useRef15(true);
+  const restoreOrderFocus = useRef15(null);
   const helpId = `${treeId}-order-help`, mime = "application/x-hermes-workspace-order";
   const signature = JSON.stringify([...childrenByParent].map(([parent, rows]) => [parent, rows.map((row) => row.id)]));
   useLayoutEffect9(() => {
@@ -7325,7 +7546,7 @@ function FolderNavigation({ childrenByParent, contexts, onOpen, selected, scope,
     const destination = node.isConnected && !node.disabled ? node : row?.querySelector(".ws-order-handle:not(:disabled)");
     destination?.focus({ preventScroll: true });
   }, [pending, scope]);
-  useEffect7(() => () => {
+  useEffect8(() => () => {
     mounted.current = false;
     drag.current = null;
   }, []);
@@ -7469,14 +7690,14 @@ function FolderNavigation({ childrenByParent, contexts, onOpen, selected, scope,
 }
 function WorkspaceSource({ ctx, profile, sourceKey }) {
   const queryInstance = useId6();
-  const client = useMemo2(
+  const client = useMemo3(
     () => new WorkspaceClient(ctx, ownerNow),
     [ctx, sourceKey]
   );
-  const workflow = useMemo2(() => createWorkflowAdapter(ctx), [ctx, sourceKey]);
+  const workflow = useMemo3(() => createWorkflowAdapter(ctx), [ctx, sourceKey]);
   const navigation = useNavigationResize(ctx.storage, client.owner);
   const compactHeader = navigation.availableWidth > 0 && navigation.availableWidth <= 480;
-  const header = useRef14(null), focusedHeaderAction = useRef14(null);
+  const header = useRef15(null), focusedHeaderAction = useRef15(null);
   useLayoutEffect9(() => {
     if (compactHeader && focusedHeaderAction.current && !focusedHeaderAction.current.isConnected && document.activeElement === document.body)
       header.current?.querySelector('[aria-label="Workspace menu"]')?.focus({ preventScroll: true });
@@ -7486,7 +7707,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
   }, onBlur: () => {
     focusedHeaderAction.current = null;
   } };
-  const drafts = useMemo2(() => {
+  const drafts = useMemo3(() => {
     const [connectionId, ownerProfile] = JSON.parse(client.owner);
     return ctx.storage ? new DraftRepository(ctx.storage, connectionId, ownerProfile) : null;
   }, [ctx.storage, client]);
@@ -7495,17 +7716,18 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
     client.snapshot,
     client.snapshot
   );
-  const [selected, setSelected] = useState14(null), [error, setError] = useState14(""), [dialog, setDialog] = useState14(null), [confirmation, setConfirmation] = useState14(null), [restore, setRestore] = useState14(null), [replacementLoad, setReplacementLoad] = useState14(null), [notice, setNotice] = useState14(""), [trash, setTrash] = useState14(false), [navExpanded, setNavExpanded] = useState14(false), [errorAction, setErrorAction] = useState14("action"), [errorContext, setErrorContext] = useState14(null);
-  const navId = useId6(), navToggle = useRef14(null), workPane = useRef14(null);
-  const importing = useRef14(false), [importBusy, setImportBusy] = useState14(false), [importedItem, setImportedItem] = useState14(null);
+  const [usernameDialog, setUsernameDialog] = useState15(null);
+  const [selected, setSelected] = useState15(null), [error, setError] = useState15(""), [dialog, setDialog] = useState15(null), [confirmation, setConfirmation] = useState15(null), [restore, setRestore] = useState15(null), [replacementLoad, setReplacementLoad] = useState15(null), [notice, setNotice] = useState15(""), [trash, setTrash] = useState15(false), [navExpanded, setNavExpanded] = useState15(false), [errorAction, setErrorAction] = useState15("action"), [errorContext, setErrorContext] = useState15(null);
+  const navId = useId6(), navToggle = useRef15(null), workPane = useRef15(null);
+  const importing = useRef15(false), [importBusy, setImportBusy] = useState15(false), [importedItem, setImportedItem] = useState15(null);
   useLayoutEffect9(() => {
     if (workPane.current) {
       workPane.current.scrollTop = 0;
       workPane.current.scrollLeft = 0;
     }
   }, [selected, trash]);
-  const importInput = useRef14(null), backupInput = useRef14(null), flush = useRef14(async () => {
-  }), selectionIntent = useRef14(0);
+  const importInput = useRef15(null), backupInput = useRef15(null), flush = useRef15(async () => {
+  }), selectionIntent = useRef15(0);
   const nextSelectionIntent = useCallback4(() => ++selectionIntent.current, []);
   const report = useCallback4(
     (err, action = "action") => {
@@ -7565,7 +7787,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
   const runs = (state?.runs ?? []).filter(
     (r) => ["running", "pending", "starting", "stopping"].includes(r.status)
   );
-  const runFailureContext = useRef14(null);
+  const runFailureContext = useRef15(null);
   const runQuery = useQuery({
     queryKey: ["workspace-runs", sourceKey, queryInstance, runs.map((r) => r.id).join(",")],
     enabled: runs.length > 0,
@@ -7591,13 +7813,13 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
     gcTime: 0,
     retry: false
   });
-  useEffect7(() => {
+  useEffect8(() => {
     if (queryState.error) report(queryState.error, "load");
   }, [queryState.error, report]);
-  useEffect7(() => {
+  useEffect8(() => {
     if (runQuery.error) report(runQuery.error, runFailureContext.current ?? { operation: "runStatus" });
   }, [runQuery.error, report]);
-  useEffect7(
+  useEffect8(
     () => () => {
       client.dispose();
       workflow.dispose();
@@ -7705,9 +7927,9 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
     client.assertCurrent();
     setDialog({ kind, returnFocus });
   });
-  const items = useMemo2(() => state?.items.filter((i) => !i.deleted_at) ?? [], [state?.items]);
-  const itemIndex = useMemo2(() => new Map(items.map((item2) => [item2.id, item2])), [items]);
-  const childrenByParent = useMemo2(() => {
+  const items = useMemo3(() => state?.items.filter((i) => !i.deleted_at) ?? [], [state?.items]);
+  const itemIndex = useMemo3(() => new Map(items.map((item2) => [item2.id, item2])), [items]);
+  const childrenByParent = useMemo3(() => {
     const index = /* @__PURE__ */ new Map();
     for (const item2 of items) {
       if (item2.kind === "record") continue;
@@ -7717,10 +7939,10 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
     }
     return index;
   }, [items]);
-  const navContexts = useMemo2(() => navigationContexts(state?.items, state?.attachments), [state?.items, state?.attachments]);
+  const navContexts = useMemo3(() => navigationContexts(state?.items, state?.attachments), [state?.items, state?.attachments]);
   const item = itemIndex.get(selected);
   const currentRun = item && activeRun(state, item.id);
-  return h(
+  return h(IdentityProvider, { client }, h(
     "div",
     { className: "ws-root" },
     h(
@@ -7750,6 +7972,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
           await refresh();
           setError("");
         }) }, "Reload state"),
+        h(Action, { disabled: !state, onClick: (_event, opener) => setUsernameDialog({ opener }) }, "set username"),
         h(
           Action,
           { disabled: !state, onClick: (_event, opener) => create("folder", opener) },
@@ -7960,6 +8183,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
         })
       )
     ),
+    usernameDialog && h(UsernameDialog, { client, returnFocus: usernameDialog.opener, onClose: () => setUsernameDialog(null) }),
     dialog && h(CreateDialog, {
       dialog,
       items,
@@ -7992,12 +8216,12 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
         await confirmation.action();
       }
     })
-  );
+  ));
 }
 function Home({ items, state, drafts, onOpen, create, setDialog, contexts, itemIndex }) {
   const descriptionPrefix = useId6();
   const recoverable = drafts ? ["content", "title", "property", "discussion"].flatMap((field) => drafts.list(state.scope_id, field)) : [];
-  const pageRows = useMemo2(
+  const pageRows = useMemo3(
     () => items.filter((item) => item.kind === "page" || item.kind === "database").map((item) => {
       const context = contexts?.get(item.id), description = `${descriptionPrefix}-${item.id}`;
       const parent = itemIndex?.get(item.parent_id);
@@ -8210,19 +8434,19 @@ function Document({
   setDialog
 }) {
   const documentWidth = useDocumentWidth(ctx.storage, client.owner, state.scope_id, item.id);
-  const draftBuffer = useMemo2(
+  const draftBuffer = useMemo3(
     () => drafts?.bind(state.scope_id, item.id) ?? null,
     [drafts, state.scope_id, item.id]
   );
-  const discussionBuffer = useMemo2(() => drafts?.bind(state.scope_id, item.id, "discussion") ?? null, [drafts, state.scope_id, item.id]);
-  const retainedDiscussion = useMemo2(() => discussionBuffer?.read()?.draft ?? null, [discussionBuffer]);
-  const [scopeReview, setScopeReview] = useState14(null);
-  const [commentGeometry, setCommentGeometry] = useState14([]), [hoveredComment, setHoveredComment] = useState14(null);
+  const discussionBuffer = useMemo3(() => drafts?.bind(state.scope_id, item.id, "discussion") ?? null, [drafts, state.scope_id, item.id]);
+  const retainedDiscussion = useMemo3(() => discussionBuffer?.read()?.draft ?? null, [discussionBuffer]);
+  const [scopeReview, setScopeReview] = useState15(null);
+  const [commentGeometry, setCommentGeometry] = useState15([]), [hoveredComment, setHoveredComment] = useState15(null);
   const receiveGeometry = useCallback4((next) => setCommentGeometry((old) => old.length === next.length && old.every((p, i) => p.id === next[i].id && p.block === next[i].block && p.slotBlock === next[i].slotBlock && p.lineGroup === next[i].lineGroup && JSON.stringify(p.anchor) === JSON.stringify(next[i].anchor) && Math.abs(p.top - next[i].top) < 0.5 && Math.abs(p.blockBottom - next[i].blockBottom) < 0.5) ? old : next), []);
-  const [pending, setPending] = useState14(false);
-  const [sectionBusy, setSectionBusy] = useState14(false), [sectionFrozen, setSectionFrozen] = useState14(false), [sectionReview, setSectionReview] = useState14(null);
-  const sectionOperation = useRef14(null);
-  const pendingFiles = useRef14(async () => {
+  const [pending, setPending] = useState15(false);
+  const [sectionBusy, setSectionBusy] = useState15(false), [sectionFrozen, setSectionFrozen] = useState15(false), [sectionReview, setSectionReview] = useState15(null);
+  const sectionOperation = useRef15(null);
+  const pendingFiles = useRef15(async () => {
   });
   const registerPendingFiles = useCallback4((fn) => {
     pendingFiles.current = fn;
@@ -8232,10 +8456,10 @@ function Document({
     };
   }, []);
   const locked = Boolean(currentRun) || pending;
-  const [text, setText] = useState14(""), [anchor, setAnchor] = useState14(() => retainedDiscussion?.anchor ?? null), [activeComment, setActiveComment] = useState14(null), [showResolved, setShowResolved] = useState14(() => state.comments.some((c) => c.item_id === item.id && c.resolved && retainedDiscussion?.replies?.[c.id])), [localDialog, setLocalDialog] = useState14(null);
-  const localDialogOpener = useRef14(null);
-  const [pageSurface, setPageSurface] = useState14(null), [surfaceBusy, setSurfaceBusy] = useState14(false), [surfaceError, setSurfaceError] = useState14("");
-  const surfaceOpener = useRef14(null), surfaceTransfer = useRef14(false);
+  const [text, setText] = useState15(""), [anchor, setAnchor] = useState15(() => retainedDiscussion?.anchor ?? null), [activeComment, setActiveComment] = useState15(null), [showResolved, setShowResolved] = useState15(() => state.comments.some((c) => c.item_id === item.id && c.resolved && retainedDiscussion?.replies?.[c.id])), [localDialog, setLocalDialog] = useState15(null);
+  const localDialogOpener = useRef15(null);
+  const [pageSurface, setPageSurface] = useState15(null), [surfaceBusy, setSurfaceBusy] = useState15(false), [surfaceError, setSurfaceError] = useState15("");
+  const surfaceOpener = useRef15(null), surfaceTransfer = useRef15(false);
   const openPageSurface = (name, opener) => {
     surfaceOpener.current = opener ?? document.activeElement;
     surfaceTransfer.current = false;
@@ -8246,14 +8470,14 @@ function Document({
     localDialogOpener.current = opener ?? document.activeElement;
     setLocalDialog(name);
   };
-  const attachment = useRef14(null), editorFocus = useRef14(null);
+  const attachment = useRef15(null), editorFocus = useRef15(null);
   const headingId = useId6();
-  const titleBuffer = useMemo2(() => drafts?.bind(state.scope_id, item.id, "title") ?? null, [drafts, state.scope_id, item.id]);
-  const editorFlushes = useRef14({ title: async () => {
+  const titleBuffer = useMemo3(() => drafts?.bind(state.scope_id, item.id, "title") ?? null, [drafts, state.scope_id, item.id]);
+  const editorFlushes = useRef15({ title: async () => {
   }, body: async () => {
   }, discussion: async () => {
   } });
-  const propertyFlushes = useRef14(/* @__PURE__ */ new Map());
+  const propertyFlushes = useRef15(/* @__PURE__ */ new Map());
   const propertyBuffer = useCallback4((recordId, columnId) => drafts?.bind(state.scope_id, recordId, "property", columnId) ?? null, [drafts, state.scope_id]);
   const registerPropertyFlush = useCallback4((id, fn) => {
     propertyFlushes.current.set(id, fn);
@@ -8293,7 +8517,7 @@ function Document({
       throw err;
     }
   };
-  useEffect7(() => registerFlush(async () => {
+  useEffect8(() => registerFlush(async () => {
     if (sectionOperation.current) await sectionOperation.current;
     await flushEditors();
   }), [registerFlush]);
@@ -8910,18 +9134,18 @@ function Document({
 }
 
 // frontend/backend-activation.mjs
-async function activateWorkspaceBackend(ctx, host4, activationEpoch, publish = () => {
+async function activateWorkspaceBackend(ctx, host5, activationEpoch, publish = () => {
 }) {
   let disposed = false;
   ctx.onDispose(() => {
     disposed = true;
   });
-  const connectionId = host4.activeConnectionId();
-  const profile = host4.state.profile.get();
+  const connectionId = host5.activeConnectionId();
+  const profile = host5.state.profile.get();
   const epoch = activationEpoch();
   const current = () => {
     if (disposed) return false;
-    if (host4.activeConnectionId() !== connectionId || host4.state.profile.get() !== profile || activationEpoch() !== epoch)
+    if (host5.activeConnectionId() !== connectionId || host5.state.profile.get() !== profile || activationEpoch() !== epoch)
       throw new Error("Hermes profile or connection changed while enabling Workspace. Toggle Workspace on again.");
     return true;
   };
@@ -8932,13 +9156,13 @@ async function activateWorkspaceBackend(ctx, host4, activationEpoch, publish = (
   };
   if (!connectionId || !profile)
     throw new Error("Select a Hermes profile before enabling Workspace.");
-  const routes = await host4.profileRoutes();
+  const routes = await host5.profileRoutes();
   if (!current()) return false;
   const matches = routes.filter((route2) => route2.connectionId === connectionId && route2.profile === profile);
   if (matches.length !== 1)
     throw new Error("The selected Hermes profile route is unavailable or ambiguous.");
   const route = Object.freeze({ ...matches[0] });
-  const request = (params) => host4.requestProfile(route, "plugins.manage", { ...params, profile: route.targetProfile });
+  const request = (params) => host5.requestProfile(route, "plugins.manage", { ...params, profile: route.targetProfile });
   const pluginRow = (result2) => {
     const rows = Array.isArray(result2?.plugins) ? result2.plugins.filter((row) => row.key === "workspace") : [];
     if (rows?.length !== 1)
@@ -8948,7 +9172,7 @@ async function activateWorkspaceBackend(ctx, host4, activationEpoch, publish = (
   const inventory = await request({ action: "list" });
   if (!current()) return false;
   if (pluginRow(inventory).status === "enabled") return complete();
-  if (host4.pluginDecisions?.get()?.workspace !== true)
+  if (host5.pluginDecisions?.get()?.workspace !== true)
     throw new Error("Workspace backend is off. Turn Workspace on in Capabilities \u2192 Plugins to enable it.");
   const result = await request({ action: "toggle", key: "workspace", enable: true });
   if (!current()) return false;
@@ -8969,7 +9193,7 @@ var index_default = {
   name: "Workspace",
   defaultEnabled: true,
   register(ctx) {
-    return activateWorkspaceBackend(ctx, host3, gatewayActivationEpoch3, () => {
+    return activateWorkspaceBackend(ctx, host4, gatewayActivationEpoch3, () => {
       ctx.register({
         id: "page",
         area: ROUTES_AREA,
