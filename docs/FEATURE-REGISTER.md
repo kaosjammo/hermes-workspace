@@ -1,6 +1,6 @@
 # Workspace technical feature register
 
-Owner-review draft. This appendix preserves the archived inventory, including incomplete work and limits. It is not a new audit of today's installed package or a list of 206 distinct completed features.
+Historical source-coverage appendix. This appendix preserves the archived inventory, including incomplete work and limits. It is not a new audit of today's installed package or a list of 206 distinct completed features.
 
 The archive contains 90 UI, 41 workflow and 75 data records. Every literal ID appears once below. Source-present, marker-only, partial and requested-only remain separate labels; none means live runtime acceptance.
 

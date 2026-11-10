@@ -1,8 +1,8 @@
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/index.jsx
+// frontend/index.jsx
 import { createElement as h2 } from "react";
 import { ROUTES_AREA, SIDEBAR_NAV_AREA, host as host3, gatewayActivationEpoch as gatewayActivationEpoch3 } from "@hermes/plugin-sdk";
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/workspace.jsx
+// frontend/workspace.jsx
 import {
   useCallback as useCallback4,
   useEffect as useEffect7,
@@ -15,7 +15,7 @@ import {
   memo
 } from "react";
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/item-labels.mjs
+// frontend/item-labels.mjs
 function itemContext(item, items = [], attachments = []) {
   if (!item) return "Unavailable item";
   const path = [], seen = /* @__PURE__ */ new Set([item.id]);
@@ -104,7 +104,7 @@ function attachmentLabels(attachments) {
   });
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/folder-destinations.mjs
+// frontend/folder-destinations.mjs
 function folderDestinations(items, movingId) {
   const children = /* @__PURE__ */ new Map();
   for (const item of items) {
@@ -132,7 +132,7 @@ function folderDestinations(items, movingId) {
   return options;
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/workspace.jsx
+// frontend/workspace.jsx
 import {
   host as host2,
   useValue,
@@ -143,11 +143,11 @@ import {
   GlyphSpinner as GlyphSpinner2
 } from "@hermes/plugin-sdk";
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/ui.jsx
+// frontend/ui.jsx
 import { createElement as h, cloneElement, Children, useState, useRef, useLayoutEffect } from "react";
 import * as nativeSdk from "@hermes/plugin-sdk";
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/editor.mjs
+// frontend/editor.mjs
 var TAGS = new Set(
   "p br div span strong b em i u s strike h1 h2 h3 h4 ul ol li blockquote pre code a img table thead tbody tr th td input hr".split(
     " "
@@ -361,7 +361,7 @@ function workspaceHref(id) {
   return href;
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/ui.jsx
+// frontend/ui.jsx
 import {
   Button,
   Input,
@@ -904,7 +904,7 @@ function FormDialog({
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/restore.jsx
+// frontend/restore.jsx
 import { useRef as useRef2, useState as useState2 } from "react";
 import {
   Dialog as Dialog2,
@@ -1055,7 +1055,7 @@ function RestoreDialog({
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/page-title.jsx
+// frontend/page-title.jsx
 import { useEffect, useLayoutEffect as useLayoutEffect2, useRef as useRef3, useState as useState3 } from "react";
 function PageTitle({ item, locked: authorityLocked, interactionBlocked = false, buffer, registerFlush, onSave, onError, headingId }) {
   const locked = authorityLocked || interactionBlocked;
@@ -1219,7 +1219,7 @@ function PageTitle({ item, locked: authorityLocked, interactionBlocked = false, 
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/drafts.mjs
+// frontend/drafts.mjs
 var DraftRepository = class {
   constructor(storage, connectionId, profile) {
     this.storage = storage;
@@ -1269,7 +1269,7 @@ var DraftRepository = class {
   }
 };
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/navigation-resize.jsx
+// frontend/navigation-resize.jsx
 import { useCallback, useLayoutEffect as useLayoutEffect3, useRef as useRef4, useState as useState4 } from "react";
 var DEFAULT_WIDTH = 280;
 var MIN_WIDTH = 200;
@@ -1391,7 +1391,7 @@ function NavigationResizeHandle({ navigation, controls }) {
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/document-width.mjs
+// frontend/document-width.mjs
 import { useMemo, useState as useState5 } from "react";
 function documentWidthKey(owner, scope, itemId) {
   const [connection, profile] = JSON.parse(owner);
@@ -1421,7 +1421,7 @@ function useDocumentWidth(storage, owner, scope, itemId) {
   } };
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/client.mjs
+// frontend/client.mjs
 var StaleWorkspaceError = class extends Error {
   constructor() {
     super("Workspace source changed. Reopen the page in the selected profile.");
@@ -1731,7 +1731,7 @@ var WorkspaceClient = class {
   }
 };
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/workspace-search.jsx
+// frontend/workspace-search.jsx
 import { useEffect as useEffect2, useId, useRef as useRef5, useState as useState6 } from "react";
 import { SearchField, GlyphSpinner } from "@hermes/plugin-sdk";
 function WorkspaceSearch({ client, scope, revision, destination, onOpen, contexts }) {
@@ -1895,7 +1895,7 @@ function WorkspaceSearch({ client, scope, revision, destination, onOpen, context
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/workspace-navigation-styles.mjs
+// frontend/workspace-navigation-styles.mjs
 var workspaceNavigationStyles = `
 .ws-body > .ws-nav { grid-column: 1; grid-row: 1; }
 .ws-body > .ws-nav-resize { grid-column: 2; grid-row: 1; }
@@ -1918,7 +1918,7 @@ var workspaceNavigationStyles = `
 }
 `;
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/styles.mjs
+// frontend/styles.mjs
 var styles = `
 .ws-root {
   height: 100%;
@@ -2956,11 +2956,11 @@ var styles = `
 ${workspaceNavigationStyles}
 `;
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/rich-editor.jsx
+// frontend/rich-editor.jsx
 import { useEffect as useEffect3, useLayoutEffect as useLayoutEffect5, useRef as useRef7, useState as useState8 } from "react";
 import { Popover as Popover2, PopoverTrigger as PopoverTrigger2, PopoverContent as PopoverContent2 } from "@hermes/plugin-sdk";
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/editor-styles.mjs
+// frontend/editor-styles.mjs
 var editorStyles = `
 :is(.ws-editor, .ws-section-fragment) span[data-workspace-weight="normal"] { font-weight: 400; }
 .ws-rich-editor .ws-editor-heading { margin: 0 0 10px; justify-content: flex-start; }
@@ -2998,7 +2998,7 @@ var editorStyles = `
 .ws-editor-selection-tools { max-width: min(26rem, var(--radix-popover-content-available-width, calc(100vw - 16px))); }
 `;
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/editor-commands.mjs
+// frontend/editor-commands.mjs
 var BLOCKS = new Set(
   "P DIV H1 H2 H3 H4 H5 H6 UL OL LI BLOCKQUOTE PRE TABLE HR".split(" ")
 );
@@ -3476,7 +3476,7 @@ var EditorHistory = class {
   }
 };
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/comment-highlights.jsx
+// frontend/comment-highlights.jsx
 import { useId as useId2, useLayoutEffect as useLayoutEffect4, useRef as useRef6, useState as useState7 } from "react";
 function anchorRange(root, anchor) {
   const location = locateAnchor(root.textContent, anchor);
@@ -3750,7 +3750,7 @@ function CommentHighlights({
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/rich-editor.jsx
+// frontend/rich-editor.jsx
 function RichEditor({
   item,
   locked: authorityLocked,
@@ -4745,7 +4745,7 @@ function RichEditor({
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/rich-preview.jsx
+// frontend/rich-preview.jsx
 import { Fragment, useLayoutEffect as useLayoutEffect6, useRef as useRef8 } from "react";
 function RichPreview({ label, html, text, attachments }) {
   const root = useRef8(null);
@@ -4774,11 +4774,11 @@ function RichPreview({ label, html, text, attachments }) {
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/tables.jsx
+// frontend/tables.jsx
 import { useCallback as useCallback2, useEffect as useEffect4, useId as useId3, useRef as useRef9, useState as useState9 } from "react";
 import { Checkbox, SearchField as SearchField2 } from "@hermes/plugin-sdk";
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/database-grid-styles.mjs
+// frontend/database-grid-styles.mjs
 var databaseGridStyles = `
 .ws-database { position: relative; min-width: 0; font-size: 13px; container-name: workspace-database; container-type: inline-size; }
 .ws-root .ws-work:has(.ws-database) { scroll-padding-top: 40px; }
@@ -4852,7 +4852,7 @@ var databaseGridStyles = `
 }
 `;
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/database.mjs
+// frontend/database.mjs
 function tableRows(records, columns, { sort = "", direction = "asc", filter = "" } = {}) {
   const needle = filter.toLocaleLowerCase();
   const result = records.filter(
@@ -4910,7 +4910,7 @@ function propertyPatch(state, id, columnId, value) {
   };
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/tables.jsx
+// frontend/tables.jsx
 function Property({ column, value, onChange, state, disabled: authorityDisabled, interactionBlocked = false, buffer, registerFlush, formulaError, onSettled, compact = false }) {
   const disabled = authorityDisabled || interactionBlocked;
   const initial = useRef9(buffer?.read() ?? null), recovery = useRef9(Boolean(initial.current));
@@ -5661,7 +5661,7 @@ function FormulaHelp({ columns }) {
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/scope-review.jsx
+// frontend/scope-review.jsx
 import { useRef as useRef10, useState as useState10 } from "react";
 import {
   Checkbox as Checkbox2,
@@ -5825,11 +5825,11 @@ function ScopeReviewDialog({
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/comments.jsx
+// frontend/comments.jsx
 import { useCallback as useCallback3, useEffect as useEffect6, useId as useId5, useLayoutEffect as useLayoutEffect8, useRef as useRef13, useState as useState13 } from "react";
 import { Checkbox as Checkbox3, Textarea as Textarea2, Popover as Popover3, PopoverTrigger as PopoverTrigger3, PopoverContent as PopoverContent3, Tip as Tip2 } from "@hermes/plugin-sdk";
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/comment-bubbles.jsx
+// frontend/comment-bubbles.jsx
 import { useLayoutEffect as useLayoutEffect7, useRef as useRef11, useState as useState11 } from "react";
 function passageGroups(geometry, inline) {
   const result = [];
@@ -6043,7 +6043,7 @@ function CommentBubbles({ geometry, header, footer, renderGroup }) {
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/thread-picker.jsx
+// frontend/thread-picker.jsx
 import { useEffect as useEffect5, useId as useId4, useRef as useRef12, useState as useState12 } from "react";
 import { SearchField as SearchField4, Dialog as Dialog4, DialogContent as DialogContent4, DialogHeader as DialogHeader4, DialogTitle as DialogTitle4, DialogDescription as DialogDescription4, DialogFooter as DialogFooter4 } from "@hermes/plugin-sdk";
 function ThreadPicker({ workflow, itemId, locked, onBound, onClose }) {
@@ -6184,7 +6184,7 @@ function ThreadPicker({ workflow, itemId, locked, onBound, onClose }) {
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/comment-styles.mjs
+// frontend/comment-styles.mjs
 var commentStyles = `
 .ws-comment-surfaces { display: contents; }
 .ws-comment-compose-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
@@ -6212,7 +6212,7 @@ var commentStyles = `
 .ws-related-scope .ws-comment { padding:8px; margin-block:6px; }
 `;
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/comments.jsx
+// frontend/comments.jsx
 function Comment({
   comment,
   text,
@@ -6940,7 +6940,7 @@ function Comments({
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/workflow.js
+// frontend/workflow.js
 import { host, gatewayActivationEpoch } from "@hermes/plugin-sdk";
 function createWorkflowAdapter(ctx) {
   let disposed = false;
@@ -7113,7 +7113,7 @@ function createWorkflowAdapter(ctx) {
   return adapter;
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/workspace.jsx
+// frontend/workspace.jsx
 var ownerNow = () => [
   host2.activeConnectionId(),
   host2.state.profile.get(),
@@ -8630,7 +8630,7 @@ function Document({
   );
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/backend-activation.mjs
+// frontend/backend-activation.mjs
 async function activateWorkspaceBackend(ctx, host4, activationEpoch, publish = () => {
 }) {
   let disposed = false;
@@ -8684,7 +8684,7 @@ async function activateWorkspaceBackend(ctx, host4, activationEpoch, publish = (
   return complete();
 }
 
-// projects/hermes-workspace/.local/catalog-publication-1569654874222632971/public-repo/frontend/index.jsx
+// frontend/index.jsx
 var index_default = {
   id: "workspace",
   name: "Workspace",

@@ -1,6 +1,6 @@
 # Workspace feature guide
 
-Owner-review draft. This guide groups the maintained source inventory by what a user is trying to do. It covers implemented surfaces, qualification limits and unfinished work without treating them as one completed release. Consult [qualification](QUALIFICATION.md) before making installation or native-runtime claims.
+This guide groups the maintained source inventory by what a user is trying to do. It covers implemented surfaces, qualification limits and unfinished work without treating them as one completed release. Consult [qualification](QUALIFICATION.md) before making installation or native-runtime claims.
 
 The [feature register](FEATURE-REGISTER.md) preserves every inventoried UI, workflow and data entry. Those layers overlap; their combined entry count is not a distinct product-feature count.
 

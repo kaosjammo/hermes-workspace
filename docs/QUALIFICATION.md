@@ -1,6 +1,6 @@
 # Qualification, scope and publication gates
 
-Owner-review draft. This is the evidence boundary for the proposed README, feature guide and catalog PR. It is not an acceptance report or a declaration that the current package is ready to publish.
+This is the evidence boundary for the public development preview, feature guide and catalog PR. Source publication and a successful catalog probe are not native-runtime acceptance or maintainer approval.
 
 ## Evidence levels
 
@@ -18,7 +18,7 @@ The archived inventory describes working HEAD `cba527e538e36af4d952560eb746083f6
 
 A fresh read during documentation preparation found installed package HEAD `35fd6a40bf7cc4c1ea0d4cffa6ab786f0289552d`. Reading its Git identity is not a new feature audit, loaded-runtime proof or native visual acceptance. The current source README also includes newer backend/Desktop setup guidance than that installed README.
 
-The final catalog candidate and public repository remain unselected/unfrozen. The eventual README/PR must bind claims and test output to the exact same public commit and package manifest.
+The public repository is [kaosjammo/hermes-workspace](https://github.com/kaosjammo/hermes-workspace). Initial frozen source commit `847b0b99478fb3cc23364db04ee1b6b96b439e78` passed all 16 catalog checks with three warning groups on the isolated public host commit `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`. The final pin and subsequent exact-commit results are maintained in [issue #1](https://github.com/kaosjammo/hermes-workspace/issues/1). Neither a Git identity nor this probe establishes loaded/native runtime acceptance.
 
 ## Native editing boundary
 
@@ -61,15 +61,16 @@ No measured load-time, memory, token, cost or latency improvement is claimed. Te
 
 Local storage is not encryption or OS-user isolation. Configured model providers may receive authorised document/comment context. Hash validation is not signing. No cloud collaboration, public sharing links or real-time multi-user editing is claimed.
 
-## Before publishing
+## Publication and release gates
 
-- [ ] Authorise/select a separate project-owned public repository and transfer local backlog items to its tracker.
-- [ ] Freeze one accepted package/commit, reconcile the feature guide and close or disclose substantive findings.
-- [ ] Validate the plugin at that full commit; retain actual output and scoped regression evidence.
-- [ ] Review public files for credentials, private documents, production databases, local exports and machine-specific reports. Do not publish the frozen private review packet wholesale.
-- [ ] Add readable screenshots from the same candidate, plus the approved public demo link.
-- [ ] State the required network/files/processes/credential/destructive-operation disclosures in README and PR.
-- [ ] Obtain publication authority for the repository, catalog PR, X post and submission form; draft preparation does not authorise those actions.
+- [x] Separate public repository authorised and created; requested backlog items transferred to issues #2–#4.
+- [x] Explicit source allowlist exported without private Git history, documents, databases or profile state; source/history secret scans passed.
+- [x] Initial frozen public commit validated with actual dependency preparation: 16 checks passed, three warning groups retained.
+- [x] Frontend build exercised; a working-directory reproducibility defect was reproduced and repaired with a passing behavioural regression.
+- [ ] Final exact-commit receipt and catalog PR readback (tracked in issue #1).
+- [ ] Resolve or obtain maintainer adjudication of private host imports/read contexts and SDK-selector warnings before treating the catalog draft as merge-ready.
+- [ ] Same-candidate native/provider-positive and Electron visual acceptance. The included earlier-build demo crop does not close this gate.
+- [ ] Approved public X demo and final form submission. These actions remain outside the source-publication/PR authorisation.
 
 ## Draft completeness
 

@@ -1,0 +1,103 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "name": "manifest",
+      "ok": true,
+      "detail": "plugin.yaml parses"
+    },
+    {
+      "name": "manifest fields",
+      "ok": true,
+      "detail": "name, version, description present"
+    },
+    {
+      "name": "requires_hermes",
+      "ok": true,
+      "detail": "not declared"
+    },
+    {
+      "name": "config schema",
+      "ok": true,
+      "detail": "not declared"
+    },
+    {
+      "name": "requires_env",
+      "ok": true,
+      "detail": "all entries UPPER_SNAKE"
+    },
+    {
+      "name": "oauth",
+      "ok": true,
+      "detail": "not declared"
+    },
+    {
+      "name": "loadable",
+      "ok": true,
+      "detail": "entry: __init__.py, desktop/plugin.js"
+    },
+    {
+      "name": "python dependencies",
+      "ok": true,
+      "detail": "4 requirements from manifest"
+    },
+    {
+      "name": "capability probe",
+      "ok": true,
+      "detail": "register() ran in isolation"
+    },
+    {
+      "name": "declared tools",
+      "ok": true,
+      "detail": "matches registrations"
+    },
+    {
+      "name": "declared hooks",
+      "ok": true,
+      "detail": "matches registrations"
+    },
+    {
+      "name": "declared middleware",
+      "ok": true,
+      "detail": "matches registrations"
+    },
+    {
+      "name": "built-in tool collisions",
+      "ok": true,
+      "detail": "no collisions"
+    },
+    {
+      "name": "security scan",
+      "ok": true,
+      "detail": "safe"
+    },
+    {
+      "name": "no core override",
+      "ok": true,
+      "detail": "no runtime rebinds of Hermes core"
+    },
+    {
+      "name": "desktop surface",
+      "ok": true,
+      "detail": "stays inside the plugin SDK surface"
+    }
+  ],
+  "warnings": [
+    "private core imports (catalog rule 9: public surfaces only; these can break on any release): dashboard/plugin_api.py:51 hermes_cli.web_deps.late; dashboard/plugin_api.py:62 gateway.owner_identity.host_owner_subject; scripts/qualify-renderer.py:25 hermes_cli.web_server; scripts/qualify-renderer.py:26 hermes_cli.web_routers.webapp; workspace_plugin/final_run.py:65 gateway.session_ingress.viewer_turn; workspace_plugin/final_run.py:66 hermes_state_runtime.get_session_admission; workspace_plugin/finalization.py:129 agent.persisted_turn_receipt.committed_row_id; workspace_plugin/native.py:71 hermes_state_terminal.RESULT_PREFIX; workspace_plugin/native.py:72 gateway.session_operator.is_viewer_input; workspace_plugin/native.py:168 gateway.session_display.admission_submission; and 13 more. Use ctx.* / documented plugin APIs, or open an issue for the seam you need.",
+    "private core attribute access (catalog rule 9: public surfaces only; these can break on any release): workspace_plugin/native.py:76 db._read_ctx; workspace_plugin/native.py:97 db._read_ctx; workspace_plugin/native.py:106 db._read_ctx; workspace_plugin/native.py:121 db._read_ctx; workspace_plugin/native.py:144 db._read_ctx. Use ctx.* / documented plugin APIs, or open an issue for the seam you need.",
+    "desktop surface review (catalog rule 8: SDK surface only): app markup selector (desktop/plugin.js:1907); app markup selector (desktop/plugin.js:2022); app markup selector (desktop/plugin.js:2047); app markup selector (desktop/plugin.js:2048); app markup selector (desktop/plugin.js:2049); app markup selector (desktop/plugin.js:2050); app markup selector (desktop/plugin.js:2051); app markup selector (desktop/plugin.js:2348) (+1 more). Use ctx.files / ctx.os / host.request and SDK slots, or open an issue for the hook you need."
+  ],
+  "isolation": {
+    "verdict": "host",
+    "host_ready": true,
+    "reasons": [],
+    "notes": [
+      "dashboard backend API is served through the plugin host (buffered responses)"
+    ],
+    "ctx_methods": [
+      "register_hook",
+      "register_namespace",
+      "register_tool"
+    ]
+  }
+}

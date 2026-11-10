@@ -6,7 +6,7 @@ Workspace brings rich documents, structured project databases and passage-level 
 
 The review workflow connects feedback to the document it concerns: select a passage, leave a comment and explicitly ask Hermes to address unresolved feedback in a linked native conversation. You decide when a comment is resolved.
 
-> **Development preview.** This repository publishes a frozen standalone source snapshot. The feature descriptions come from the maintained inventory; catalog validation and final acceptance are tracked in [issue #1](https://github.com/kaosjammo/hermes-workspace/issues/1). Genuine provider-positive saved edits and native Electron acceptance remain unqualified; a working interface or a preview video does not establish those outcomes. See [qualification and limitations](docs/QUALIFICATION.md).
+> **Development preview.** This repository publishes a frozen standalone source snapshot. Initial catalog validation passed 16/16 checks with three warning groups requiring review, not a clean compatibility approval. See [validation evidence and limits](docs/VALIDATION.md) and [issue #1](https://github.com/kaosjammo/hermes-workspace/issues/1). Genuine provider-positive saved edits and native Electron acceptance remain unqualified; a working interface or a preview video does not establish those outcomes. See [qualification and limitations](docs/QUALIFICATION.md).
 
 ## What you can work with
 
@@ -21,6 +21,10 @@ Workspace retains unsaved recovery drafts when a save or connection transition f
 Use text, number, checkbox, date, single-select, relation and same-row formula properties. Filter and sort records, switch to a single-select-grouped board, and open a record as a full document with its own notes and feedback.
 
 For example, track subscription renewals, client invoices or a story's scenes. Those are examples of user-created databases, not separate financial integrations or built-in accounting products. Formula expressions use bounded helpers such as `col("Hours") * col("Rate")`; they do not execute arbitrary code.
+
+![Synthetic Northbank invoice database](docs/screenshots/database-demo.png)
+
+*Database view from the manual demo, using fictional invoice records. This earlier-build capture illustrates the interface; it is not native acceptance evidence for the current source commit. [Media provenance](docs/MEDIA.md).*
 
 ### Feedback that stays with the passage
 

@@ -10,6 +10,7 @@ const { build } = toolRequire('esbuild');
 const outdir = path.join(root, 'desktop');
 await mkdir(outdir, { recursive: true });
 const result = await build({
+  absWorkingDir: root,
   entryPoints: [path.join(root, 'frontend/index.jsx')],
   outfile: path.join(outdir, 'plugin.js'),
   bundle: true,
