@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { host } from '@hermes/plugin-sdk';
 import { h, Action, Input, errorMessage, isSubmitEnter } from './ui.jsx';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@hermes/plugin-sdk';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Popover, PopoverTrigger, PopoverContent } from '@hermes/plugin-sdk';
 import { authorName, createIdentityBridge } from './identity.mjs';
 const IdentityContext = createContext(null);
 
@@ -13,6 +14,7 @@ export function IdentityProvider({client, children}) {
 export function AuthorHeader({entry}) {
   const loadAvatar = useContext(IdentityContext), author = entry?.author_identity;
   const name = authorName(entry), [loaded,setLoaded] = useState(null);
+  const [open,setOpen] = useState(false), trigger = useRef(null), close = useRef(null);
   const key = JSON.stringify(author);
   const image = loaded && loaded.key === key ? loaded.data : null;
   const pending = Boolean(loadAvatar && author?.kind === 'agent' && (!loaded || loaded.key !== key));
@@ -23,13 +25,29 @@ export function AuthorHeader({entry}) {
       void loadAvatar(author).then(data => { if (current) setLoaded({key,data}); }).catch(() => { if (current) setLoaded({key,data:null}); });
     return () => { current = false; };
   }, [loadAvatar,key]);
-  return h('span', {className:'ws-author', title:name, 'aria-busy':pending},
+  const contents = [
     h('span', {className:'ws-author-avatar', 'aria-hidden':true, 'data-avatar-state':pending?'loading':image?'image':'fallback'}, image
       ? h('img', {src:image, alt:'', width:20, height:20, referrerPolicy:'no-referrer',
           onLoad:e => { if (e.currentTarget.naturalWidth > 2048 || e.currentTarget.naturalHeight > 2048) setLoaded({key,data:null}); },
           onError:() => setLoaded({key,data:null})})
       : h('span', null, Array.from(name)[0]?.toLocaleUpperCase() || '•')),
-    h('strong', {className:'ws-author-name'}, name));
+    h('strong', {className:'ws-author-name'}, name)];
+  // Comment authors also appear INSIDE the thread-summary button. Keep that
+  // summary's complete accessible name and never nest another interactive
+  // control. Reply headers are separate and can expose a native disclosure.
+  if (entry?.author !== 'user' && entry?.author !== 'agent')
+    return h('span', {className:'ws-author', title:name, 'aria-busy':pending}, ...contents);
+  return h(Popover, {open, onOpenChange:setOpen},
+    h(PopoverTrigger, {asChild:true},
+      h(Action, {ref:trigger, variant:'ghost', className:'ws-author ws-author-disclosure',
+        'aria-label':`Show full author name: ${name}`, 'aria-busy':pending,
+        onMouseDown:event => event.preventDefault()}, ...contents)),
+    h(PopoverContent, {className:'ws-author-details', align:'start',
+      onOpenAutoFocus:event => { event.preventDefault(); close.current?.focus({preventScroll:true}); },
+      onCloseAutoFocus:event => { event.preventDefault(); trigger.current?.focus({preventScroll:true}); },
+      onClick:event => event.stopPropagation()},
+      h('p', {className:'ws-author-full-name'}, name),
+      h(Action, {ref:close, variant:'text', onClick:() => setOpen(false), 'aria-label':'Close author name'}, 'Close')));
 }
 
 export function UsernameDialog({client, onClose, returnFocus}) {

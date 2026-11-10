@@ -168,7 +168,8 @@ class SharedWorkspaces:
     def snapshot(self, profile_id, project_id):
         with self._catalog() as conn:
             row = self._access(conn, project_id, profile_id)
-            return {'workspace': self._view(conn, row), 'state': self._store(project_id).snapshot()}
+            return {'workspace': self._view(conn, row),
+                    'state': self._store(project_id).snapshot(include_identity=True, human_actor=profile_id)}
 
     def execute(self, profile_id, project_id, op, payload, *, membership_revision, expected_scope):
         # Membership lock spans Store lock waits and commit. A concurrent revoke
@@ -182,7 +183,8 @@ class SharedWorkspaces:
                 raise StoreError('Use a validated exact executor source and matching native thread', 409)
             if not isinstance(payload, dict) or (op != 'search' and type(payload.get('expected_revision')) is not int):
                 raise StoreError('Shared mutations require the captured Workspace revision', 409)
-            return {'result': store.execute(op, payload, human_actor=profile_id), 'state': store.snapshot()}
+            return {'result': store.execute(op, payload, human_actor=profile_id),
+                    'state': store.snapshot(include_identity=True, human_actor=profile_id)}
 
     def bind_executor(self, profile_id, project_id, item_id, binding, *, membership_revision,
                       expected_scope, expected_revision, validate=None):
