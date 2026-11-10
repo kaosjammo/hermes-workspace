@@ -39,7 +39,7 @@ if not store.snapshot()['items']:
         if name=='Authors':
             def author_fixture(state):
                 comment=next(c for c in state['comments']if c['id']==a['id'])
-                comment['replies'][0]['author_identity']={'kind':'human','id':'f'*64,'name':'庭 🌿 '*18}
+                comment['replies'][0]['author_identity']={'kind':'human','id':'f'*64,'name':('庭 🌿 '*18).strip()}
             store._transaction(author_fixture)
         if name=='Legacy':
             def legacy(state):
