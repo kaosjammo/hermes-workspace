@@ -212,10 +212,11 @@ def _process_identity(pid=None):
 
 
 class Store:
-    def __init__(self, profile_home: Path):
+    def __init__(self, profile_home: Path, *, shared=False):
         if not isinstance(profile_home, Path) or not profile_home.is_absolute():
             raise StoreError('An explicit absolute profile_home Path is required')
         self.profile_home = profile_home.resolve()
+        self.shared = shared
         self.root = self.profile_home / 'plugin-data' / 'workspace'
         for directory in (self.profile_home / 'plugin-data', self.root):
             if directory.is_symlink():
@@ -257,6 +258,7 @@ class Store:
             conn.execute("INSERT OR IGNORE INTO metadata VALUES('scope_id',?)", (_id(),))
             conn.execute("INSERT OR IGNORE INTO metadata VALUES('section_epoch',?)", (_id(),))
             conn.execute("INSERT OR IGNORE INTO metadata VALUES('schema_version','1')")
+            conn.execute("INSERT OR IGNORE INTO metadata VALUES('identity_names','{}')")
             if conn.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()[0] != '1':
                 raise StoreError('Unsupported Workspace schema version')
             self.scope_id = conn.execute("SELECT value FROM metadata WHERE key='scope_id'").fetchone()[0]
@@ -282,13 +284,14 @@ class Store:
         schema = self._schema(schema)
         state = {key:[json.loads(row[0]) for row in conn.execute(f'SELECT data FROM {schema}.{key} ORDER BY rowid')] for key in CATEGORIES}
         state['revision'] = int(conn.execute(f"SELECT value FROM {schema}.metadata WHERE key='revision'").fetchone()[0])
+        state['_identity_names'] = json.loads(conn.execute(f"SELECT value FROM {schema}.metadata WHERE key='identity_names'").fetchone()[0])
         state['_locks'] = dict(conn.execute(f'SELECT item_id,run_id FROM {schema}.locks'))
         state['_section_epoch'] = conn.execute(f"SELECT value FROM {schema}.metadata WHERE key='section_epoch'").fetchone()[0]
         return state
 
     def _save(self, conn, state, schema='main'):
         schema = self._schema(schema)
-        if len(_json({k:v for k,v in state.items() if k not in {'_locks','_section_epoch'}}).encode()) > MAX_STATE:
+        if len(_json({k:v for k,v in state.items() if k not in {'_locks','_section_epoch','_identity_names'}}).encode()) > MAX_STATE:
             raise StoreError('Workspace storage limit exceeded')
         for table in ('locks','comments','versions','attachments','recents','runs','templates','items'):
             conn.execute(f'DELETE FROM {schema}.{table}')
@@ -300,6 +303,7 @@ class Store:
         conn.executemany(f'INSERT INTO {schema}.recents VALUES(?,?)', [(x['item_id'],_json(x)) for x in state['recents']])
         conn.executemany(f'INSERT INTO {schema}.locks VALUES(?,?)', state['_locks'].items())
         conn.execute(f"UPDATE {schema}.metadata SET value=? WHERE key='revision'", (str(state['revision']),))
+        conn.execute(f"UPDATE {schema}.metadata SET value=? WHERE key='identity_names'", (_json(state.get('_identity_names',{})),))
         if '_section_epoch' in state:
             conn.execute(f"UPDATE {schema}.metadata SET value=? WHERE key='section_epoch'", (state['_section_epoch'],))
 
@@ -334,7 +338,7 @@ class Store:
         finally:
             conn.close()
 
-    def snapshot(self):
+    def snapshot(self, *, human_actor=None, include_identity=False):
         conn = self._connect()
         try:
             conn.execute('BEGIN')
@@ -342,6 +346,8 @@ class Store:
             result = {key:self._public(copy.deepcopy([row for row in state[key]
                 if key != 'comments' or not row.get('_deleted_at')]), state) for key in CATEGORIES}
             result.update(revision=state['revision'], scope_id=self.scope_id)
+            if include_identity:
+                result['identity'] = self._identity_view(state,human_actor)
             conn.commit()
             return result
         finally:
@@ -360,6 +366,10 @@ class Store:
             state = self._load(conn)
             state.pop('_locks')
             state.pop('_section_epoch',None)
+            state.pop('_identity_names',None)
+            # Materialise known private legacy ownership before export. Imports
+            # must never infer ownership from the receiving profile.
+            self._stamp_legacy(state)
             state['scope_id'] = self.scope_id
             conn.commit()
             return state
@@ -645,6 +655,29 @@ class Store:
             compute(column['id'])
         return result, errors
 
+    def _human(self, state, actor=None):
+        from .identity import human_id
+        actor = actor if self.shared else human_id(self.profile_home)
+        if actor is None:
+            return None
+        if not isinstance(actor,str) or re.fullmatch('[0-9a-f]{64}',actor) is None:
+            raise StoreError('An implementation-owned human author is required',403)
+        return {'kind':'human','id':actor,'name':state.get('_identity_names',{}).get(actor,'user')}
+
+    def _identity_view(self, state, actor=None):
+        from .identity import human_id
+        return {'human':self._human(state,actor), 'source_id':human_id(self.profile_home)}
+
+    def _stamp_legacy(self, state):
+        if self.shared:
+            return
+        for comment in state['comments']:
+            if 'author_identity' not in comment:
+                comment['author_identity'] = self._human(state)
+            for reply in comment['replies']:
+                if reply['author']=='user' and 'author_identity' not in reply:
+                    reply['author_identity'] = self._human(state)
+
     def _public(self, value, state):
         if isinstance(value, list):
             return [self._public(x,state) for x in value]
@@ -661,6 +694,10 @@ class Store:
             result['properties'], errors = self._computed(state, value)
             if errors:
                 result['formula_errors'] = errors
+        if ('anchor' in value and 'replies' in value) or value.get('author')=='user':
+            identity = value.get('author_identity') if 'author_identity' in value else self._human(state)
+            if identity and identity.get('kind')=='human':
+                result['author_identity'] = {**identity,'name':state.get('_identity_names',{}).get(identity['id'],identity['name'])}
         if 'anchor' in value and 'replies' in value:
             anchor = value['anchor']
             if anchor is None:
@@ -908,7 +945,7 @@ class Store:
         state['items'] = [next(replacement) if row['id'] in ids else row for row in state['items']]
         return {'id': item['id'], 'parent_id': item['parent_id'], 'sibling_ids': [row['id'] for row in ordered]}
 
-    def execute(self, op: str, payload: dict):
+    def execute(self, op: str, payload: dict, *, human_actor=None):
         _text(op,'operation',80)
         if not isinstance(payload,dict):
             raise StoreError('payload must be an object')
@@ -917,6 +954,7 @@ class Store:
         if 'expected_scope' in payload:
             self.check_scope(payload.pop('expected_scope'))
         fields = {
+            'set_username':({'name'},{'name'}),
             'create_item':({'kind','title','parent_id','database_id','content','properties'},{'kind','title'}),
             'update_item':({'id','patch'},{'id','patch'}), 'open_item':({'id'},{'id'}),
             'reorder_item':({'id','target_id','position'},{'id','target_id','position'}),
@@ -958,6 +996,27 @@ class Store:
             return [item for item in snapshot['items'] if item['deleted_at'] is None and item['kind'] != 'folder' and query in (item['title'] + ' ' + _plain(item['content']) + ' ' + ' '.join(v for v in item['properties'].values() if isinstance(v,str))).casefold()][:200]
 
         def action(state):
+            if op == 'set_username':
+                from .identity import username
+                if type(revision) is not int:
+                    raise StoreError('Username changes require the captured Workspace revision',409)
+                actor = self._human(state,human_actor)
+                if actor is None:
+                    raise StoreError('An admitted human author is required',403)
+                try:
+                    name = username(payload['name'])
+                except ValueError as exc:
+                    raise StoreError(str(exc)) from exc
+                self._stamp_legacy(state)
+                state['_identity_names'][actor['id']] = name
+                # Persist display snapshots too, so canonical backups retain
+                # attribution without exporting local preference/authority data.
+                for comment in state['comments']:
+                    for entry in [comment,*comment['replies']]:
+                        identity = entry.get('author_identity')
+                        if identity and identity['kind']=='human' and identity['id']==actor['id']:
+                            identity['name'] = name
+                return {**actor,'name':name}
             if op == 'create_item':
                 return self._create(state,payload)
             if op in ('update_item','open_item','trash','restore','purge','set_columns'):
@@ -1008,7 +1067,9 @@ class Store:
                 if item['kind']=='database' and anchor is not None:
                     raise StoreError('Databases accept whole-database comments only')
                 targets = self._targets(state,payload.get('target_item_ids',[]),active=True)
-                comment = {'id':_id(),'item_id':item['id'],'text':_text(payload['text'],'comment'),'anchor':anchor,'resolved':False,'replies':[],'created_at':_now(),'target_item_ids':targets}
+                comment = {'id':_id(),'item_id':item['id'],'text':_text(payload['text'],'comment'),'anchor':anchor,'resolved':False,'replies':[],'created_at':_now(),'target_item_ids':targets,'author_identity':self._human(state,human_actor)}
+                if self.shared and comment['author_identity'] is None:
+                    raise StoreError('An admitted human author is required',403)
                 state['comments'].append(comment)
                 return comment
             if op in ('reply_comment','resolve_comment','delete_comment'):
@@ -1024,7 +1085,7 @@ class Store:
                     comment.update(text='[Deleted comment]',replies=[],_deleted_at=_now())
                     return {'id':comment['id'],'item_id':comment['item_id'],'deleted':True}
                 if op == 'reply_comment':
-                    self._reply(comment,payload['text'],'user')
+                    self._reply(comment,payload['text'],'user',self._human(state,human_actor))
                 else:
                     if type(payload['resolved']) is not bool:
                         raise StoreError('resolved must be a boolean')
@@ -1136,12 +1197,14 @@ class Store:
         _keys(anchor,{'quote','prefix','suffix'},{'quote','prefix','suffix'})
         return {key:_text(anchor[key], 'anchor '+key, 2000,empty=key!='quote') for key in ('quote','prefix','suffix')}
 
-    def _reply(self, comment, text, author):
+    def _reply(self, comment, text, author, identity=None):
         if comment.get('_deleted_at'):
             raise StoreError('Comment was deleted; replies cannot be restored',409)
         if len(comment['replies']) >= 1000:
             raise StoreError('Comment reply limit exceeded')
-        reply = {'id':_id(),'author':author,'text':_text(text,'reply'),'created_at':_now()}
+        if author=='user' and self.shared and identity is None:
+            raise StoreError('An admitted human author is required',403)
+        reply = {'id':_id(),'author':author,'text':_text(text,'reply'),'created_at':_now(),'author_identity':copy.deepcopy(identity)}
         comment['replies'].append(reply)
         return reply
 
@@ -1310,9 +1373,12 @@ class Store:
         return self._transaction(lambda state:self._run_review(state,item_id,selected_ids),
                                  expected_revision,skip_unchanged=True)
 
-    def begin_run(self, item_id, session_id, explicit_item_ids=None, *, scope_review=None):
+    def begin_run(self, item_id, session_id, explicit_item_ids=None, *, scope_review=None, executor_identity=None):
         if scope_review is not None and not callable(scope_review):
             raise StoreError('Run review must be an implementation-owned validator',403)
+        from .identity import validate
+        validate(executor_identity,'agent')
+        executor_identity = copy.deepcopy(executor_identity)
         explicit_item_ids = [] if explicit_item_ids is None else explicit_item_ids
         if not isinstance(explicit_item_ids,list) or len(explicit_item_ids)>MAX_ITEMS or not all(isinstance(x,str) for x in explicit_item_ids):
             raise StoreError('explicit_item_ids must be an array of Workspace IDs')
@@ -1344,6 +1410,7 @@ class Store:
             self._unlocked(state,allowed)
             now = _now()
             run = {'id':_id(),'item_id':item_id,'session_id':session_id,'status':'running','comment_ids':[c['id'] for c in comments], 'allowed_item_ids':[x['id'] for x in state['items'] if x['id'] in allowed], 'version_ids':[], 'progress':'Prepared; awaiting native admission','error':None,'created_at':now,'updated_at':now,'_owner_pid':os.getpid(),'_owner_identity':_process_identity()}
+            run['_executor_identity'] = executor_identity
             for scoped_id in run['allowed_item_ids']:
                 scoped = self._item(state,scoped_id)
                 version = {'id':_id(),'item_id':scoped_id,'run_id':run['id'],'snapshot':copy.deepcopy(scoped),'created_at':now,'restore_group_id':run['id']}
@@ -1428,7 +1495,7 @@ class Store:
                 if changed['content'] != old_content:
                     self._capture_section_changes(state,run,changed)
             for reply in replies:
-                self._reply(self._find(state,'comments',reply['comment_id']),reply['text'],'agent')
+                self._reply(self._find(state,'comments',reply['comment_id']),reply['text'],'agent',run.get('_executor_identity'))
             run['progress'] = 'Saved Workspace edits and comment outcomes'
             run['updated_at'] = _now()
             run['operation_receipts'] = receipts + [{'operation_id':operation_id,'operation_digest':digest,'comment_ids':list(dict.fromkeys(r['comment_id'] for r in replies))}]
@@ -1522,7 +1589,7 @@ class Store:
         return self._transaction(action,expected_revision)
 
     def restore_snapshot(self, snapshot, expected_revision=None):
-        if not isinstance(snapshot,dict) or set(snapshot)-set(CATEGORIES)-{'revision','scope_id'} or set(CATEGORIES)-set(snapshot):
+        if not isinstance(snapshot,dict) or set(snapshot)-set(CATEGORIES)-{'revision','scope_id','identity'} or set(CATEGORIES)-set(snapshot):
             raise StoreError('Backup must contain the complete v1 snapshot arrays')
         if len(_json({k:v for k,v in snapshot.items() if k!='scope_id'}).encode())>MAX_STATE:
             raise StoreError('Backup exceeds Workspace storage limit')
@@ -1530,6 +1597,7 @@ class Store:
             raise StoreError('Backup revision must be a nonnegative integer')
         restored = copy.deepcopy(snapshot)
         restored.pop('scope_id',None)
+        restored.pop('identity',None)
         restored['revision'] = 0
         restored['_locks'] = {}
         if isinstance(restored.get('recents'),list):
@@ -1541,6 +1609,13 @@ class Store:
         except (TypeError,KeyError,OverflowError,RecursionError) as exc:
             raise StoreError('Invalid backup data shape') from exc
         restored['runs'] = []
+        for comment in restored['comments']:
+            for entry in [comment,*comment['replies']]:
+                # Backup identities are inert attribution, never an asset grant
+                # or evidence that an unknown legacy author is this owner.
+                entry.setdefault('author_identity',None)
+                if entry['author_identity'] and entry['author_identity']['kind']=='agent':
+                    entry['author_identity']['avatar_eligible'] = False
         for item in restored['items']:
             item['thread_id'] = None
             item.pop('executor',None)
@@ -1566,8 +1641,9 @@ class Store:
             if state['_locks'] or any(run['status'] in ACTIVE for run in state['runs']):
                 raise StoreError('Stop all active Workspace runs before restoring a backup',409)
             revision = state['revision']
+            names = state.get('_identity_names',{})
             state.clear()
-            state.update(copy.deepcopy(restored),revision=revision,_section_epoch=_id())
+            state.update(copy.deepcopy(restored),revision=revision,_section_epoch=_id(),_identity_names=names)
             return {'restored':True,'item_count':len(state['items']),'scope_id':self.scope_id}
         return self._transaction(action,expected_revision)
 
@@ -1672,11 +1748,13 @@ class Store:
 
         for comment in state['comments']:
             required = {'id','item_id','text','anchor','resolved','replies','created_at'}
-            _keys(comment,required|{'anchor_status','target_item_ids','section_change','_deleted_at'},required)
+            _keys(comment,required|{'anchor_status','target_item_ids','section_change','_deleted_at','author_identity'},required)
             if '_deleted_at' in comment:
                 timestamp(comment['_deleted_at'])
                 if comment['text'] != '[Deleted comment]' or comment['replies'] != []:
                     raise StoreError('Deleted comment must contain only its provenance tombstone')
+            from .identity import validate
+            validate(comment.get('author_identity'),'human')
             self._targets(state,comment.get('target_item_ids',[]))
             item = self._item(state,comment['item_id'])
             if item['kind']=='folder':
@@ -1693,7 +1771,8 @@ class Store:
                 raise StoreError('Invalid replies array')
             reply_ids = set()
             for reply in replies:
-                _keys(reply,{'id','author','text','created_at'},{'id','author','text','created_at'})
+                _keys(reply,{'id','author','text','created_at','author_identity'},{'id','author','text','created_at'})
+                validate(reply.get('author_identity'),'agent' if reply.get('author')=='agent' else 'human')
                 _identifier(reply['id'])
                 if reply['id'] in reply_ids:
                     raise StoreError('Duplicate reply ID')
@@ -1809,7 +1888,9 @@ class Store:
 
         for run in state['runs']:
             required = {'id','item_id','session_id','status','comment_ids','allowed_item_ids','version_ids','progress','error','created_at','updated_at'}
-            _keys(run,required|{'_owner_pid','_owner_identity','operation_receipts'},required)
+            _keys(run,required|{'_owner_pid','_owner_identity','operation_receipts','_executor_identity'},required)
+            from .identity import validate
+            validate(run.get('_executor_identity'),'agent')
             self._item(state,run['item_id'])
             _identifier(run['session_id'],'session_id')
             if run['status'] not in ACTIVE|TERMINAL:
@@ -1917,7 +1998,7 @@ def validate_backup_snapshot(snapshot):
     Derived public projections are removed; scope_id remains inert provenance.
     Lifecycle refusal/detachment and archive framing belong to interchange.
     """
-    _keys(snapshot,set(CATEGORIES)|{'revision','scope_id'},set(CATEGORIES)|{'revision'})
+    _keys(snapshot,set(CATEGORIES)|{'revision','scope_id','identity'},set(CATEGORIES)|{'revision'})
     if type(snapshot['revision']) is not int or snapshot['revision']<0:
         raise StoreError('Backup revision must be a nonnegative integer')
     if 'scope_id' in snapshot:
@@ -1925,6 +2006,7 @@ def validate_backup_snapshot(snapshot):
     if len(_json({k:v for k,v in snapshot.items() if k!='scope_id'}).encode('utf-8'))>MAX_STATE:
         raise StoreError('Backup exceeds Workspace storage limit')
     state = copy.deepcopy(snapshot)
+    state.pop('identity',None)
     state['_locks'] = {}
     try:
         # No __init__: these graph methods depend only on their explicit state.

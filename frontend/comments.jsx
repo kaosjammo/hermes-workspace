@@ -5,6 +5,8 @@ import { CommentBubbles } from "./comment-bubbles.jsx";
 import { numberComments } from "./comment-highlights.jsx";
 import { ThreadPicker } from "./thread-picker.jsx";
 import { commentStyles } from "./comment-styles.mjs";
+import { AuthorHeader } from "./identity.jsx";
+import { authorName } from "./identity.mjs";
 import { itemLabel } from "./item-labels.mjs";
 import { locateAnchor, visibleComments, commentAnchor } from "./editor.mjs";
 function Comment({
@@ -45,7 +47,8 @@ function Comment({
       h(
         "strong",
         null,
-        passageNumber ? `You · Comment ${passageNumber}` : "You",
+        h(AuthorHeader, {entry:comment}),
+        passageNumber ? ` · Comment ${passageNumber}` : "",
       ),
       h(
         "span",
@@ -131,7 +134,7 @@ function Comment({
       h(
         "div",
         { className: "ws-reply", key: reply.id },
-        h("strong", null, reply.author === "agent" ? "Hermes" : "You"),
+        h(AuthorHeader, {entry:reply}),
         h("p", null, reply.text),
       ),
     ),
@@ -445,11 +448,11 @@ export function Comments({
       onPointerEnter: () => setHoveredComment(comment.id), onPointerLeave: () => setHoveredComment(null),
       onFocusCapture: () => setHoveredComment(comment.id), onBlurCapture: event => { if (!event.currentTarget.contains(event.relatedTarget)) setHoveredComment(null); } },
       h(Action, { id: `ws-bubble-${comment.id}`, className: "ws-bubble-summary", variant: "ghost", "aria-expanded": selected,
-        "aria-label": `${context}: ${comment.text} · ${selected ? "Collapse thread" : "Open thread"}`,
+        "aria-label": `${context}: ${comment.text} · ${authorName(comment)} · ${selected ? "Collapse thread" : "Open thread"}`,
         "aria-controls": selected ? `ws-discussion-${comment.id}` : undefined,
         onClick: () => selected ? setActiveComment(null) : select(comment.id) },
-        !grouped && h("span", { className: "ws-bubble-context" }, context,
-          ` · You${comment.resolved ? " · Resolved" : ""}`),
+        h("span", { className: "ws-bubble-author" }, h(AuthorHeader, {entry:comment}),
+          h("span", {className:"ws-bubble-context"}, `${!grouped ? context : `Comment ${number}`}${comment.resolved ? " · Resolved" : ""}`)),
         !selected && h("span", { className: "ws-bubble-preview" }, comment.text),
         h("span", { className: "ws-bubble-context" }, `${comment.replies.length} ${comment.replies.length === 1 ? "reply" : "replies"} · ${selected ? "Collapse thread" : "Open thread"}${discussion.current.replies[comment.id] ? " · Draft reply" : ""}`)),
       selected && h(Comment, { comment, text, command, locked, onError, state, retainedReply: discussion.current.replies[comment.id] ?? "", retainReply,

@@ -47,7 +47,8 @@ export class WorkspaceClient {
     )
       return;
     if (this.value?.scope_id !== state.scope_id) this.scopeVersion++;
-    this.value = state;
+    this.value = state.identity || this.value?.scope_id !== state.scope_id
+      ? state : {...state, identity:this.value?.identity};
     for (const fn of this.listeners) fn();
   }
   assertScope(scope) {
@@ -153,7 +154,7 @@ export class WorkspaceClient {
       if (generation !== this.scopeVersion) throw new StaleWorkspaceError();
       if (response.state && response.state.scope_id !== scope)
         throw new StaleWorkspaceError();
-      if (response.state) this.accept(response.state);
+      if (response.state) this.accept(response.identity ? {...response.state, identity:response.identity} : response.state);
       return response.result;
     };
     const result = this.queue.then(invoke);

@@ -105,7 +105,7 @@ class SharedWorkspaces:
         home = self.root / 'projects' / project_id
         if home.resolve() != home:
             raise StoreError('Shared workspace directory must not traverse symlinks')
-        return Store(home)
+        return Store(home, shared=True)
 
     @staticmethod
     def _revision(value):
@@ -182,7 +182,7 @@ class SharedWorkspaces:
                 raise StoreError('Use a validated exact executor source and matching native thread', 409)
             if not isinstance(payload, dict) or (op != 'search' and type(payload.get('expected_revision')) is not int):
                 raise StoreError('Shared mutations require the captured Workspace revision', 409)
-            return {'result': store.execute(op, payload), 'state': store.snapshot()}
+            return {'result': store.execute(op, payload, human_actor=profile_id), 'state': store.snapshot()}
 
     def bind_executor(self, profile_id, project_id, item_id, binding, *, membership_revision,
                       expected_scope, expected_revision, validate=None):
@@ -233,6 +233,7 @@ class SharedWorkspaces:
                     if conn.execute(f"SELECT value FROM {schema}.metadata WHERE key='scope_id'").fetchone()[0] != scope:
                         raise StoreError('Workspace scope changed before move', 409)
                 old, new = source._load(conn), target._load(conn, 'moved')
+                source._stamp_legacy(old)
                 if type(source_revision) is not int or type(destination_revision) is not int or old['revision'] != source_revision or new['revision'] != destination_revision:
                     raise StoreError('Workspace revision changed before move', 409)
                 root = source._item(old, item_id, active=True)

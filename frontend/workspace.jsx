@@ -48,6 +48,7 @@ import { RichPreview } from "./rich-preview.jsx";
 import { Database, RecordProperties } from "./tables.jsx";
 import { reviewScope, ScopeReviewDialog } from "./scope-review.jsx";
 import { Comments } from "./comments.jsx";
+import { IdentityProvider, UsernameDialog } from "./identity.jsx";
 import { numberComments } from "./comment-highlights.jsx";
 import { commentAnchor } from "./editor.mjs";
 import { activeRun } from "./database.mjs";
@@ -302,6 +303,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
     client.snapshot,
     client.snapshot,
   );
+  const [usernameDialog, setUsernameDialog] = useState(null);
   const [selected, setSelected] = useState(null),
     [error, setError] = useState(""),
     [dialog, setDialog] = useState(null),
@@ -532,7 +534,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
   const navContexts = useMemo(() => navigationContexts(state?.items, state?.attachments), [state?.items, state?.attachments]);
   const item = itemIndex.get(selected);
   const currentRun = item && activeRun(state, item.id);
-  return h(
+  return h(IdentityProvider, {client}, h(
     "div",
     { className: "ws-root" },
     h(
@@ -554,6 +556,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
         compactHeader && h(Action, { onClick: () => act(home) }, "Home"),
         compactHeader && h(Action, { disabled: !state, onClick: (_event, opener) => create("page", opener) }, "New page"),
         h(Action, { disabled: !state, onClick: () => act(async () => { await flush.current(); await refresh(); setError(""); }) }, "Reload state"),
+        h(Action, { disabled: !state, onClick: (_event, opener) => setUsernameDialog({opener}) }, "set username"),
         h(
           Action,
           { disabled: !state, onClick: (_event, opener) => create("folder", opener) },
@@ -767,6 +770,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
                     }),
           ),
         ),
+    usernameDialog && h(UsernameDialog, {client, returnFocus:usernameDialog.opener, onClose:() => setUsernameDialog(null)}),
     dialog &&
       h(CreateDialog, {
         dialog,
@@ -802,7 +806,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
           await confirmation.action();
         },
       }),
-  );
+  ));
 }
 function Home({ items, state, drafts, onOpen, create, setDialog, contexts, itemIndex }) {
   const descriptionPrefix = useId();

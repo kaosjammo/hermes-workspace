@@ -1,6 +1,15 @@
 // Lane-owned additions use the existing native theme, type and control sizes.
 export const commentStyles = `
 .ws-comment-surfaces { display: contents; }
+.ws-author { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:100%; vertical-align:middle; }
+.ws-author-avatar { display:inline-flex; flex:0 0 20px; width:20px; height:20px; align-items:center; justify-content:center; border-radius:50%; overflow:hidden; background:var(--ui-bg-elevated); color:var(--ui-text-secondary); font-size:11px; font-weight:600; }
+.ws-author-avatar img { width:20px; height:20px; object-fit:cover; }
+.ws-author-name { min-width:0; overflow-wrap:anywhere; white-space:normal; text-align:left; color:var(--ui-text-primary); font-size:12px; line-height:1.4; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.ws-bubble-author { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:4px 8px; width:100%; min-width:0; }
+.ws-bubble-author .ws-author { flex:1 1 100px; }
+.ws-bubble-author .ws-bubble-context { flex:0 1 auto; }
+.ws-username-dialog { width:min(24rem,calc(100% - 24px)); }
+.ws-username-dialog input { width:100%; min-width:0; }
 .ws-anchor-recovery summary { cursor:pointer; color:var(--ui-text-secondary); }
 .ws-anchor-recovery blockquote { margin:8px 0 0; max-height:8rem; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
 .ws-anchor-recovery summary:focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; }
