@@ -70,6 +70,7 @@ try{
   await mobile.getByRole('button',{name:'Revert changes: North feedback Touch',exact:true}).tap();await expect.poll(async()=>(await mobile.evaluate(()=>window.issue9.rest('/state'))).comments.find(c=>c.text==='North feedback Touch').section_change.status).toBe('reverted');
   const now=await mobile.evaluate(()=>window.issue9.rest('/state'));assert.equal(now.comments.find(c=>c.text==='North feedback Touch').replies.length,2);passed('emulated touch has visible action labels and >=40px action buttons; tap delete cancel is unchanged and tap revert removes only associated outcome');
  }finally{await touch.close()}
+ await page.reload();await page.locator('.ws-nav').waitFor();
  await open('Stale');let staleState=await state();await button('Revert changes: North feedback Stale').click();const staleDialog=page.getByRole('dialog',{name:'Revert section after manual edits?'});await staleDialog.waitFor();
  const staleComment=staleState.comments.find(c=>c.text==='North feedback Stale');
  const concurrent=await page.request.post(base+'/api/command',{data:{op:'update_item',expected_scope:staleState.scope_id,payload:{id:staleComment.item_id,patch:{title:'Stale garden concurrent title'},expected_revision:staleState.revision}}});assert.equal(concurrent.status(),200);
