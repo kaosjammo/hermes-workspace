@@ -47,6 +47,7 @@ import { RichPreview } from "./rich-preview.jsx";
 import { Database, RecordProperties } from "./tables.jsx";
 import { reviewScope, ScopeReviewDialog } from "./scope-review.jsx";
 import { Comments } from "./comments.jsx";
+import { numberComments } from "./comment-highlights.jsx";
 import { commentAnchor } from "./editor.mjs";
 import { activeRun } from "./database.mjs";
 import { fileBase64, backupFileBase64, downloadFile } from "./editor.mjs";
@@ -1027,9 +1028,10 @@ function Document({
       });
     }).catch(onError);
   };
-  const pageComments = state.comments.filter(
-    (c) => c.item_id === item.id && (showResolved || !c.resolved),
-  ).map(c => ({ ...c, anchor: commentAnchor(c) }));
+  const pageComments = numberComments(state.comments.filter(
+    c => c.item_id === item.id,
+  ).map(c => ({ ...c, anchor: commentAnchor(c) })))
+    .filter(c => showResolved || !c.resolved);
   const returnToEditor = () => editorFocus.current?.();
   const revealComment = (id) => {
     // The discussion becomes active; keep the saved editor Range, not a stale

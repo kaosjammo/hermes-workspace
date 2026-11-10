@@ -1901,6 +1901,8 @@ var workspaceNavigationStyles = `
 .ws-body > .ws-nav-resize { grid-column: 2; grid-row: 1; }
 .ws-body > .ws-work { grid-column: 3; grid-row: 1; }
 .ws-nav-content { min-width: 0; }
+.ws-tree-actions { display: flex; flex-wrap: wrap; gap: 2px 4px; margin-block: 0 6px; }
+.ws-tree-actions > [data-slot="button"] { min-height: 2rem; height: auto; padding: 4px 8px; }
 .ws-workspace-search { min-width: 0; }
 .ws-search-results { margin-block: 8px 16px; }
 .ws-search-results > p { margin: 8px 0; }
@@ -3478,6 +3480,12 @@ var EditorHistory = class {
 
 // frontend/comment-highlights.jsx
 import { useId as useId2, useLayoutEffect as useLayoutEffect4, useRef as useRef6, useState as useState7 } from "react";
+function numberComments(comments) {
+  return comments.map((comment, index) => ({
+    ...comment,
+    passageNumber: Number.isSafeInteger(comment.passageNumber) && comment.passageNumber > 0 ? comment.passageNumber : index + 1
+  }));
+}
 function anchorRange(root, anchor) {
   const location = locateAnchor(root.textContent, anchor);
   if (location.status !== "attached") return null;
@@ -3517,7 +3525,7 @@ function CommentHighlights({
   const [groups, setGroups] = useState7([]), [openGroup, setOpenGroup] = useState7(null);
   const selectedDiscussion = useRef6(false);
   const signature = JSON.stringify(
-    comments.map((c) => [c.id, c.anchor, c.resolved])
+    comments.map((c) => [c.id, c.anchor, c.resolved, c.passageNumber, c.text])
   );
   useLayoutEffect4(() => {
     const root = editorRef.current;
@@ -3532,9 +3540,9 @@ function CommentHighlights({
       const base = root.parentElement.getBoundingClientRect();
       const layoutRoot = root.closest(".ws-layout") ?? root.parentElement;
       const layout = layoutRoot.getBoundingClientRect(), scale = elementScale(layoutRoot);
-      current = comments.filter((c) => c.anchor).map((c, index) => ({
+      current = numberComments(comments).filter((c) => c.anchor).map((c) => ({
         comment: c,
-        number: index + 1,
+        number: c.passageNumber,
         range: anchorRange(root, c.anchor)
       })).filter((c) => c.range);
       if (registry && globalThis.Highlight) {
@@ -4800,18 +4808,19 @@ var databaseGridStyles = `
 .ws-db-column-name > .codicon { color: var(--ui-text-secondary); flex-shrink: 0; }
 .ws-db-record-name > button:first-child { flex: 1 1 0%; max-width: 100%; white-space: normal; min-width: 0; justify-content: start; height: auto; padding-inline: 0; font-size: 13px; text-align: left; overflow-wrap: anywhere; }
 .ws-db-row-actions { flex: 0 0 auto; color: var(--ui-text-secondary); }
-.ws-database .ws-table .ws-db-property-header,.ws-database .ws-table .ws-db-property-spacer { width: 40px; min-width: 40px; max-width: 40px; padding: 4px; }
-.ws-db-add-property { color: var(--ui-text-secondary); }
+.ws-database .ws-table .ws-db-property-header,.ws-database .ws-table .ws-db-property-spacer { width: 128px; min-width: 128px; max-width: 128px; padding: 4px; }
+.ws-db-add-property { color: var(--ui-text-primary); white-space: nowrap; font-size: 12px; font-weight: 500; gap: 6px; }
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger) { min-height: 30px; height: 30px; border-color: transparent; background: transparent; box-shadow: none; font-size: 13px; padding-inline: 5px; }
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger):hover { background: var(--ui-bg-tertiary); }
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger):focus-visible { border-color: var(--ui-accent); }
 .ws-database .ws-property-status { font-size: 12px; padding-block: 5px; }
 .ws-database .ws-formula-value output { display: block; padding: 5px; color: var(--ui-text-primary); }
 .ws-database .ws-table .ws-db-create-row > td { padding: 0; max-width: none; }
-.ws-db-new-record { width: 100%; justify-content: flex-start; min-height: 36px; color: var(--ui-text-secondary); font-weight: 400; }
+.ws-db-new-record { width: 100%; justify-content: flex-start; min-height: 36px; color: var(--ui-text-primary); font-weight: 500; }
 .ws-table .ws-db-new-record { position: sticky; left: 0; width: 100cqw; }
 .ws-db-record-draft { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; max-width: 100%; }
-.ws-table .ws-db-record-draft { width: 100cqw; box-sizing: border-box; }
+.ws-table .ws-db-record-draft { position: sticky; left: 0; width: 100cqw; box-sizing: border-box; }
+.ws-db-draft-label { color: var(--ui-text-primary); font-size: 12px; font-weight: 500; }
 .ws-db-record-draft > input { flex: 1 1 180px; width: auto; max-width: 420px; }
 .ws-db-record-draft > p { flex-basis: 100%; margin: 0; font-size: 12px; }
 .ws-db-form-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
@@ -5211,11 +5220,13 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
           setOpen(true);
         }
       },
-      triggerTip: "Add property",
-      trigger: h(Action, { variant: "ghost", size: "icon-sm", disabled: locked || busy, "aria-label": "Add property", className: "ws-db-add-property" }, h(Codicon, { name: "add", "aria-hidden": true })),
+      trigger: h(Action, { variant: "ghost", disabled: locked || busy, "aria-label": "Add property", className: "ws-db-add-property" }, h(Codicon, { name: "add", "aria-hidden": true }), "Add property"),
       className: "ws-db-property-popover",
       align: "end",
       side: "bottom",
+      onEscapeKeyDown: (event) => {
+        if (gate.current || composing.current || event.isComposing || event.keyCode === 229) event.preventDefault();
+      },
       onOpenAutoFocus: (event) => {
         event.preventDefault();
         requestAnimationFrame(() => input.current?.focus({ preventScroll: true }));
@@ -5319,6 +5330,7 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
 }
 function NewRecordCreator({ draft, locked, onDraft, onCreate, onCancel, label = "New record", groupKey, onFocus }) {
   const form = useRef9(null), input = useRef9(null), composing = useRef9(false);
+  const titleId = useId3(), messageId = useId3();
   useEffect4(() => {
     if (draft.open && !draft.busy && (document.activeElement === document.body || form.current?.contains(document.activeElement))) {
       form.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
@@ -5363,10 +5375,13 @@ function NewRecordCreator({ draft, locked, onDraft, onCreate, onCancel, label = 
         if (!composing.current) void onCreate();
       }
     },
+    h("label", { className: "ws-db-draft-label", htmlFor: titleId }, "New record"),
     h(Input, {
       ref: input,
+      id: titleId,
       "aria-label": "New record title",
-      placeholder: "Record name\u2026",
+      "aria-describedby": draft.error || draft.status ? messageId : void 0,
+      placeholder: "Enter record title\u2026",
       value: draft.title,
       maxLength: 500,
       required: true,
@@ -5380,7 +5395,7 @@ function NewRecordCreator({ draft, locked, onDraft, onCreate, onCancel, label = 
       h(Action, { type: "submit", disabled: locked || draft.busy || !draft.title.trim() }, draft.busy ? "Creating\u2026" : "Create record"),
       h(Action, { "aria-label": "Cancel new record", disabled: draft.busy, onClick: onCancel }, "Cancel")
     ),
-    (draft.error || draft.status) && h("p", { role: draft.error ? "alert" : "status", className: draft.error ? "ws-field-error" : "ws-muted" }, draft.error || draft.status)
+    (draft.error || draft.status) && h("p", { id: messageId, role: draft.error ? "alert" : "status", className: draft.error ? "ws-field-error" : "ws-muted" }, draft.error || draft.status)
   );
 }
 function Database({ item, state, command, onOpen, onError, locked, confirm, propertyBuffer, registerPropertyFlush }) {
@@ -5545,7 +5560,6 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
         "div",
         { className: "ws-db-board-tools" },
         groupColumn && h(Choice, { label: "Group board by", value: groupColumn.id, disabled: rowDraft.open, options: selectColumns.map((c) => [c.id, c.name]), onChange: setGroup }),
-        h("span", null, "Properties"),
         h(PropertyCreator, { item, state, command, locked: schemaLocked, registerFlush: registerCreationFlush })
       ),
       !groupColumn ? h("p", { className: "ws-db-empty" }, "Add a single-select property to group records on a board.") : h(
@@ -6187,6 +6201,11 @@ function ThreadPicker({ workflow, itemId, locked, onBound, onClose }) {
 // frontend/comment-styles.mjs
 var commentStyles = `
 .ws-comment-surfaces { display: contents; }
+.ws-anchor-recovery summary { cursor:pointer; color:var(--ui-text-secondary); }
+.ws-anchor-recovery blockquote { margin:8px 0 0; max-height:8rem; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
+.ws-anchor-recovery summary:focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; }
+.ws-comment .ws-anchor:has(.ws-comment-passage) { border:0; padding:0; margin:4px 0; }
+.ws-comment-passage { min-height:28px; }
 .ws-comment-compose-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
 .ws-comment-compose-heading label { flex:1 1 100px; }
 .ws-comment-compose-heading button { flex:0 0 auto; color:var(--ui-text-secondary); }
@@ -6232,6 +6251,7 @@ function Comment({
   onRevertSection = () => {
   },
   showContext = true,
+  originalAnchor = comment.anchor,
   onDelete = () => {
   }
 }) {
@@ -6294,20 +6314,27 @@ function Comment({
     comment.anchor ? h(
       "div",
       { className: "ws-anchor" },
-      location.status === "attached" ? `\u201C${comment.anchor.quote}\u201D` : `Detached selection: \u201C${comment.anchor.quote}\u201D`,
       location.status === "attached" && h(
         Action,
         {
+          className: "ws-comment-passage",
           variant: "text",
           style: { color: "var(--ui-text-secondary)" },
+          "aria-label": `Show passage for comment ${passageNumber}`,
           onClick: () => onPassage(comment.id, comment.anchor)
         },
-        "Show passage"
+        `Show passage ${passageNumber}`
       ),
       location.status === "detached" && h(
-        "p",
+        "div",
         null,
-        "The original text is missing or ambiguous. This comment has not been attached elsewhere."
+        h("p", { role: "status" }, "The original text is missing or ambiguous. This comment has not been attached elsewhere."),
+        originalAnchor?.quote && h(
+          "details",
+          { className: "ws-anchor-recovery" },
+          h("summary", null, "Show original excerpt"),
+          h("blockquote", null, originalAnchor.quote)
+        )
       )
     ) : h("span", { className: "ws-muted" }, state.items.find((item) => item.id === comment.item_id)?.kind === "database" ? "Whole database" : "Whole page"),
     h("p", null, comment.text),
@@ -6543,7 +6570,7 @@ function Comments({
   };
   const currentCommentIds = new Set(state.comments.map((c) => c.id));
   for (const id of deletedIds.current) if (!currentCommentIds.has(id)) deletedIds.current.delete(id);
-  const all = state.comments.filter((c) => c.item_id === item.id && !deletedIds.current.has(c.id)).map((c) => ({ ...c, anchor: commentAnchor(c) }));
+  const all = numberComments(state.comments.filter((c) => c.item_id === item.id && !deletedIds.current.has(c.id))).map((c) => ({ ...c, originalAnchor: c.anchor, anchor: commentAnchor(c) }));
   const [pageComposerOpen, setPageComposerOpen] = useState13(Boolean(discussion.current.text || discussion.current.targets.length));
   useEffect6(() => {
     const reply = all.find((c) => discussion.current.replies[c.id]);
@@ -6689,9 +6716,10 @@ function Comments({
     (window.requestAnimationFrame ?? ((fn) => setTimeout(fn, 0)))(() => document.getElementById(`ws-discussion-${id}`)?.focus({ preventScroll: true }));
   };
   const bubble = (comment, grouped = false) => {
-    const number = comment.anchor ? visible.filter((c) => c.anchor).findIndex((c) => c.id === comment.id) + 1 : null;
+    const number = comment.passageNumber;
     const selected = activeComment === comment.id;
     const detached = comment.anchor && !attached.has(comment.id);
+    const context = `Comment ${number}${comment.anchor ? detached ? " \xB7 Detached" : "" : item.kind === "database" ? " \xB7 Whole database" : " \xB7 Whole page"}`;
     return h(
       "section",
       {
@@ -6711,14 +6739,14 @@ function Comments({
           className: "ws-bubble-summary",
           variant: "ghost",
           "aria-expanded": selected,
-          "aria-label": `${number ? `Comment ${number}` : item.kind === "database" ? "Whole database" : "Whole page"}: ${comment.text} \xB7 ${selected ? "Collapse thread" : "Open thread"}`,
+          "aria-label": `${context}: ${comment.text} \xB7 ${selected ? "Collapse thread" : "Open thread"}`,
           "aria-controls": selected ? `ws-discussion-${comment.id}` : void 0,
           onClick: () => selected ? setActiveComment(null) : select(comment.id)
         },
         !grouped && h(
           "span",
           { className: "ws-bubble-context" },
-          number ? `${detached ? "Detached \xB7 " : ""}Comment ${number}` : item.kind === "database" ? "Whole database" : "Whole page",
+          context,
           ` \xB7 You${comment.resolved ? " \xB7 Resolved" : ""}`
         ),
         !selected && h("span", { className: "ws-bubble-preview" }, comment.text),
@@ -6734,6 +6762,7 @@ function Comments({
         retainedReply: discussion.current.replies[comment.id] ?? "",
         retainReply,
         passageNumber: number,
+        originalAnchor: comment.originalAnchor,
         active: true,
         onActivate: setActiveComment,
         onPassage,
@@ -7138,7 +7167,7 @@ function NavigationLabel({ item, context, descriptionId }) {
     context && h("span", { className: "ws-title-reader", id: descriptionId }, context.description)
   );
 }
-var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOpen, selected }) {
+var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOpen, selected, expansion, onToggle }) {
   return h(
     "ul",
     null,
@@ -7148,7 +7177,12 @@ var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOp
         { key: item.id },
         item.kind === "folder" ? h(
           "details",
-          { open: true },
+          {
+            open: expansion.overrides.get(item.id) ?? expansion.defaultOpen,
+            onToggle: (event) => {
+              if (event.target === event.currentTarget) onToggle(item.id, event.currentTarget.open);
+            }
+          },
           h(
             "summary",
             null,
@@ -7168,7 +7202,7 @@ var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOp
               h(NavigationLabel, { item, context: contexts.get(item.id), descriptionId: `ws-tree-context-${item.id}` })
             )
           ),
-          h(Tree2, { childrenByParent, contexts, parent: item.id, onOpen, selected })
+          h(Tree2, { childrenByParent, contexts, parent: item.id, onOpen, selected, expansion, onToggle })
         ) : h(
           "div",
           { className: "ws-nav-row" },
@@ -7192,6 +7226,36 @@ var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOp
     )
   );
 });
+function FolderNavigation({ childrenByParent, contexts, onOpen, selected }) {
+  const treeId = useId6();
+  const [expansion, setExpansion] = useState14(() => ({ defaultOpen: true, overrides: /* @__PURE__ */ new Map() }));
+  const onToggle = useCallback4((id, open) => setExpansion((current) => {
+    if ((current.overrides.get(id) ?? current.defaultOpen) === open) return current;
+    const overrides = new Map(current.overrides);
+    overrides.set(id, open);
+    return { ...current, overrides };
+  }), []);
+  const hasFolders = [...childrenByParent.values()].some((items) => items.some((item) => item.kind === "folder"));
+  return h(
+    "div",
+    { className: "ws-folder-navigation" },
+    hasFolders && h(
+      "div",
+      { className: "ws-tree-actions", role: "group", "aria-label": "Folder tree actions" },
+      h(Action, {
+        variant: "ghost",
+        "aria-controls": treeId,
+        onClick: () => setExpansion({ defaultOpen: true, overrides: /* @__PURE__ */ new Map() })
+      }, "Expand all"),
+      h(Action, {
+        variant: "ghost",
+        "aria-controls": treeId,
+        onClick: () => setExpansion({ defaultOpen: false, overrides: /* @__PURE__ */ new Map() })
+      }, "Collapse all")
+    ),
+    h("div", { id: treeId }, h(Tree, { childrenByParent, contexts, onOpen, selected, expansion, onToggle }))
+  );
+}
 function WorkspaceSource({ ctx, profile, sourceKey }) {
   const queryInstance = useId6();
   const client = useMemo2(
@@ -7608,7 +7672,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
             contexts: navContexts
           }),
           h("h2", null, "Folders and pages"),
-          items.length ? h(Tree, { childrenByParent, contexts: navContexts, onOpen: open, selected }) : h("p", { className: "ws-empty" }, "Create your first page."),
+          items.length ? h(FolderNavigation, { childrenByParent, contexts: navContexts, onOpen: open, selected }) : h("p", { className: "ws-empty" }, "Create your first page."),
           h("h2", null, "Recents"),
           h(
             "ul",
@@ -8078,9 +8142,9 @@ function Document({
       });
     }).catch(onError);
   };
-  const pageComments = state.comments.filter(
-    (c) => c.item_id === item.id && (showResolved || !c.resolved)
-  ).map((c) => ({ ...c, anchor: commentAnchor(c) }));
+  const pageComments = numberComments(state.comments.filter(
+    (c) => c.item_id === item.id
+  ).map((c) => ({ ...c, anchor: commentAnchor(c) }))).filter((c) => showResolved || !c.resolved);
   const returnToEditor = () => editorFocus.current?.();
   const revealComment = (id) => {
     getSelection()?.removeAllRanges();
