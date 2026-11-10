@@ -132,6 +132,14 @@ function folderDestinations(items, movingId) {
   return options;
 }
 
+// frontend/navigation-order.mjs
+function navigationOrderPayload(state, request) {
+  const siblings = state.items.filter((item) => !item.deleted_at && item.kind !== "record" && item.parent_id === request.parent);
+  if (state.scope_id !== request.scope || siblings.length !== request.siblings.length || siblings.some((item, i) => item.id !== request.siblings[i]) || !siblings.some((item) => item.id === request.id) || !siblings.some((item) => item.id === request.target_id))
+    throw new Error("The folder order changed. Try reordering the current items again.");
+  return { id: request.id, target_id: request.target_id, position: request.position };
+}
+
 // frontend/workspace.jsx
 import {
   host as host2,
@@ -1914,6 +1922,25 @@ var workspaceNavigationStyles = `
 .ws-search-result-text small { color: var(--ui-text-secondary); font: inherit; white-space: normal; }
 .ws-nav ul ul { min-width: 0; }
 .ws-nav li { min-width: 0; }
+.ws-order-help, .ws-order-status { font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.ws-order-help { margin: 4px 0 8px; color: var(--ui-text-secondary); }
+.ws-order-status { margin: 0; }
+.ws-order-status:not(:empty) { margin-block: 6px; }
+.ws-folder-navigation[data-reordering="true"] .ws-order-status { height: 4.5em; overflow: auto; margin-block: 6px; }
+.ws-order-status[role="alert"] { color: var(--ui-text-primary); border-inline-start: 2px solid var(--ui-accent); padding-inline-start: 6px; }
+.ws-folder-navigation[data-reordering="true"] .ws-order-row { display: flex; align-items: center; flex-wrap: wrap; position: relative; }
+.ws-folder-navigation[data-reordering="true"] .ws-order-row > [data-slot="button"] { flex: 1; width: auto; min-width: 72px; }
+.ws-order-controls { display: inline-flex; gap: 0; flex: 0 0 auto; margin-inline-start: auto; }
+.ws-order-controls > [data-slot="button"] { padding: 4px; width: 28px; min-width: 28px; height: 32px; }
+.ws-order-controls .ws-order-handle { cursor: grab; }
+.ws-order-controls .ws-order-handle:active { cursor: grabbing; }
+.ws-order-controls > [data-slot="button"]:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
+.ws-order-row[data-order-position] { background: var(--ui-bg-quaternary); }
+.ws-order-row[data-order-position]::after {
+  content: ""; position: absolute; inset-inline: 0; height: 2px; background: var(--ui-accent); pointer-events: none;
+}
+.ws-order-row[data-order-position="before"]::after { top: 0; }
+.ws-order-row[data-order-position="after"]::after { bottom: 0; }
 @container hermes-workspace (max-width: 600px) {
   .ws-nav { flex: 0 0 auto; max-height: min(240px, 40vh); }
   .ws-nav[data-expanded="true"] { flex-shrink: 1; }
@@ -7167,20 +7194,65 @@ function NavigationLabel({ item, context, descriptionId }) {
     context && h("span", { className: "ws-title-reader", id: descriptionId }, context.description)
   );
 }
-var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOpen, selected, initializeDisclosure }) {
+function NavigationOrderControls({ item, siblings, order }) {
+  if (!order.mode) return null;
+  const index = siblings.findIndex((row) => row.id === item.id);
+  const move = (direction) => {
+    const target = siblings[index + direction];
+    if (target) order.save(order.capture(item), target, direction < 0 ? "before" : "after");
+  };
+  return h(
+    "span",
+    {
+      className: "ws-order-controls",
+      role: "group",
+      "aria-label": `${item.title}, position ${index + 1} of ${siblings.length}`,
+      onClick: (e) => e.stopPropagation(),
+      onKeyDown: (e) => {
+        if (e.key !== "Escape") e.stopPropagation();
+      }
+    },
+    h(Action, {
+      variant: "ghost",
+      className: "ws-order-handle",
+      "aria-label": `Drag ${item.title}`,
+      title: `Drag ${item.title}. Or use Move up and Move down.`,
+      "aria-describedby": order.helpId,
+      disabled: order.pending || siblings.length < 2,
+      draggable: !order.pending && siblings.length > 1,
+      onDragStart: (e) => order.start(e, item),
+      onDragEnd: order.end
+    }, h(Codicon, { name: "gripper" })),
+    h(Action, {
+      variant: "ghost",
+      "aria-label": `Move ${item.title} up`,
+      title: "Move up",
+      disabled: order.pending || index === 0,
+      onClick: () => move(-1)
+    }, h(Codicon, { name: "arrow-up" })),
+    h(Action, {
+      variant: "ghost",
+      "aria-label": `Move ${item.title} down`,
+      title: "Move down",
+      disabled: order.pending || index === siblings.length - 1,
+      onClick: () => move(1)
+    }, h(Codicon, { name: "arrow-down" }))
+  );
+}
+var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOpen, selected, initializeDisclosure, order }) {
   return h(
     "ul",
     null,
     (childrenByParent.get(parent) ?? []).map(
       (item) => h(
         "li",
-        { key: item.id },
+        { key: item.id, "data-ws-item-id": item.id },
         item.kind === "folder" ? h(
           "details",
           { ref: initializeDisclosure },
           h(
             "summary",
-            null,
+            order.row(item),
             h(Codicon, {
               name: "chevron-right",
               className: "ws-disclosure-caret"
@@ -7195,12 +7267,13 @@ var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOp
                 "aria-describedby": contexts.has(item.id) ? `ws-tree-context-${item.id}` : void 0
               },
               h(NavigationLabel, { item, context: contexts.get(item.id), descriptionId: `ws-tree-context-${item.id}` })
-            )
+            ),
+            h(NavigationOrderControls, { item, siblings: childrenByParent.get(parent), order })
           ),
-          h(Tree2, { childrenByParent, contexts, parent: item.id, onOpen, selected, initializeDisclosure })
+          h(Tree2, { childrenByParent, contexts, parent: item.id, onOpen, selected, initializeDisclosure, order })
         ) : h(
           "div",
-          { className: "ws-nav-row" },
+          { ...order.row(item), className: "ws-nav-row ws-order-row" },
           h(
             Action,
             {
@@ -7215,13 +7288,14 @@ var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOp
               name: item.kind === "database" ? "table" : "file-text"
             }),
             h(NavigationLabel, { item, context: contexts.get(item.id), descriptionId: `ws-tree-context-${item.id}` })
-          )
+          ),
+          h(NavigationOrderControls, { item, siblings: childrenByParent.get(parent), order })
         )
       )
     )
   );
 });
-function FolderNavigation({ childrenByParent, contexts, onOpen, selected }) {
+function FolderNavigation({ childrenByParent, contexts, onOpen, selected, scope, reorder }) {
   const treeId = useId6();
   const tree = useRef14(null), defaultOpen = useRef14(true);
   const initializeDisclosure = useCallback4((node) => {
@@ -7233,25 +7307,164 @@ function FolderNavigation({ childrenByParent, contexts, onOpen, selected }) {
       node.open = open;
     });
   }, []);
+  const [mode, setMode] = useState14(false), [pending, setPending] = useState14(false), [feedback, setFeedback] = useState14({ text: "", failed: false }), [target, setTarget] = useState14(null);
+  const busy = useRef14(false), drag = useRef14(null), serial = useRef14(0), toggle = useRef14(null), mounted = useRef14(true);
+  const restoreOrderFocus = useRef14(null);
+  const helpId = `${treeId}-order-help`, mime = "application/x-hermes-workspace-order";
+  const signature = JSON.stringify([...childrenByParent].map(([parent, rows]) => [parent, rows.map((row) => row.id)]));
+  useLayoutEffect9(() => {
+    drag.current = null;
+    setTarget(null);
+  }, [scope, signature]);
+  useLayoutEffect9(() => {
+    if (pending || !restoreOrderFocus.current) return;
+    const { node, id, sourceScope } = restoreOrderFocus.current;
+    restoreOrderFocus.current = null;
+    if (sourceScope !== scope || document.activeElement !== document.body && document.activeElement !== node) return;
+    const row = [...tree.current?.querySelectorAll("[data-ws-order-row]") ?? []].find((row2) => row2.dataset.wsOrderRow === id);
+    const destination = node.isConnected && !node.disabled ? node : row?.querySelector(".ws-order-handle:not(:disabled)");
+    destination?.focus({ preventScroll: true });
+  }, [pending, scope]);
+  useEffect7(() => () => {
+    mounted.current = false;
+    drag.current = null;
+  }, []);
+  const capture = (item) => ({
+    id: item.id,
+    parent: item.parent_id,
+    scope,
+    siblings: (childrenByParent.get(item.parent_id) ?? []).map((row) => row.id)
+  });
+  const cancel = () => {
+    if (!drag.current) return;
+    drag.current = null;
+    setTarget(null);
+    setFeedback({ text: "Reordering cancelled. Saved order unchanged.", failed: false });
+  };
+  const save = async (request, item, position) => {
+    if (busy.current || request.id === item.id || request.parent !== item.parent_id || request.scope !== scope) return;
+    const focused = document.activeElement;
+    if (tree.current?.contains(focused)) restoreOrderFocus.current = { node: focused, id: request.id, sourceScope: scope };
+    busy.current = true;
+    drag.current = null;
+    setTarget(null);
+    setPending(true);
+    setFeedback({ text: "Saving folder order\u2026", failed: false });
+    try {
+      await reorder({ ...request, target_id: item.id, position });
+      if (mounted.current) setFeedback({ text: `Saved order. \u201C${request.title ?? request.id}\u201D ${position} \u201C${item.title}\u201D.`, failed: false });
+    } catch (error) {
+      if (mounted.current) setFeedback({ text: `Could not save order. ${error.message} Try again with the current order.`, failed: true });
+    } finally {
+      busy.current = false;
+      if (mounted.current) setPending(false);
+    }
+  };
+  const order = {
+    mode,
+    pending,
+    helpId,
+    capture: (item) => ({ ...capture(item), title: item.title }),
+    save,
+    start: (event, item) => {
+      if (busy.current || !mode) {
+        event.preventDefault();
+        return;
+      }
+      const token = `${treeId}:${++serial.current}`;
+      drag.current = { ...capture(item), title: item.title, token };
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData(mime, token);
+      event.dataTransfer.setData("text/plain", item.title);
+    },
+    end: cancel,
+    row: (item) => ({
+      className: "ws-order-row",
+      "data-ws-order-row": item.id,
+      "data-order-position": target?.id === item.id ? target.position : void 0,
+      onDragOver: (event) => {
+        const request = drag.current;
+        if (!mode || busy.current || !request || request.scope !== scope) return;
+        if (request.parent !== item.parent_id || request.id === item.id) {
+          event.dataTransfer.dropEffect = "none";
+          setTarget(null);
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = "move";
+        const box = event.currentTarget.getBoundingClientRect();
+        const position = event.clientY < box.top + box.height / 2 ? "before" : "after";
+        setTarget((old) => old?.id === item.id && old.position === position ? old : { id: item.id, position });
+        setFeedback((old) => {
+          const text = `Drop ${position} \u201C${item.title}\u201D. Same folder only; use Move to change folders.`;
+          return old.text === text ? old : { text, failed: false };
+        });
+      },
+      onDragLeave: (event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setTarget((old) => old?.id === item.id ? null : old);
+      },
+      onDrop: (event) => {
+        const request = drag.current;
+        if (!request || request.token !== event.dataTransfer.getData(mime)) {
+          cancel();
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        const box = event.currentTarget.getBoundingClientRect();
+        const position = event.clientY < box.top + box.height / 2 ? "before" : "after";
+        void save(request, item, position);
+      }
+    })
+  };
   const hasFolders = [...childrenByParent.values()].some((items) => items.some((item) => item.kind === "folder"));
+  const canReorder = [...childrenByParent.values()].some((items) => items.length > 1);
   return h(
     "div",
-    { className: "ws-folder-navigation" },
-    hasFolders && h(
+    {
+      className: "ws-folder-navigation",
+      "data-reordering": mode,
+      "aria-busy": pending,
+      onKeyDown: (event) => {
+        if (event.key !== "Escape" || event.isComposing || busy.current) return;
+        event.stopPropagation();
+        event.preventDefault();
+        if (drag.current) cancel();
+        else {
+          setMode(false);
+          toggle.current?.focus({ preventScroll: true });
+        }
+      }
+    },
+    h(
       "div",
       { className: "ws-tree-actions", role: "group", "aria-label": "Folder tree actions" },
-      h(Action, {
+      hasFolders && h(Action, {
         variant: "ghost",
         "aria-controls": treeId,
         onClick: () => setAll(true)
       }, "Expand all"),
-      h(Action, {
+      hasFolders && h(Action, {
         variant: "ghost",
         "aria-controls": treeId,
         onClick: () => setAll(false)
-      }, "Collapse all")
+      }, "Collapse all"),
+      canReorder && h(Action, {
+        ref: toggle,
+        variant: "ghost",
+        "aria-pressed": mode,
+        disabled: pending,
+        "aria-controls": treeId,
+        onClick: () => {
+          cancel();
+          setMode((value) => !value);
+        }
+      }, mode ? "Done reordering" : "Reorder")
     ),
-    h("div", { id: treeId, ref: tree }, h(Tree, { childrenByParent, contexts, onOpen, selected, initializeDisclosure }))
+    mode && h("p", { id: helpId, className: "ws-order-help" }, "Drag a handle, or use Move up and Move down. Escape cancels. Same folder only; use Move to change folders."),
+    h("p", { className: "ws-order-status", role: feedback.failed ? "alert" : "status", "aria-atomic": true }, feedback.text),
+    h("div", { id: treeId, ref: tree }, h(Tree, { childrenByParent, contexts, onOpen, selected, initializeDisclosure, order }))
   );
 }
 function WorkspaceSource({ ctx, profile, sourceKey }) {
@@ -7310,6 +7523,10 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
     (op, payload) => client.command(op, payload),
     [client]
   );
+  const reorder = useCallback4((request) => client.command(
+    "reorder_item",
+    (current) => navigationOrderPayload(current, request)
+  ), [client]);
   const refresh = useCallback4(() => client.load(), [client]);
   const loadReplacement = async (ticket, committed = true) => {
     client.assertCurrent();
@@ -7670,7 +7887,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
             contexts: navContexts
           }),
           h("h2", null, "Folders and pages"),
-          items.length ? h(FolderNavigation, { childrenByParent, contexts: navContexts, onOpen: open, selected }) : h("p", { className: "ws-empty" }, "Create your first page."),
+          items.length ? h(FolderNavigation, { childrenByParent, contexts: navContexts, onOpen: open, selected, scope: state.scope_id, reorder }) : h("p", { className: "ws-empty" }, "Create your first page."),
           h("h2", null, "Recents"),
           h(
             "ul",
