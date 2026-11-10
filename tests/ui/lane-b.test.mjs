@@ -152,7 +152,7 @@ test("picker labels bounded coverage; keyboard chooses exact duplicate-title row
   const rows = [{ id: "durable-a", title: "Same" }, { id: "durable-b", title: "Same" }, { id: "busy", title: "Busy", running: true }];
   const bound = []; const workflow = { listThreads: async () => rows, bindThread: async (...args) => bound.push(args) };
   await act(async () => root.render(h(ThreadPicker, { workflow, itemId: "p", onBound: () => {}, onClose: () => {}, locked: false }))); await tick();
-  assert.match(document.body.textContent, /older history has not been searched/i);
+  assert.match(document.body.textContent, /older history (?:is not|has not been) searched/i);
   const search = document.querySelector('input[aria-label="Search recent native threads"]');
   await type(search, "Same"); await key(search, { key: "ArrowDown" }); await key(search);
   assert.deepEqual(bound, [["p", "durable-b", rows[1]]]);

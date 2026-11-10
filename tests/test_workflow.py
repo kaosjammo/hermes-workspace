@@ -12,7 +12,7 @@ from workspace_plugin.native import NativeSessions
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1] / '.local/workflow/tmp')
-        self.home = Path(self.temp.name)
+        self.home = Path(self.temp.name).resolve()
         from workspace_plugin.store import Store
         from hermes_state import SessionDB
         from hermes_state_runtime import begin_runtime_epoch
