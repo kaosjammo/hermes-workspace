@@ -19,6 +19,7 @@ const env = {
   XDG_CACHE_HOME: path.join(fixture, 'cache'),
   HERMES_RUNTIME_DIR: path.join(fixture, 'runtime'),
   PYTHONDONTWRITEBYTECODE: '1',
+  PYTHONPATH: [root, path.join(root, 'tests')].join(path.delimiter),
 };
 function run(args) {
   const result = spawnSync(process.execPath, args, {
