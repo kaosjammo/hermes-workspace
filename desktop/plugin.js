@@ -7167,7 +7167,7 @@ function NavigationLabel({ item, context, descriptionId }) {
     context && h("span", { className: "ws-title-reader", id: descriptionId }, context.description)
   );
 }
-var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOpen, selected, expansion, onToggle }) {
+var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOpen, selected, initializeDisclosure }) {
   return h(
     "ul",
     null,
@@ -7177,12 +7177,7 @@ var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOp
         { key: item.id },
         item.kind === "folder" ? h(
           "details",
-          {
-            open: expansion.overrides.get(item.id) ?? expansion.defaultOpen,
-            onToggle: (event) => {
-              if (event.target === event.currentTarget) onToggle(item.id, event.currentTarget.open);
-            }
-          },
+          { ref: initializeDisclosure },
           h(
             "summary",
             null,
@@ -7202,7 +7197,7 @@ var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOp
               h(NavigationLabel, { item, context: contexts.get(item.id), descriptionId: `ws-tree-context-${item.id}` })
             )
           ),
-          h(Tree2, { childrenByParent, contexts, parent: item.id, onOpen, selected, expansion, onToggle })
+          h(Tree2, { childrenByParent, contexts, parent: item.id, onOpen, selected, initializeDisclosure })
         ) : h(
           "div",
           { className: "ws-nav-row" },
@@ -7228,13 +7223,16 @@ var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOp
 });
 function FolderNavigation({ childrenByParent, contexts, onOpen, selected }) {
   const treeId = useId6();
-  const [expansion, setExpansion] = useState14(() => ({ defaultOpen: true, overrides: /* @__PURE__ */ new Map() }));
-  const onToggle = useCallback4((id, open) => setExpansion((current) => {
-    if ((current.overrides.get(id) ?? current.defaultOpen) === open) return current;
-    const overrides = new Map(current.overrides);
-    overrides.set(id, open);
-    return { ...current, overrides };
-  }), []);
+  const tree = useRef14(null), defaultOpen = useRef14(true);
+  const initializeDisclosure = useCallback4((node) => {
+    if (node) node.open = defaultOpen.current;
+  }, []);
+  const setAll = useCallback4((open) => {
+    defaultOpen.current = open;
+    tree.current?.querySelectorAll("details").forEach((node) => {
+      node.open = open;
+    });
+  }, []);
   const hasFolders = [...childrenByParent.values()].some((items) => items.some((item) => item.kind === "folder"));
   return h(
     "div",
@@ -7245,15 +7243,15 @@ function FolderNavigation({ childrenByParent, contexts, onOpen, selected }) {
       h(Action, {
         variant: "ghost",
         "aria-controls": treeId,
-        onClick: () => setExpansion({ defaultOpen: true, overrides: /* @__PURE__ */ new Map() })
+        onClick: () => setAll(true)
       }, "Expand all"),
       h(Action, {
         variant: "ghost",
         "aria-controls": treeId,
-        onClick: () => setExpansion({ defaultOpen: false, overrides: /* @__PURE__ */ new Map() })
+        onClick: () => setAll(false)
       }, "Collapse all")
     ),
-    h("div", { id: treeId }, h(Tree, { childrenByParent, contexts, onOpen, selected, expansion, onToggle }))
+    h("div", { id: treeId, ref: tree }, h(Tree, { childrenByParent, contexts, onOpen, selected, initializeDisclosure }))
   );
 }
 function WorkspaceSource({ ctx, profile, sourceKey }) {
