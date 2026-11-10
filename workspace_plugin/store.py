@@ -878,6 +878,36 @@ class Store:
         item['updated_at'] = _now()
         return item
 
+    def _reorder_item(self, state, payload):
+        """Permute active navigation sibling slots, without touching item data.
+
+        _save/_load and catalog retain this order through SQLite rowid. Records,
+        Trash and every other parent's slots keep their exact relative order.
+        This user operation grants no model edit authority and never reparents.
+        """
+        item = self._item(state, payload['id'], active=True)
+        target = self._item(state, payload['target_id'], active=True)
+        if item['kind'] == 'record' or target['kind'] == 'record':
+            raise StoreError('Database records cannot be reordered in navigation')
+        if item['parent_id'] != target['parent_id']:
+            raise StoreError('Reorder within the same folder; use Move to change folders', 409)
+        if item['id'] == target['id']:
+            raise StoreError('Choose a different sibling as the reorder target')
+        if not isinstance(payload['position'], str) or payload['position'] not in ('before', 'after'):
+            raise StoreError('Reorder position must be before or after')
+        self._parent(state, item['parent_id'])
+        siblings = [row for row in state['items'] if row['kind'] != 'record'
+                    and row['deleted_at'] is None and row['parent_id'] == item['parent_id']]
+        ordered = [row for row in siblings if row['id'] != item['id']]
+        index = next(i for i, row in enumerate(ordered) if row['id'] == target['id'])
+        ordered.insert(index + (payload['position'] == 'after'), item)
+        changed = [old['id'] for old, new in zip(siblings, ordered) if old['id'] != new['id']]
+        self._unlocked(state, set(changed) | {item['id'], target['id']})
+        ids = {row['id'] for row in siblings}
+        replacement = iter(ordered)
+        state['items'] = [next(replacement) if row['id'] in ids else row for row in state['items']]
+        return {'id': item['id'], 'parent_id': item['parent_id'], 'sibling_ids': [row['id'] for row in ordered]}
+
     def execute(self, op: str, payload: dict):
         _text(op,'operation',80)
         if not isinstance(payload,dict):
@@ -889,6 +919,7 @@ class Store:
         fields = {
             'create_item':({'kind','title','parent_id','database_id','content','properties'},{'kind','title'}),
             'update_item':({'id','patch'},{'id','patch'}), 'open_item':({'id'},{'id'}),
+            'reorder_item':({'id','target_id','position'},{'id','target_id','position'}),
             'trash':({'id'},{'id'}), 'restore':({'id'},{'id'}), 'purge':({'id'},{'id'}),
             'add_comment':({'item_id','text','anchor','target_item_ids'},{'item_id','text'}),
             'reply_comment':({'id','text'},{'id','text'}),
@@ -907,6 +938,10 @@ class Store:
         if op not in fields:
             raise StoreError('Unknown Workspace operation')
         _keys(payload,*fields[op])
+        if op == 'reorder_item':
+            if type(revision) is not int or revision < 0:
+                raise StoreError('Navigation reordering requires the captured Workspace revision', 409)
+            return self._transaction(lambda state:self._reorder_item(state,payload),revision,skip_unchanged=True)
         if op == 'search_page':
             return self.search_page(payload['query'],offset=payload.get('offset',0),limit=payload.get('limit',100),expected_revision=revision)
         if op == 'preview_section_revert':

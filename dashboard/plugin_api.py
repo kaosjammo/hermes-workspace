@@ -221,7 +221,7 @@ def create_router(owner_home: Callable[[], Path] = _home,
     async def shared_command(request: Request, workspace_id: str):
         body = await _body(request, 16 * 1024 * 1024)
         service, profile_id, _ = shared_selected()
-        allowed = {'create_item', 'update_item', 'open_item', 'trash', 'restore', 'purge',
+        allowed = {'create_item', 'update_item', 'open_item', 'reorder_item', 'trash', 'restore', 'purge',
                    'add_comment', 'reply_comment', 'resolve_comment', 'delete_comment', 'set_columns',
                    'search', 'save_template', 'apply_template', 'add_attachment', 'restore_version',
                    'preview_section_revert', 'revert_section'}
@@ -295,7 +295,7 @@ def create_router(owner_home: Callable[[], Path] = _home,
         body = await _body(request, 16 * 1024 * 1024)
         _, store = selected()
         _scope(store, body)
-        allowed = {'create_item', 'update_item', 'open_item', 'trash', 'restore', 'purge',
+        allowed = {'create_item', 'update_item', 'open_item', 'reorder_item', 'trash', 'restore', 'purge',
                    'add_comment', 'reply_comment', 'resolve_comment', 'delete_comment', 'set_columns',
                    'search', 'search_page', 'save_template', 'apply_template', 'add_attachment', 'restore_version',
                    'preview_section_revert','revert_section'}
