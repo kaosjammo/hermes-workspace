@@ -104,4 +104,86 @@ test('empty and folder-free trees offer no inert bulk controls', async () => {
     await act(async () => root.render(null));
   }
 });
-after(() => dom.window.close());
+
+for (const initialOpen of [true, false]) {
+  test(`F001: pending native ${initialOpen ? 'close then Expand all' : 'open then Collapse all'} respects the later bulk intent at every level`, async () => {
+    const state = { scope_id: 'pending-toggle', revision: 1, items: [folder('Root'), folder('Nested', 'Root'), folder('Deep', 'Nested'), folder('Other'), page('Reading page', 'Deep')], comments: [], runs: [], attachments: [], versions: [], recents: [], templates: [] };
+    const original = structuredClone(state), calls = [];
+    const ctx = { onDispose: () => {}, rest: async (path, options) => {
+      if (path === '/state') return structuredClone(state);
+      calls.push(options.body);
+      assert.equal(options.body.op, 'open_item');
+      return { result: {}, state: structuredClone(state) };
+    } };
+    try {
+      await act(async () => root.render(h(Workspace, { ctx }))); await tick();
+      await click(button('Reading page'));
+      const editor = document.querySelector('.ws-editor'), work = document.querySelector('.ws-work');
+      const nodes = [...document.querySelectorAll('.ws-nav details')];
+      work.scrollTop = 380;
+      if (!initialOpen) await click(button('Collapse all'));
+      await tick(20);
+      const beforeCommands = calls.length;
+      let notifications = 0;
+      nodes.forEach(node => node.addEventListener('toggle', () => notifications++));
+      await act(async () => {
+        // No await/timer separates the native defaults from the bulk click.
+        // React still holds the previous prop when the DOM already differs.
+        for (const node of nodes.slice(0, 3)) {
+          node.querySelector('summary').click();
+          assert.equal(node.open, !initialOpen, 'native default changes the actual DOM immediately');
+        }
+        assert.equal(notifications, 0, 'bulk action precedes native toggle delivery');
+        button(initialOpen ? 'Expand all' : 'Collapse all').click();
+      });
+      assert.deepEqual(nodes.map(node => node.open), nodes.map(() => initialOpen), 'bulk intent wins before queued toggle events');
+      await tick(25);
+      assert.ok(notifications > 0, 'queued native notifications were actually delivered');
+      assert.deepEqual(nodes.map(node => node.open), nodes.map(() => initialOpen), 'late notifications cannot undo the bulk intent');
+      assert.deepEqual([...document.querySelectorAll('.ws-nav details')], nodes, 'tree nodes were not remounted');
+      assert.equal(document.querySelector('.ws-editor'), editor);
+      assert.equal(work.scrollTop, 380);
+      assert.equal(button('Reading page').getAttribute('aria-current'), 'page');
+      assert.equal(calls.length, beforeCommands, 'disclosure actions issue zero transport commands');
+      assert.deepEqual(state, original);
+    } finally { await act(async () => root.render(null)); }
+  });
+}
+
+test('F001: mixed same-task manual and bulk orderings preserve the latest action without remounting', async () => {
+  const state = { scope_id: 'mixed-toggle', revision: 1, items: [folder('Root'), folder('Nested', 'Root'), folder('Deep', 'Nested'), folder('Other'), page('Reading page', 'Deep')], comments: [], runs: [], attachments: [], versions: [], recents: [], templates: [] };
+  const calls = [], original = structuredClone(state);
+  const ctx = { onDispose: () => {}, rest: async (path, options) => {
+    if (path === '/state') return structuredClone(state);
+    calls.push(options.body);
+    assert.equal(options.body.op, 'open_item');
+    return { result: {}, state: structuredClone(state) };
+  } };
+  try {
+    await act(async () => root.render(h(Workspace, { ctx }))); await tick();
+    await click(button('Reading page'));
+    const nodes = [...document.querySelectorAll('.ws-nav details')], editor = document.querySelector('.ws-editor');
+    const work = document.querySelector('.ws-work'); work.scrollTop = 380;
+    const manual = index => nodes[index].querySelector('summary').click();
+    const sequences = [
+      { setup: 'Expand all', run: () => { manual(0); button('Expand all').click(); manual(1); }, expected: [true, false, true, true] },
+      { setup: 'Collapse all', run: () => { manual(0); button('Collapse all').click(); manual(1); }, expected: [false, true, false, false] },
+      { setup: 'Expand all', run: () => { manual(2); button('Collapse all').click(); manual(0); button('Expand all').click(); manual(2); }, expected: [true, true, false, true] },
+      { setup: 'Collapse all', run: () => { button('Expand all').click(); manual(1); button('Collapse all').click(); manual(3); }, expected: [false, false, false, true] },
+    ];
+    for (const { setup, run, expected } of sequences) {
+      await click(button(setup)); await tick(20);
+      await act(async () => run());
+      assert.deepEqual(nodes.map(node => node.open), expected, 'last same-task action per folder wins');
+      await tick(25);
+      assert.deepEqual(nodes.map(node => node.open), expected, 'delayed/coalesced notifications preserve the same result');
+      assert.deepEqual([...document.querySelectorAll('.ws-nav details')], nodes);
+      assert.equal(document.querySelector('.ws-editor'), editor);
+      assert.equal(work.scrollTop, 380);
+      assert.equal(button('Reading page').getAttribute('aria-current'), 'page');
+      assert.equal(calls.length, 1, 'only the initial explicit document navigation used transport');
+      assert.deepEqual(state, original);
+    }
+  } finally { await act(async () => root.render(null)); }
+});
+after(async () => { await act(async () => root.unmount()); dom.window.close(); });
