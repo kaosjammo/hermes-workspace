@@ -1,6 +1,11 @@
 // Lane-owned additions use the existing native theme, type and control sizes.
 export const commentStyles = `
 .ws-comment-surfaces { display: contents; }
+.ws-anchor-recovery summary { cursor:pointer; color:var(--ui-text-secondary); }
+.ws-anchor-recovery blockquote { margin:8px 0 0; max-height:8rem; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
+.ws-anchor-recovery summary:focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; }
+.ws-comment .ws-anchor:has(.ws-comment-passage) { border:0; padding:0; margin:4px 0; }
+.ws-comment-passage { min-height:28px; }
 .ws-comment-compose-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
 .ws-comment-compose-heading label { flex:1 1 100px; }
 .ws-comment-compose-heading button { flex:0 0 auto; color:var(--ui-text-secondary); }

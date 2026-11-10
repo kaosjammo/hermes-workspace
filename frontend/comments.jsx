@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { Checkbox, Textarea, Popover, PopoverTrigger, PopoverContent, Tip } from "@hermes/plugin-sdk";
 import { h, Action, Choice, Codicon, UnsavedEditError, FormDialog, isSubmitEnter } from "./ui.jsx";
 import { CommentBubbles } from "./comment-bubbles.jsx";
+import { numberComments } from "./comment-highlights.jsx";
 import { ThreadPicker } from "./thread-picker.jsx";
 import { commentStyles } from "./comment-styles.mjs";
 import { itemLabel } from "./item-labels.mjs";
@@ -22,6 +23,7 @@ function Comment({
   onResolutionFinished = () => {},
   onRevertSection = () => {},
   showContext = true,
+  originalAnchor = comment.anchor,
   onDelete = () => {},
 }) {
   const [reply, setReply] = useState(retainedReply),
@@ -83,23 +85,24 @@ function Comment({
       ? h(
           "div",
           { className: "ws-anchor" },
-          location.status === "attached"
-            ? `“${comment.anchor.quote}”`
-            : `Detached selection: “${comment.anchor.quote}”`,
           location.status === "attached" &&
             h(
               Action,
               {
-                variant: "text", style: { color: "var(--ui-text-secondary)" },
+                className: "ws-comment-passage", variant: "text", style: { color: "var(--ui-text-secondary)" },
+                "aria-label": `Show passage for comment ${passageNumber}`,
                 onClick: () => onPassage(comment.id, comment.anchor),
               },
-              "Show passage",
+              `Show passage ${passageNumber}`,
             ),
           location.status === "detached" &&
             h(
-              "p",
+              "div",
               null,
-              "The original text is missing or ambiguous. This comment has not been attached elsewhere.",
+              h("p", { role: "status" }, "The original text is missing or ambiguous. This comment has not been attached elsewhere."),
+              originalAnchor?.quote && h("details", { className: "ws-anchor-recovery" },
+                h("summary", null, "Show original excerpt"),
+                h("blockquote", null, originalAnchor.quote)),
             ),
         )
       : h("span", { className: "ws-muted" }, state.items.find(item => item.id === comment.item_id)?.kind === "database" ? "Whole database" : "Whole page"),
@@ -313,7 +316,8 @@ export function Comments({
   // repeated add/delete cycles must not grow a per-page tombstone cache.
   const currentCommentIds = new Set(state.comments.map(c => c.id));
   for (const id of deletedIds.current) if (!currentCommentIds.has(id)) deletedIds.current.delete(id);
-  const all = state.comments.filter((c) => c.item_id === item.id && !deletedIds.current.has(c.id)).map(c => ({ ...c, anchor: commentAnchor(c) }));
+  const all = numberComments(state.comments.filter((c) => c.item_id === item.id && !deletedIds.current.has(c.id)))
+    .map(c => ({ ...c, originalAnchor: c.anchor, anchor: commentAnchor(c) }));
   const [pageComposerOpen, setPageComposerOpen] = useState(Boolean(discussion.current.text || discussion.current.targets.length));
   useEffect(() => {
     const reply = all.find(c => discussion.current.replies[c.id]);
@@ -433,22 +437,23 @@ export function Comments({
     (window.requestAnimationFrame ?? (fn => setTimeout(fn,0)))(() => document.getElementById(`ws-discussion-${id}`)?.focus({ preventScroll: true }));
   };
   const bubble = (comment, grouped = false) => {
-    const number = comment.anchor ? visible.filter(c => c.anchor).findIndex(c => c.id === comment.id)+1 : null;
+    const number = comment.passageNumber;
     const selected = activeComment === comment.id;
     const detached = comment.anchor && !attached.has(comment.id);
+    const context = `Comment ${number}${comment.anchor ? detached ? " · Detached" : "" : item.kind === "database" ? " · Whole database" : " · Whole page"}`;
     return h("section", { key: comment.id, className: `ws-bubble${selected ? " ws-bubble-selected" : ""}${hoveredComment === comment.id ? " ws-bubble-emphasis" : ""}`,
       onPointerEnter: () => setHoveredComment(comment.id), onPointerLeave: () => setHoveredComment(null),
       onFocusCapture: () => setHoveredComment(comment.id), onBlurCapture: event => { if (!event.currentTarget.contains(event.relatedTarget)) setHoveredComment(null); } },
       h(Action, { id: `ws-bubble-${comment.id}`, className: "ws-bubble-summary", variant: "ghost", "aria-expanded": selected,
-        "aria-label": `${number ? `Comment ${number}` : item.kind === "database" ? "Whole database" : "Whole page"}: ${comment.text} · ${selected ? "Collapse thread" : "Open thread"}`,
+        "aria-label": `${context}: ${comment.text} · ${selected ? "Collapse thread" : "Open thread"}`,
         "aria-controls": selected ? `ws-discussion-${comment.id}` : undefined,
         onClick: () => selected ? setActiveComment(null) : select(comment.id) },
-        !grouped && h("span", { className: "ws-bubble-context" }, number ? `${detached ? "Detached · " : ""}Comment ${number}` : item.kind === "database" ? "Whole database" : "Whole page",
+        !grouped && h("span", { className: "ws-bubble-context" }, context,
           ` · You${comment.resolved ? " · Resolved" : ""}`),
         !selected && h("span", { className: "ws-bubble-preview" }, comment.text),
         h("span", { className: "ws-bubble-context" }, `${comment.replies.length} ${comment.replies.length === 1 ? "reply" : "replies"} · ${selected ? "Collapse thread" : "Open thread"}${discussion.current.replies[comment.id] ? " · Draft reply" : ""}`)),
       selected && h(Comment, { comment, text, command, locked, onError, state, retainedReply: discussion.current.replies[comment.id] ?? "", retainReply,
-        passageNumber: number, active: true, onActivate: setActiveComment, onPassage, onResolutionFinished: setResolutionFocus,
+        passageNumber: number, originalAnchor: comment.originalAnchor, active: true, onActivate: setActiveComment, onPassage, onResolutionFinished: setResolutionFocus,
         onDelete: (comment, opener) => setDeleting({ comment, opener }),
         onRevertSection, showContext: false }));
   };
