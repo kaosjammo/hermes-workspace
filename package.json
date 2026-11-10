@@ -1,0 +1,19 @@
+{
+  "name": "hermes-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Profile-local documents and structured tables for Hermes Desktop",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test:ui": "node scripts/test-ui.mjs",
+    "package": "python3 scripts/package.py"
+  },
+  "engines": {"node": ">=26"},
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "jsdom": "29.1.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  }
+}

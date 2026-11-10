@@ -1,0 +1,27 @@
+// Lane-owned additions use the existing native theme, type and control sizes.
+export const commentStyles = `
+.ws-comment-surfaces { display: contents; }
+.ws-comment-compose-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
+.ws-comment-compose-heading label { flex:1 1 100px; }
+.ws-comment-compose-heading button { flex:0 0 auto; color:var(--ui-text-secondary); }
+.ws-comment-composer .ws-field textarea { min-height:4rem; max-height:min(12rem,30vh); }
+.ws-comment-composer .ws-field textarea::placeholder { color:var(--ui-text-secondary); opacity:1; }
+.ws-comment-composer .ws-anchor { max-height:6rem; overflow:auto; }
+.ws-comment-composer .ws-anchor p { margin-block:4px; }
+.ws-dialog.ws-thread-picker { width:min(36rem,calc(100% - 24px)); max-width:calc(100% - 24px); max-height:calc(100% - 24px); gap:0; }
+.ws-thread-picker-body { display:flex; flex-direction:column; gap:8px; min-width:0; overflow:hidden; overscroll-behavior:contain; }
+.ws-thread-picker-body > * { flex-shrink:0; }
+.ws-thread-picker .ws-thread-search { width:100%; min-width:0; }
+.ws-thread-picker .ws-thread-search input { flex:1; min-width:0; width:100%; }
+.ws-thread-picker-body > .ws-thread-results { flex:1 1 auto; min-height:0; overflow:auto; max-height:45vh; display:flex; flex-direction:column; gap:4px; }
+.ws-thread-result { width:100%; height:auto; text-align:left; white-space:normal; justify-content:flex-start; display:flex; flex-direction:column; align-items:flex-start; gap:2px; padding:6px; }
+.ws-thread-result span { overflow-wrap:anywhere; }
+.ws-thread-result small { color:var(--ui-text-secondary); overflow-wrap:anywhere; }
+.ws-thread-notice { margin:0; color:var(--ui-text-secondary); }
+.ws-scope-review-body { display:flex; flex-direction:column; min-height:0; overflow:hidden; gap:10px; }
+.ws-scope-review-body > :not(.ws-related-scope) { flex-shrink:0; }
+.ws-scope-current { margin:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; color:var(--ui-text-secondary); }
+.ws-related-scope { min-height:0; overflow:auto; overscroll-behavior:contain; }
+.ws-related-scope[open] { flex:1 1 auto; }
+.ws-related-scope .ws-comment { padding:8px; margin-block:6px; }
+`;
