@@ -1,5 +1,6 @@
 name: workspace
 version: "0.1.0"
+requires_hermes: ">=0.23.0"
 description: "Profile-local documents, typed tables and comment-driven native Hermes edits."
 author: Mike
 provides_tools:

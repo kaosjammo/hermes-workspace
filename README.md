@@ -69,7 +69,8 @@ The package declares `workspace_apply`, `pre_llm_call` and `post_llm_call`, alon
 ## Local data and disclosure
 
 - Workspace stores its data under the selected Hermes profile's `plugin-data/workspace/`, outside the installation directory. Local storage is not encryption or OS-user isolation.
-- Workspace has no separate hosted account service, cloud converter or plugin telemetry. Import/export conversion is local; PDF conversion uses bounded local workers.
+- Outside its own data directory, the native review path opens the selected profile's canonical Hermes `state.db` through `SessionDB` and reads session, admission, transcript and runtime metadata. Constructing that database object is not promised to be a read-only SQLite connection. Editing/finalisation also depends on the actual same-process native owner and loop; this coupling uses private host interfaces and remains a catalog-review concern.
+- Workspace has no separate hosted account service, cloud converter or plugin telemetry. Import/export conversion is local; PDF conversion starts a local Python child process with a 20-second parent timeout and POSIX CPU/address-space limits. No plugin-managed credential store is used.
 - Starting native agent work may send the authorised document/comment context to your configured model provider. Local storage does not imply offline inference.
 - Native agent tools and approvals remain subject to Hermes policy. Workspace does not gain edit rights from model prose or bypass a host refusal.
 - Complete backup restore replaces the current Workspace dataset after validation. It is not a merge and does not restore native session authority, Hermes credentials/configuration or local frontend drafts/preferences. Download a backup before replacement.
@@ -78,7 +79,7 @@ The package declares `workspace_apply`, `pre_llm_call` and `post_llm_call`, alon
 
 The standalone source repository is [kaosjammo/hermes-workspace](https://github.com/kaosjammo/hermes-workspace). This is a development preview, not a catalog-approved release. Use the supported Hermes plugin installer with this repository only after reading the qualification limits. Catalog admission is tracked in [issue #1](https://github.com/kaosjammo/hermes-workspace/issues/1).
 
-The documented qualification target is Linux x64 with pinned Hermes commit `90d6b98fd86d20981ee06ddd5b7d93e4320f26a4`. macOS/Windows execution, native Electron acceptance and complete provider lifecycle coverage remain unqualified. Supported profile setup must respect explicit opt-outs; automatic installation into future profiles is not claimed.
+The manifest and proposed catalog entry declare the same conservative host floor, `>=0.23.0`. The isolated catalog probe ran on Linux x64 against the public `v0.23.0` release commit `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`; the annotated upstream tag was independently resolved to that commit. Earlier hosts are outside this package's supported baseline. This is not a claim of native/provider acceptance or a guarantee that undocumented interfaces stay stable on newer releases. macOS/Windows execution, native Electron acceptance and complete provider lifecycle coverage remain unqualified. Supported profile setup must respect explicit opt-outs; automatic installation into future profiles is not claimed.
 
 ## Demo and release evidence
 

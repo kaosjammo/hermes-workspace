@@ -179,4 +179,4 @@ Mike's latest intake adds:
 - Drag-and-drop reordering with saved ordering.
 - Clear New record and New property buttons, reconciled with existing inline creation controls.
 
-Keep these as future GitHub issues once a project-owned repository is selected. They do not change the archived inventory denominator or authorise implementation/publication.
+These requests are tracked in the standalone repository as [#2](https://github.com/kaosjammo/hermes-workspace/issues/2), [#3](https://github.com/kaosjammo/hermes-workspace/issues/3) and [#4](https://github.com/kaosjammo/hermes-workspace/issues/4). They do not change the archived inventory denominator or authorise implementation.
