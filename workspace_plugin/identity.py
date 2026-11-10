@@ -19,9 +19,11 @@ def username(value):
 
 
 def executor(home: Path):
-    """Capture ONLY the admitted executing home's public structured metadata.
+    """Capture ONLY the admitted executing home's host-internal structured metadata.
 
-    The public task-profile resolver is checked against this exact home; launch
+    Host-internal helpers retain catalogue rule 9 coupling; this is not a
+    qualified public server metadata contract. The task-profile helper is
+    checked against this exact home; launch
     pins/ambient active selection cannot relabel a differently scoped executor.
     No roster, free-form persona, model, credentials or image files are read.
     Images use the supported SDK avatar route, separately fenced by this source.
