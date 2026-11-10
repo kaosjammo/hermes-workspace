@@ -70,8 +70,15 @@ def _diff(before, after, plain):
     return left, result
 
 
-def _raw_position(tokens, offset, end=False):
+def _raw_position(tokens, offset, end=False, exact_edges=False):
     text = [token for token in tokens if token[4] > token[3]]
+    if exact_edges:
+        # At adjacent text-node boundaries a selection starts at the NEXT
+        # visible token and ends at the PREVIOUS one. Historical captures used
+        # the opposite bias and could include a neighbouring paragraph's tags.
+        exact = [t for t in text if t[4 if end else 3] == offset]
+        if exact:
+            return exact[-1][2] if end else exact[0][1]
     ordered = reversed(text) if end else text
     for raw, start, finish, a, b in ordered:
         if a <= offset <= b:
@@ -112,7 +119,7 @@ def _anchor(document, start, end, plain):
     return value
 
 
-def capture_sections(before, after, anchors, plain):
+def capture_sections(before, after, anchors, plain, *, exact_boundaries=False):
     """Return per-comment actual-change regions or explicit unavailable reasons.
 
     Unchanged anchors are omitted. Overlap and changes crossing a selection are
@@ -128,18 +135,21 @@ def capture_sections(before, after, anchors, plain):
         except SectionUnavailable as error:
             output[ident] = {'status': 'unavailable', 'reason': str(error)}
     for ident, (start, end) in selections.items():
-        changes = [op for op in operations if op[0] != 'equal' and
-                   (op[5] < end and op[6] > start or op[5] == op[6] and start <= op[5] <= end)]
-        if not changes:
-            continue
         try:
+            raw_selection_start = _raw_position(tokens,start,exact_edges=exact_boundaries)
+            raw_selection_end = _raw_position(tokens,end,True,exact_edges=exact_boundaries)
+            changes = [op for op in operations if op[0] != 'equal' and
+                       (op[5] < end and op[6] > start or op[5] == op[6] and start <= op[5] <= end) and
+                       (not exact_boundaries or op[1] != op[2] or raw_selection_start <= op[1] <= raw_selection_end)]
+            if not changes:
+                continue
             if any(max(start, other_start) < min(end, other_end)
                    for other_id, (other_start, other_end) in selections.items() if other_id != ident):
                 raise SectionUnavailable('Overlapping highlighted sections cannot be reverted independently.')
             if any(op[5] < start or op[6] > end for op in changes):
                 raise SectionUnavailable('The agent change crosses this highlighted section; review the saved version.')
-            raw_start = min(_raw_position(tokens, start), *(op[1] for op in changes))
-            raw_end = max(_raw_position(tokens, end, True), *(op[2] for op in changes))
+            raw_start = min(raw_selection_start, *(op[1] for op in changes))
+            raw_end = max(raw_selection_end, *(op[2] for op in changes))
             post_start = _mapped_position(operations, raw_start)
             post_end = _mapped_position(operations, raw_end, True)
             old, new = before[raw_start:raw_end], after[post_start:post_end]
@@ -226,12 +236,20 @@ def plan_revert(change, post_document, current_document, plain, sanitize):
     start, end = change['after_start'], change['after_end']
     if post_document[start:end] != change['after']:
         raise SectionUnavailable('Saved section provenance no longer matches its agent version.')
-    _, operations = _diff(post_document, current_document, plain)
-    for kind, a, b, _, _, _, _ in operations:
+    tokens, operations = _diff(post_document, current_document, plain)
+    replaced_edge = False
+    for kind, a, b, c, d, _, _ in operations:
         if kind == 'equal':
             continue
         if a < start < b or a < end < b or a == b and a in (start, end):
             raise SectionUnavailable('A later edit changed the section boundary; review the saved version.')
+        replaced_edge |= kind in ('replace','delete') and (a <= start < b or a < end <= b)
+        if (a <= start <= b or a <= end <= b) and '<' in post_document[a:b] + current_document[c:d]:
+            raise SectionUnavailable('A later structural edit removed the section boundary; review the saved version.')
+    if replaced_edge and not any(start <= a < b <= end and re.fullmatch(r'\w+',raw) and
+                                 any(kind == 'equal' and left <= a and b <= right for kind,left,right,*_ in operations)
+                                 for raw,a,b,*_ in tokens):
+        raise SectionUnavailable('The original section text is missing or ambiguous after replacement; review the saved version.')
     current_start = _mapped_position(operations, start)
     current_end = _mapped_position(operations, end, True)
     candidate = current_document[:current_start] + change['before'] + current_document[current_end:]

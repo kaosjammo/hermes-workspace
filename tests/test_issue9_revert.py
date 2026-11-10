@@ -205,7 +205,7 @@ class RevertResponses(unittest.TestCase):
         run=self.run_begin();self.apply(run,'<p>North stream.</p><p>South garden.</p>');self.store.finish_run(run['id'],'completed')
         def legacy(state):
             for g in state['versions'][0]['_section_provenance']:
-                for key in ['response_origin','response_links','response_limitations']:g.pop(key)
+                for key in ['response_origin','response_links','response_limitations','response_version']:g.pop(key,None)
         self.store._transaction(legacy)
         self.assertEqual(self.comment()['section_change']['status'],'unavailable')
         before=self.store.backup_snapshot()

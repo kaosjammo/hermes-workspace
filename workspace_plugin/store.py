@@ -806,6 +806,8 @@ class Store:
         reason = generation.get('response_limitations',{}).get(change['comment_id'])
         if generation.get('response_origin') != 'application' or version['run_id'] != generation['run_id']:
             reason = 'This saved change has no trusted response association (historical or imported data).'
+        elif generation.get('response_version') != 2:
+            reason = 'These historical response associations predate complete cumulative-region verification; cleanup is unavailable.'
         links = [link for link in generation.get('response_links',[]) if link['comment_id']==change['comment_id']]
         if reason or not links:
             raise StoreError(reason or 'The saved change has no exact associated response; use saved history for recovery.',409)
@@ -823,7 +825,8 @@ class Store:
                 if change is None:
                     continue
                 result = {'version_id':version['id'],'generation_id':generation['id'],'change_id':change['id'],
-                          'run_id':generation['run_id'],'status':'available','requires_confirmation':item.get('_manual_revision',0)>generation['manual_revision']}
+                          'run_id':generation['run_id'],'status':'available','highlight_status':'unavailable',
+                          'requires_confirmation':item.get('_manual_revision',0)>generation['manual_revision']}
                 if item['deleted_at'] is not None:
                     return dict(result,status='unavailable',reason='Restore the page from Trash before reviewing this section.')
                 if item.get('_section_generation') != generation['id']:
@@ -834,13 +837,20 @@ class Store:
                     # Keep the original comment anchor's conservative mapping.
                     return dict(result,status='reverted')
                 try:
-                    plan = self._section_plan(generation,change,item)
-                    self._section_responses(version,generation,change)
+                    # Passage geometry is independent of response-deletion
+                    # authority (including imported and legacy associations).
+                    plan = plan_revert(change,generation['post_content'],item['content'],_plain,_content)
                     try:
                         result['anchor'] = addressed_anchor(change,plan,item['content'],_plain)
+                        result['highlight_status'] = 'available'
                     except SectionUnavailable as exc:
                         result['highlight_status'] = 'unavailable'
                         result['highlight_reason'] = str(exc)
+                except SectionUnavailable as exc:
+                    return dict(result,status='unavailable',reason=str(exc),highlight_reason=str(exc))
+                try:
+                    self._section_plan(generation,change,item)
+                    self._section_responses(version,generation,change)
                 except StoreError as exc:
                     return dict(result,status='unavailable',reason=str(exc))
                 return result
@@ -849,7 +859,7 @@ class Store:
     def _capture_section_changes(self, state, run, item, old_content, operation_id, outcomes):
         version = next(v for v in state['versions'] if v['id'] in run['version_ids'] and v['item_id']==item['id'])
         before = version['snapshot']['content']
-        anchors = {}
+        anchors, anchor_limitations = {}, set()
         for comment in state['comments']:
             if comment['id'] not in run['comment_ids'] or comment['item_id'] != item['id'] or not comment['anchor']:
                 continue
@@ -867,34 +877,42 @@ class Store:
                         try:
                             anchor = plan_revert(change,generation['post_content'],before,_plain,_content)['anchor']
                         except SectionUnavailable:
-                            pass
+                            anchor_limitations.add(comment['id'])
                         break
             anchors[comment['id']] = copy.deepcopy(anchor)
         if not anchors and not item.get('_section_generation'):
             return
         try:
-            captured = capture_sections(before,item['content'],anchors,_plain)
+            captured = capture_sections(before,item['content'],anchors,_plain,exact_boundaries=True)
         except SectionUnavailable as exc:
             captured = {ident:{'status':'unavailable','reason':str(exc)} for ident in anchors}
         generation = {'id':_id(),'run_id':run['id'],'post_content':item['content'],
                       'manual_revision':item.get('_manual_revision',0),'anchors':anchors,'changes':[],
-                      'response_origin':'application','response_links':[], 'response_limitations':{}}
+                      'mapping_version':2,'response_origin':'application','response_version':2,'response_links':[], 'response_limitations':{}}
         generation['changes'] = [dict(value,id=_id(),comment_id=ident,reverted_at=None) for ident,value in captured.items()]
         previous = version.get('_section_provenance',[])[-1:]
         previous = previous[0] if previous else None
         # The saved regions are cumulative from this run's pre-run version.
         # Associate NEW outcomes only where THIS operation actually changed the
         # corresponding region. A reply-only outcome for another comment stays.
-        delta_anchors = copy.deepcopy(anchors)
+        delta_anchors, uncertain = {}, set(anchor_limitations)
         for cid,anchor in anchors.items():
+            prior = next((c for c in previous['changes'] if c['comment_id']==cid),None) if previous else None
             try:
-                delta_anchors[cid] = map_anchor(before,old_content,anchor,_plain,_content)
+                if prior:
+                    # The complete saved region includes inserted boundary
+                    # text/markup. Mapping the original selection again would
+                    # lose later edits to those inserted prefixes or suffixes.
+                    delta_anchors[cid] = plan_revert(prior,previous['post_content'],old_content,_plain,_content)['anchor']
+                else:
+                    delta_anchors[cid] = map_anchor(before,old_content,anchor,_plain,_content)
             except SectionUnavailable:
-                pass
+                uncertain.add(cid)  # Never reuse a stale original anchor.
         try:
-            delta = capture_sections(old_content,item['content'],delta_anchors,_plain)
+            delta = capture_sections(old_content,item['content'],delta_anchors,_plain,exact_boundaries=True)
         except SectionUnavailable:
             delta = {}
+            uncertain.update(anchors)
         for change in generation['changes']:
             cid = change['comment_id']
             prior = next((c for c in previous['changes'] if c['comment_id']==cid),None) if previous else None
@@ -902,6 +920,11 @@ class Store:
                 generation['response_links'].extend(copy.deepcopy([link for link in previous.get('response_links',[]) if link['comment_id']==cid]))
                 if cid in previous.get('response_limitations',{}):
                     generation['response_limitations'][cid] = previous['response_limitations'][cid]
+                if previous.get('response_version') != 2:
+                    uncertain.add(cid)
+            if cid in uncertain:
+                generation['response_limitations'][cid] = 'The complete cumulative changed region cannot be mapped safely; response cleanup is unavailable.'
+                continue
             actual = delta.get(cid)
             if actual and actual['status']=='available':
                 ids = [r['reply_id'] for r in outcomes if r['comment_id']==cid]
@@ -951,7 +974,8 @@ class Store:
             raise StoreError('Associated responses changed; review saved history before reverting.',409)
         checkpoint = {'id':_id(),'item_id':item['id'],'run_id':None,'snapshot':copy.deepcopy(item),'created_at':_now(),'section_revert_of':change['id']}
         checkpoint['section_revert_receipt'] = {'generation_id':generation['id'],'run_id':generation['run_id'],
-            'operation_ids':[link['operation_id'] for link in links], 'removed_reply_ids':[r['id'] for r in removed]}
+            'operation_ids':[link['operation_id'] for link in links], 'removed_reply_ids':[r['id'] for r in removed],
+            'cleanup_mode':'discussion_deleted' if comment.get('_deleted_at') else 'responses_archived'}
         checkpoint['_removed_responses'] = [{'comment_id':comment['id'],'reply':r} for r in removed]
         if item['kind']=='record':
             checkpoint['database_columns'] = copy.deepcopy(self._item(state,item['database_id'])['columns'])
@@ -1916,7 +1940,7 @@ class Store:
             if not isinstance(generations,list) or len(generations)>10000:
                 raise StoreError('Invalid section provenance generations')
             for generation in generations:
-                _keys(generation,{'id','run_id','post_content','manual_revision','anchors','changes','response_origin','response_links','response_limitations'},
+                _keys(generation,{'id','run_id','post_content','manual_revision','anchors','changes','mapping_version','response_origin','response_version','response_links','response_limitations'},
                       {'id','run_id','post_content','manual_revision','anchors','changes'})
                 ident = _identifier(generation['id'],'section generation')
                 if ident in section_generations:
@@ -1930,6 +1954,8 @@ class Store:
                     raise StoreError('Invalid section manual-edit generation')
                 if _content(generation['post_content']) != generation['post_content']:
                     raise StoreError('Section provenance contains noncanonical rich content')
+                if 'mapping_version' in generation and (type(generation['mapping_version']) is not int or generation['mapping_version'] != 2):
+                    raise StoreError('Invalid section mapping version')
                 anchors = generation['anchors']
                 if not isinstance(anchors,dict) or len(anchors)>MAX_COMMENTS:
                     raise StoreError('Invalid section anchor map')
@@ -1940,7 +1966,8 @@ class Store:
                     if version['run_id'] is not None and cid not in run_map[version['run_id']]['comment_ids']:
                         raise StoreError('Section comment is outside the captured run')
                 try:
-                    expected = capture_sections(saved['content'],generation['post_content'],anchors,_plain)
+                    expected = capture_sections(saved['content'],generation['post_content'],anchors,_plain,
+                                                exact_boundaries=generation.get('mapping_version') == 2)
                 except SectionUnavailable as exc:
                     expected = {cid:{'status':'unavailable','reason':str(exc)} for cid in anchors}
                 changes = generation['changes']
@@ -1967,15 +1994,25 @@ class Store:
                     timestamp(change.get('reverted_at'),True)
                 if current.get('_section_generation')==ident and current.get('_manual_revision',0)<generation['manual_revision']:
                     raise StoreError('Section manual-edit generation moved backwards')
+        cleanup_checkpoints = set()
         for version in state['versions']:
             if 'section_revert_of' in version and section_change_ids.get(version['section_revert_of']) != version['item_id']:
                 raise StoreError('Section recovery checkpoint references an absent change')
+            if 'section_revert_of' in version:
+                change_id = version['section_revert_of']
+                if change_id in cleanup_checkpoints:
+                    raise StoreError('Duplicate section cleanup checkpoint for one reverted change')
+                cleanup_checkpoints.add(change_id)
             if 'section_revert_receipt' not in version:
                 if '_removed_responses' in version:
                     raise StoreError('Removed responses require a section recovery receipt')
+                if 'section_revert_of' in version and 'response_links' in change_map[version['section_revert_of']][0]:
+                    raise StoreError('Section response cleanup requires its complete recovery receipt')
+                # Pre-cleanup historical checkpoints never claimed removal of
+                # responses. Retain them without inventing an archive.
                 continue
             receipt = version['section_revert_receipt']
-            _keys(receipt,{'generation_id','run_id','operation_ids','removed_reply_ids'}, {'generation_id','run_id','operation_ids','removed_reply_ids'})
+            _keys(receipt,{'generation_id','run_id','operation_ids','removed_reply_ids','cleanup_mode'}, {'generation_id','run_id','operation_ids','removed_reply_ids'})
             generation,change = change_map.get(version.get('section_revert_of'),(None,None))
             if generation is None or not change['reverted_at'] or receipt['generation_id']!=generation['id'] or receipt['run_id']!=generation['run_id']:
                 raise StoreError('Section cleanup receipt identity mismatch')
@@ -1988,8 +2025,19 @@ class Store:
             if receipt['removed_reply_ids'] != [entry.get('reply',{}).get('id') for entry in removed]:
                 raise StoreError('Section cleanup archive mismatch')
             linked_ids = [rid for link in links for rid in link['reply_ids']]
-            if not set(receipt['removed_reply_ids'])<=set(linked_ids) or len(set(receipt['removed_reply_ids']))!=len(removed):
-                raise StoreError('Section cleanup includes an unrelated response')
+            tombstoned = bool(comment_map[change['comment_id']].get('_deleted_at'))
+            mode = receipt.get('cleanup_mode')
+            if mode is not None and mode not in ('responses_archived','discussion_deleted'):
+                raise StoreError('Invalid section cleanup mode')
+            if mode == 'discussion_deleted' and (not tombstoned or removed):
+                raise StoreError('Deleted-discussion cleanup must reference its tombstone and remove no responses')
+            # Older empty receipts are legitimate only when the discussion was
+            # explicitly deleted already. Otherwise every associated ID must
+            # have its complete archived response in THIS unique checkpoint.
+            deleted_before = tombstoned and not removed and mode != 'responses_archived'
+            if (not deleted_before and set(receipt['removed_reply_ids']) != set(linked_ids)
+                    or len(set(receipt['removed_reply_ids'])) != len(removed)):
+                raise StoreError('Section cleanup response archive is incomplete or unrelated')
             for entry in removed:
                 _keys(entry,{'comment_id','reply'},{'comment_id','reply'})
                 if entry['comment_id']!=change['comment_id']:
@@ -2001,6 +2049,10 @@ class Store:
                 if key in archived_responses or any(r['id']==key[1] for r in comment_map[key[0]]['replies']):
                     raise StoreError('Duplicate archived or live response')
                 archived_responses[key] = entry['reply']
+
+        for change_id,(generation,change) in change_map.items():
+            if change['reverted_at'] and 'response_links' in generation and change_id not in cleanup_checkpoints:
+                raise StoreError('Reverted response cleanup is missing its recovery checkpoint')
 
         for run in state['runs']:
             required = {'id','item_id','session_id','status','comment_ids','allowed_item_ids','version_ids','progress','error','created_at','updated_at'}
@@ -2061,6 +2113,8 @@ class Store:
                 raise StoreError('Active run is missing a durable lock')
         for version,generation in generation_map.values():
             fields = {'response_origin','response_links','response_limitations'} & set(generation)
+            if 'response_version' in generation and (type(generation['response_version']) is not int or generation['response_version'] != 2 or len(fields) != 3):
+                raise StoreError('Invalid cumulative response provenance version')
             if not fields:
                 continue  # Historical data stays unchanged and cleanup unavailable.
             if len(fields)!=3 or generation['response_origin'] not in ('application','imported'):

@@ -46,7 +46,7 @@ if not store.snapshot()['items']:
                 for version in state['versions']:
                     if version['item_id']==page['id']:
                         for generation in version.get('_section_provenance',[]):
-                            for key in ['response_origin','response_links','response_limitations']:generation.pop(key,None)
+                            for key in ['response_origin','response_links','response_limitations','response_version']:generation.pop(key,None)
             store._transaction(legacy)
 
 app=FastAPI();mode='normal'
