@@ -209,6 +209,16 @@ def addressed_anchor(change, plan, current_document, plain):
     return _anchor(current_document,start,end,plain)
 
 
+def map_anchor(document, current_document, anchor, plain, sanitize):
+    """Map the exact selection through edits without stale prefix guessing."""
+    start,end = locate_anchor(plain(document),anchor)
+    tokens = _tokens(document,plain)
+    a,b = _raw_position(tokens,start),_raw_position(tokens,end,True)
+    region = document[a:b]
+    change = {'status':'available','before':region,'after':region,'after_start':a,'after_end':b}
+    return plan_revert(change,document,current_document,plain,sanitize)['anchor']
+
+
 def plan_revert(change, post_document, current_document, plain, sanitize):
     """Map the same section through later edits; retain every outside byte."""
     if change.get('status') != 'available':

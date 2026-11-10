@@ -37,7 +37,7 @@ import uuid
 from urllib.parse import urlsplit
 
 from .formulas import FormulaError, dependencies, evaluate, validate
-from .sections import SectionUnavailable, capture_sections, locate_anchor, plan_revert, addressed_anchor
+from .sections import SectionUnavailable, capture_sections, locate_anchor, plan_revert, addressed_anchor, map_anchor
 
 
 class StoreError(ValueError):
@@ -790,9 +790,26 @@ class Store:
 
     def _section_plan(self, generation, change, item):
         try:
-            return plan_revert(change,generation['post_content'],item['content'],_plain,_content)
+            plan = plan_revert(change,generation['post_content'],item['content'],_plain,_content)
+            if plan['content'] == item['content']:
+                raise StoreError('This section already matches its saved original; no eligible change remains to revert.',409)
+            return plan
         except SectionUnavailable as exc:
             raise StoreError(str(exc),409) from exc
+
+    def _section_responses(self, version, generation, change):
+        """Only application-recorded outcomes can authorise response cleanup.
+
+        An imported association is retained as recovery data, never upgraded to
+        application provenance. Legacy author/text/time guesses are forbidden.
+        """
+        reason = generation.get('response_limitations',{}).get(change['comment_id'])
+        if generation.get('response_origin') != 'application' or version['run_id'] != generation['run_id']:
+            reason = 'This saved change has no trusted response association (historical or imported data).'
+        links = [link for link in generation.get('response_links',[]) if link['comment_id']==change['comment_id']]
+        if reason or not links:
+            raise StoreError(reason or 'The saved change has no exact associated response; use saved history for recovery.',409)
+        return links
 
     def _section_view(self, state, comment):
         if not comment['anchor']:
@@ -818,6 +835,7 @@ class Store:
                     return dict(result,status='reverted')
                 try:
                     plan = self._section_plan(generation,change,item)
+                    self._section_responses(version,generation,change)
                     try:
                         result['anchor'] = addressed_anchor(change,plan,item['content'],_plain)
                     except SectionUnavailable as exc:
@@ -828,7 +846,7 @@ class Store:
                 return result
         return None
 
-    def _capture_section_changes(self, state, run, item):
+    def _capture_section_changes(self, state, run, item, old_content, operation_id, outcomes):
         version = next(v for v in state['versions'] if v['id'] in run['version_ids'] and v['item_id']==item['id'])
         before = version['snapshot']['content']
         anchors = {}
@@ -859,15 +877,54 @@ class Store:
         except SectionUnavailable as exc:
             captured = {ident:{'status':'unavailable','reason':str(exc)} for ident in anchors}
         generation = {'id':_id(),'run_id':run['id'],'post_content':item['content'],
-                      'manual_revision':item.get('_manual_revision',0),'anchors':anchors,'changes':[]}
+                      'manual_revision':item.get('_manual_revision',0),'anchors':anchors,'changes':[],
+                      'response_origin':'application','response_links':[], 'response_limitations':{}}
         generation['changes'] = [dict(value,id=_id(),comment_id=ident,reverted_at=None) for ident,value in captured.items()]
+        previous = version.get('_section_provenance',[])[-1:]
+        previous = previous[0] if previous else None
+        # The saved regions are cumulative from this run's pre-run version.
+        # Associate NEW outcomes only where THIS operation actually changed the
+        # corresponding region. A reply-only outcome for another comment stays.
+        delta_anchors = copy.deepcopy(anchors)
+        for cid,anchor in anchors.items():
+            try:
+                delta_anchors[cid] = map_anchor(before,old_content,anchor,_plain,_content)
+            except SectionUnavailable:
+                pass
+        try:
+            delta = capture_sections(old_content,item['content'],delta_anchors,_plain)
+        except SectionUnavailable:
+            delta = {}
+        for change in generation['changes']:
+            cid = change['comment_id']
+            prior = next((c for c in previous['changes'] if c['comment_id']==cid),None) if previous else None
+            if prior:
+                generation['response_links'].extend(copy.deepcopy([link for link in previous.get('response_links',[]) if link['comment_id']==cid]))
+                if cid in previous.get('response_limitations',{}):
+                    generation['response_limitations'][cid] = previous['response_limitations'][cid]
+            actual = delta.get(cid)
+            if actual and actual['status']=='available':
+                ids = [r['reply_id'] for r in outcomes if r['comment_id']==cid]
+                if ids:
+                    generation['response_links'].append({'operation_id':operation_id,'comment_id':cid,'reply_ids':ids})
+                else:
+                    generation['response_limitations'][cid] = 'A changed section has no outcome in its actual edit operation; response cleanup cannot be verified.'
+            elif not prior or actual:
+                generation['response_limitations'][cid] = 'The operation cannot be associated with this section safely; response cleanup is unavailable.'
         version.setdefault('_section_provenance',[]).append(generation)
         item['_section_generation'] = generation['id']
+        return generation['id']
 
     def _preview_section(self, state, payload):
         version,generation,change,item = self._section_ref(state,payload['version_id'],payload['generation_id'],payload['change_id'])
         plan = self._section_plan(generation,change,item)
+        try:
+            links = self._section_responses(version,generation,change)
+            cleanup = {'cleanup_status':'verified','response_ids':[rid for link in links for rid in link['reply_ids']]}
+        except StoreError as exc:
+            cleanup = {'cleanup_status':'unavailable','cleanup_reason':str(exc),'response_ids':[]}
         return {'version_id':version['id'],'generation_id':generation['id'],'change_id':change['id'],'item_id':item['id'],
+                **cleanup,
                 'dataset_epoch':state['_section_epoch'],
                 'content_hash':hashlib.sha256(item['content'].encode()).hexdigest(),'manual_revision':item.get('_manual_revision',0),
                 'requires_confirmation':item.get('_manual_revision',0)>generation['manual_revision'],
@@ -886,14 +943,25 @@ class Store:
             raise StoreError('Manual edits followed the agent change. Confirm this exact section before reverting.',409)
         version,generation,change,item = self._section_ref(state,payload['version_id'],payload['generation_id'],payload['change_id'])
         plan = self._section_plan(generation,change,item)
+        links = self._section_responses(version,generation,change)
+        response_ids = [rid for link in links for rid in link['reply_ids']]
+        comment = self._find(state,'comments',change['comment_id'])
+        removed = [copy.deepcopy(r) for r in comment['replies'] if r['id'] in response_ids]
+        if not comment.get('_deleted_at') and {r['id'] for r in removed} != set(response_ids):
+            raise StoreError('Associated responses changed; review saved history before reverting.',409)
         checkpoint = {'id':_id(),'item_id':item['id'],'run_id':None,'snapshot':copy.deepcopy(item),'created_at':_now(),'section_revert_of':change['id']}
+        checkpoint['section_revert_receipt'] = {'generation_id':generation['id'],'run_id':generation['run_id'],
+            'operation_ids':[link['operation_id'] for link in links], 'removed_reply_ids':[r['id'] for r in removed]}
+        checkpoint['_removed_responses'] = [{'comment_id':comment['id'],'reply':r} for r in removed]
         if item['kind']=='record':
             checkpoint['database_columns'] = copy.deepcopy(self._item(state,item['database_id'])['columns'])
         state['versions'].append(checkpoint)
         item['content'] = plan['content']
+        comment['replies'] = [r for r in comment['replies'] if r['id'] not in response_ids]
         item['updated_at'] = _now()
         change['reverted_at'] = _now()
-        return {'item_id':item['id'],'change_id':change['id'],'reverted':True,'recovery_version_id':checkpoint['id']}
+        return {'item_id':item['id'],'change_id':change['id'],'reverted':True,'recovery_version_id':checkpoint['id'],
+                'removed_reply_ids':[r['id'] for r in removed]}
 
     def _set_columns(self, state, item, columns, token=None):
         if item['kind'] != 'database':
@@ -1291,6 +1359,7 @@ class Store:
                 comment['target_item_ids'] = [x for x in comment['target_item_ids'] if x not in ids]
         surviving_comments = {x['id'] for x in state['comments']}
         surviving_versions = {x['id'] for x in state['versions']}
+        surviving_generations = {g['id'] for v in state['versions'] for g in v.get('_section_provenance',[])}
         state['runs'] = [x for x in state['runs'] if x['item_id'] not in ids]
         for run in state['runs']:
             run['allowed_item_ids'] = [x for x in run['allowed_item_ids'] if x not in ids]
@@ -1298,6 +1367,9 @@ class Store:
             run['comment_ids'] = [x for x in run['comment_ids'] if x in surviving_comments]
             for receipt in run.get('operation_receipts',[]):
                 receipt['comment_ids'] = [x for x in receipt['comment_ids'] if x in surviving_comments]
+                if '_outcomes' in receipt:
+                    receipt['_outcomes'] = [x for x in receipt['_outcomes'] if x['comment_id'] in surviving_comments]
+                    receipt['_generation_ids'] = [x for x in receipt['_generation_ids'] if x in surviving_generations]
         # Only purge references to the deleted objects; unrelated history stays
         # byte-for-byte meaningful even when the live schema has since changed.
         def prune_columns(columns):
@@ -1490,15 +1562,21 @@ class Store:
             before_content = {edit['item_id']:self._item(state,edit['item_id'])['content'] for edit in resolved if 'content' in edit['patch']}
             for edit in resolved:
                 self._patch(state,self._item(state,edit['item_id'],active=True),edit['patch'],run_id)
+            outcomes = []
+            for reply in replies:
+                saved_reply = self._reply(self._find(state,'comments',reply['comment_id']),reply['text'],'agent',run.get('_executor_identity'))
+                outcomes.append({'comment_id':reply['comment_id'],'reply_id':saved_reply['id']})
+            generation_ids = []
             for ident,old_content in before_content.items():
                 changed = self._item(state,ident)
                 if changed['content'] != old_content:
-                    self._capture_section_changes(state,run,changed)
-            for reply in replies:
-                self._reply(self._find(state,'comments',reply['comment_id']),reply['text'],'agent',run.get('_executor_identity'))
+                    generation_id = self._capture_section_changes(state,run,changed,old_content,operation_id,outcomes)
+                    if generation_id:
+                        generation_ids.append(generation_id)
             run['progress'] = 'Saved Workspace edits and comment outcomes'
             run['updated_at'] = _now()
-            run['operation_receipts'] = receipts + [{'operation_id':operation_id,'operation_digest':digest,'comment_ids':list(dict.fromkeys(r['comment_id'] for r in replies))}]
+            run['operation_receipts'] = receipts + [{'operation_id':operation_id,'operation_digest':digest,'comment_ids':list(dict.fromkeys(r['comment_id'] for r in replies)),
+                '_outcomes':outcomes,'_generation_ids':generation_ids}]
             return run
         return self._transaction(action,authorize=authorize,skip_unchanged=True)
 
@@ -1746,6 +1824,16 @@ class Store:
                 if root is None or root['deleted_at'] is None or item['deleted_at'] is None:
                     raise StoreError('Invalid Trash group')
 
+        def validate_response(reply):
+            from .identity import validate
+            _keys(reply,{'id','author','text','created_at','author_identity'},{'id','author','text','created_at'})
+            validate(reply.get('author_identity'),'agent' if reply.get('author')=='agent' else 'human')
+            _identifier(reply['id'])
+            if reply['author'] not in ('user','agent'):
+                raise StoreError('Invalid reply author')
+            _text(reply['text'],'reply')
+            timestamp(reply['created_at'])
+
         for comment in state['comments']:
             required = {'id','item_id','text','anchor','resolved','replies','created_at'}
             _keys(comment,required|{'anchor_status','target_item_ids','section_change','_deleted_at','author_identity'},required)
@@ -1771,16 +1859,10 @@ class Store:
                 raise StoreError('Invalid replies array')
             reply_ids = set()
             for reply in replies:
-                _keys(reply,{'id','author','text','created_at','author_identity'},{'id','author','text','created_at'})
-                validate(reply.get('author_identity'),'agent' if reply.get('author')=='agent' else 'human')
-                _identifier(reply['id'])
+                validate_response(reply)
                 if reply['id'] in reply_ids:
                     raise StoreError('Duplicate reply ID')
                 reply_ids.add(reply['id'])
-                if reply['author'] not in ('user','agent'):
-                    raise StoreError('Invalid reply author')
-                _text(reply['text'],'reply')
-                timestamp(reply['created_at'])
             comment.pop('anchor_status',None)
             comment.pop('section_change',None)
 
@@ -1803,9 +1885,10 @@ class Store:
         version_map = {x['id']:x for x in state['versions']}
         run_map = {x['id']:x for x in state['runs']}
         section_generations,section_change_ids = set(),{}
+        generation_map, change_map, archived_responses = {}, {}, {}
         for version in state['versions']:
             required = {'id','item_id','run_id','snapshot','created_at'}
-            _keys(version,required|{'database_columns','restore_group_id','_section_provenance','section_revert_of'},required)
+            _keys(version,required|{'database_columns','restore_group_id','_section_provenance','section_revert_of','section_revert_receipt','_removed_responses'},required)
             current = self._item(state,version['item_id'])
             saved = version['snapshot']
             if not isinstance(saved,dict) or saved.get('id')!=current['id'] or saved.get('kind')!=current['kind'] or saved.get('database_id')!=current['database_id']:
@@ -1833,12 +1916,13 @@ class Store:
             if not isinstance(generations,list) or len(generations)>10000:
                 raise StoreError('Invalid section provenance generations')
             for generation in generations:
-                _keys(generation,{'id','run_id','post_content','manual_revision','anchors','changes'},
+                _keys(generation,{'id','run_id','post_content','manual_revision','anchors','changes','response_origin','response_links','response_limitations'},
                       {'id','run_id','post_content','manual_revision','anchors','changes'})
                 ident = _identifier(generation['id'],'section generation')
                 if ident in section_generations:
                     raise StoreError('Duplicate section generation')
                 section_generations.add(ident)
+                generation_map[ident] = (version,generation)
                 _identifier(generation['run_id'],'section source run')
                 if version['run_id'] is not None and generation['run_id'] != version['run_id']:
                     raise StoreError('Section source run differs from its pre-run version')
@@ -1879,12 +1963,44 @@ class Store:
                     if change_id in section_change_ids:
                         raise StoreError('Duplicate section change')
                     section_change_ids[change_id] = current['id']
+                    change_map[change_id] = (generation,change)
                     timestamp(change.get('reverted_at'),True)
                 if current.get('_section_generation')==ident and current.get('_manual_revision',0)<generation['manual_revision']:
                     raise StoreError('Section manual-edit generation moved backwards')
         for version in state['versions']:
             if 'section_revert_of' in version and section_change_ids.get(version['section_revert_of']) != version['item_id']:
                 raise StoreError('Section recovery checkpoint references an absent change')
+            if 'section_revert_receipt' not in version:
+                if '_removed_responses' in version:
+                    raise StoreError('Removed responses require a section recovery receipt')
+                continue
+            receipt = version['section_revert_receipt']
+            _keys(receipt,{'generation_id','run_id','operation_ids','removed_reply_ids'}, {'generation_id','run_id','operation_ids','removed_reply_ids'})
+            generation,change = change_map.get(version.get('section_revert_of'),(None,None))
+            if generation is None or not change['reverted_at'] or receipt['generation_id']!=generation['id'] or receipt['run_id']!=generation['run_id']:
+                raise StoreError('Section cleanup receipt identity mismatch')
+            links = [link for link in generation.get('response_links',[]) if link.get('comment_id')==change['comment_id']]
+            if receipt['operation_ids'] != [link['operation_id'] for link in links]:
+                raise StoreError('Section cleanup operation mismatch')
+            removed = version.get('_removed_responses')
+            if not isinstance(removed,list) or len(removed)>1000:
+                raise StoreError('Invalid removed response archive')
+            if receipt['removed_reply_ids'] != [entry.get('reply',{}).get('id') for entry in removed]:
+                raise StoreError('Section cleanup archive mismatch')
+            linked_ids = [rid for link in links for rid in link['reply_ids']]
+            if not set(receipt['removed_reply_ids'])<=set(linked_ids) or len(set(receipt['removed_reply_ids']))!=len(removed):
+                raise StoreError('Section cleanup includes an unrelated response')
+            for entry in removed:
+                _keys(entry,{'comment_id','reply'},{'comment_id','reply'})
+                if entry['comment_id']!=change['comment_id']:
+                    raise StoreError('Section cleanup comment mismatch')
+                validate_response(entry['reply'])
+                if entry['reply']['author']!='agent':
+                    raise StoreError('Section cleanup cannot remove human feedback')
+                key = (entry['comment_id'],entry['reply']['id'])
+                if key in archived_responses or any(r['id']==key[1] for r in comment_map[key[0]]['replies']):
+                    raise StoreError('Duplicate archived or live response')
+                archived_responses[key] = entry['reply']
 
         for run in state['runs']:
             required = {'id','item_id','session_id','status','comment_ids','allowed_item_ids','version_ids','progress','error','created_at','updated_at'}
@@ -1915,7 +2031,7 @@ class Store:
                 raise StoreError('Invalid run operation receipts')
             seen_operations = set()
             for receipt in receipts:
-                _keys(receipt,{'operation_id','operation_digest','comment_ids'},{'operation_id','operation_digest','comment_ids'})
+                _keys(receipt,{'operation_id','operation_digest','comment_ids','_outcomes','_generation_ids'},{'operation_id','operation_digest','comment_ids'})
                 operation_id = receipt['operation_id']
                 if not isinstance(operation_id,str) or re.fullmatch(r'[a-f0-9]{64}',operation_id) is None or receipt['operation_digest']!=operation_id or operation_id in seen_operations:
                     raise StoreError('Invalid or duplicate operation receipt digest')
@@ -1923,8 +2039,60 @@ class Store:
                 comment_ids = receipt['comment_ids']
                 if not isinstance(comment_ids,list) or not all(isinstance(x,str) for x in comment_ids) or len(set(comment_ids))!=len(comment_ids) or not set(comment_ids)<=set(run['comment_ids']):
                     raise StoreError('Operation receipt comment scope mismatch')
+                if ('_outcomes' in receipt)!=('_generation_ids' in receipt):
+                    raise StoreError('Incomplete application response receipt')
+                if '_outcomes' in receipt:
+                    outcomes,gids = receipt['_outcomes'],receipt['_generation_ids']
+                    if not isinstance(outcomes,list) or len(outcomes)>MAX_COMMENTS or not isinstance(gids,list) or len(gids)!=len(set(gids)):
+                        raise StoreError('Invalid application response receipt')
+                    if any(gid not in generation_map or generation_map[gid][1]['run_id']!=run['id'] for gid in gids):
+                        raise StoreError('Response receipt generation mismatch')
+                    seen = set()
+                    for outcome in outcomes:
+                        _keys(outcome,{'comment_id','reply_id'},{'comment_id','reply_id'})
+                        cid,rid = outcome['comment_id'],_identifier(outcome['reply_id'])
+                        if cid not in comment_ids or rid in seen:
+                            raise StoreError('Response receipt outcome mismatch')
+                        seen.add(rid)
+                        response = next((r for r in comment_map[cid]['replies'] if r['id']==rid),archived_responses.get((cid,rid)))
+                        if response is None and not comment_map[cid].get('_deleted_at') or response is not None and response['author']!='agent':
+                            raise StoreError('Response receipt references an absent or human outcome')
             if not imported and run['status'] in ACTIVE and any(state['_locks'].get(x)!=run['id'] for x in run['allowed_item_ids']):
                 raise StoreError('Active run is missing a durable lock')
+        for version,generation in generation_map.values():
+            fields = {'response_origin','response_links','response_limitations'} & set(generation)
+            if not fields:
+                continue  # Historical data stays unchanged and cleanup unavailable.
+            if len(fields)!=3 or generation['response_origin'] not in ('application','imported'):
+                raise StoreError('Invalid section response provenance')
+            links,limitations = generation['response_links'],generation['response_limitations']
+            changes = {c['comment_id']:c for c in generation['changes']}
+            if not isinstance(links,list) or len(links)>10000 or not isinstance(limitations,dict) or not set(limitations)<=set(changes):
+                raise StoreError('Invalid section response associations')
+            for reason in limitations.values():
+                _text(reason,'response association limitation',2000)
+            seen = set()
+            for link in links:
+                _keys(link,{'operation_id','comment_id','reply_ids'},{'operation_id','comment_id','reply_ids'})
+                op,cid,ids = link['operation_id'],link['comment_id'],link['reply_ids']
+                if not isinstance(op,str) or not re.fullmatch(r'[a-f0-9]{64}',op) or cid not in changes or not isinstance(ids,list) or not ids or len(ids)>1000:
+                    raise StoreError('Invalid section response link')
+                for rid in ids:
+                    _identifier(rid)
+                    if rid in seen:
+                        raise StoreError('Duplicate section response link')
+                    seen.add(rid)
+                    response = next((r for r in comment_map[cid]['replies'] if r['id']==rid),archived_responses.get((cid,rid)))
+                    if response is None and not comment_map[cid].get('_deleted_at') or response is not None and response['author']!='agent':
+                        raise StoreError('Section response link is absent or human')
+                if generation['response_origin']=='application' and version['run_id'] is not None and (not imported or generation['run_id'] in run_map):
+                    run = run_map.get(generation['run_id'])
+                    receipt = next((r for r in run.get('operation_receipts',[]) if r['operation_id']==op),None) if run else None
+                    if receipt is None or not all({'comment_id':cid,'reply_id':rid} in receipt.get('_outcomes',[]) for rid in ids):
+                        raise StoreError('Section response association lacks its actual operation outcome')
+                    preceding = version.get('_section_provenance',[])[:version.get('_section_provenance',[]).index(generation)+1]
+                    if not any(g['id'] in receipt.get('_generation_ids',[]) and any(c['comment_id']==cid and c['status']=='available' for c in g['changes']) for g in preceding):
+                        raise StoreError('Section response association lacks its actual operation change')
         for item_id,run_id in state['_locks'].items():
             run = run_map.get(run_id)
             if item_id not in items or run is None or run['status'] not in ACTIVE or item_id not in run['allowed_item_ids']:

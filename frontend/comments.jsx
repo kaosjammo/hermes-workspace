@@ -5,6 +5,7 @@ import { CommentBubbles } from "./comment-bubbles.jsx";
 import { numberComments } from "./comment-highlights.jsx";
 import { ThreadPicker } from "./thread-picker.jsx";
 import { commentStyles } from "./comment-styles.mjs";
+import { CommentActions } from "./comment-actions.jsx";
 import { AuthorHeader } from "./identity.jsx";
 import { authorName } from "./identity.mjs";
 import { itemLabel } from "./item-labels.mjs";
@@ -27,9 +28,11 @@ function Comment({
   showContext = true,
   originalAnchor = comment.anchor,
   onDelete = () => {},
+  onReplyPending = () => true,
 }) {
   const [reply, setReply] = useState(retainedReply),
     [busy, setBusy] = useState(false), [replyOpen, setReplyOpen] = useState(Boolean(retainedReply));
+  const replying = useRef(false);
   const location = locateAnchor(text, comment.anchor);
   return h(
     "article",
@@ -56,34 +59,6 @@ function Comment({
         comment.resolved ? "Resolved" : "Open discussion",
       ),
     ),
-    h(
-      "label",
-      { className: "ws-check" },
-      h(Checkbox, {
-        className: "ws-checkbox",
-        "aria-label": `Resolve: ${comment.text}`,
-        checked: comment.resolved,
-        disabled: locked || busy,
-        onCheckedChange: (value) => {
-          const card = document.getElementById(`ws-discussion-${comment.id}`);
-          const control = document.activeElement;
-          const ownedFocus = card?.contains(control);
-          setBusy(true);
-          void command("resolve_comment", {
-            id: comment.id,
-            resolved: value === true,
-          })
-            .catch(onError)
-            .finally(() => {
-              setBusy(false);
-              if (ownedFocus) onResolutionFinished({ id: comment.id, card, control });
-            });
-        },
-      }),
-      comment.resolved ? "Resolved — uncheck to reopen" : "Resolve comment",
-    ),
-    h(Action, { variant: "text", style: { color: "var(--ui-text-secondary)" },
-      disabled: locked || busy, onClick: event => onDelete(comment, event.currentTarget) }, "Delete comment"),
     comment.anchor
       ? h(
           "div",
@@ -127,9 +102,6 @@ function Comment({
           ),
         ),
       ),
-    comment.section_change && h("div", { className: "ws-section-change" },
-      comment.section_change.status === "available" ? h(Action, { disabled: locked || busy, onClick: event => onRevertSection(comment, event.currentTarget) }, "Revert section") :
-      h("p", { className: "ws-muted", role: "status" }, comment.section_change.status === "reverted" ? "This section was reverted." : `Section revert unavailable. ${comment.section_change.reason ?? "The original passage cannot be mapped safely."}`)),
     comment.replies.map((reply) =>
       h(
         "div",
@@ -147,7 +119,9 @@ function Comment({
         {
           onSubmit: async (e) => {
             e.preventDefault();
-            if (locked || busy || !reply.trim()) return;
+            if (locked || busy || replying.current || !reply.trim()) return;
+            if (!onReplyPending(true)) return;
+            replying.current = true;
             setBusy(true);
             try {
               await command("reply_comment", { id: comment.id, text: reply });
@@ -156,6 +130,8 @@ function Comment({
             } catch (error) {
               onError(error);
             } finally {
+              replying.current = false;
+              onReplyPending(false);
               setBusy(false);
             }
           },
@@ -211,6 +187,19 @@ export function Comments({
   const [deleting, setDeleting] = useState(null);
   const deletedIds = useRef(new Set());
   const mutationInFlight = useRef(false), composing = useRef(false);
+  const actionInFlight = useRef(new Set());
+  const [pendingActions, setPendingActions] = useState(new Set());
+  const commentAction = async (comment, work) => {
+    if (locked || busy || mutationInFlight.current || actionInFlight.current.has(comment.id)) return;
+    actionInFlight.current.add(comment.id);
+    setPendingActions(new Set(actionInFlight.current));
+    try { await work(); }
+    catch (error) { onError(error); }
+    finally {
+      actionInFlight.current.delete(comment.id);
+      setPendingActions(new Set(actionInFlight.current));
+    }
+  };
   const revealFrame = useRef(null);
   const saveViewport = useRef(null);
   useEffect(() => () => { window.cancelAnimationFrame?.(revealFrame.current); saveViewport.current?.stop(); }, []);
@@ -333,7 +322,7 @@ export function Comments({
     const { id, card, control } = resolutionFocus;
     if (document.activeElement !== document.body && !card?.contains(document.activeElement)) return;
     const visible = visibleComments(all, showResolved), remaining = new Set(visible.map(c => c.id));
-    const current = document.getElementById(`ws-discussion-${id}`);
+    const current = remaining.has(id) && (document.getElementById(`ws-discussion-${id}`) ?? document.getElementById(`ws-bubble-${id}`));
     if (current) {
       (control?.isConnected && !control.disabled ? control : current).focus();
       return;
@@ -447,6 +436,7 @@ export function Comments({
     return h("section", { key: comment.id, className: `ws-bubble${selected ? " ws-bubble-selected" : ""}${hoveredComment === comment.id ? " ws-bubble-emphasis" : ""}`,
       onPointerEnter: () => setHoveredComment(comment.id), onPointerLeave: () => setHoveredComment(null),
       onFocusCapture: () => setHoveredComment(comment.id), onBlurCapture: event => { if (!event.currentTarget.contains(event.relatedTarget)) setHoveredComment(null); } },
+      h("div", { className: "ws-comment-heading" },
       h(Action, { id: `ws-bubble-${comment.id}`, className: "ws-bubble-summary", variant: "ghost", "aria-expanded": selected,
         "aria-label": `${context}: ${comment.text} · ${authorName(comment)} · ${selected ? "Collapse thread" : "Open thread"}`,
         "aria-controls": selected ? `ws-discussion-${comment.id}` : undefined,
@@ -455,7 +445,25 @@ export function Comments({
           h("span", {className:"ws-bubble-context"}, `${!grouped ? context : `Comment ${number}`}${comment.resolved ? " · Resolved" : ""}`)),
         !selected && h("span", { className: "ws-bubble-preview" }, comment.text),
         h("span", { className: "ws-bubble-context" }, `${comment.replies.length} ${comment.replies.length === 1 ? "reply" : "replies"} · ${selected ? "Collapse thread" : "Open thread"}${discussion.current.replies[comment.id] ? " · Draft reply" : ""}`)),
-      selected && h(Comment, { comment, text, command, locked, onError, state, retainedReply: discussion.current.replies[comment.id] ?? "", retainReply,
+      h(CommentActions, { comment, locked: locked || busy, pending: pendingActions.has(comment.id),
+        onResolve: resolved => {
+          const card = document.getElementById(`ws-discussion-${comment.id}`) ?? document.getElementById(`ws-bubble-${comment.id}`)?.closest("section");
+          const control = document.activeElement, ownedFocus = card?.contains(control);
+          return commentAction(comment, async () => {
+            try { await command("resolve_comment", { id: comment.id, resolved }); }
+            finally { if (ownedFocus) setResolutionFocus({ id: comment.id, card, control }); }
+          });
+        },
+        onDelete: opener => { if (!locked && !busy && !actionInFlight.current.has(comment.id)) setDeleting({ comment, opener }); },
+        onRevert: opener => commentAction(comment, () => onRevertSection(comment, opener)),
+      })),
+      selected && h(Comment, { comment, text, command, locked: locked || pendingActions.has(comment.id), onError, state, retainedReply: discussion.current.replies[comment.id] ?? "", retainReply,
+        onReplyPending: value => {
+          if (value && actionInFlight.current.has(comment.id)) return false;
+          if (value) actionInFlight.current.add(comment.id); else actionInFlight.current.delete(comment.id);
+          setPendingActions(new Set(actionInFlight.current));
+          return true;
+        },
         passageNumber: number, originalAnchor: comment.originalAnchor, active: true, onActivate: setActiveComment, onPassage, onResolutionFinished: setResolutionFocus,
         onDelete: (comment, opener) => setDeleting({ comment, opener }),
         onRevertSection, showContext: false }));
@@ -571,7 +579,7 @@ export function Comments({
         else { setActiveComment(null); (resolvedControl.current ?? wholeScopeAction.current)?.focus(); }
       },
       onSubmit: async () => {
-        if (locked || busy || mutationInFlight.current) throw new Error("Wait for the current operation before deleting this comment.");
+        if (locked || busy || mutationInFlight.current || actionInFlight.current.size) throw new Error("Wait for the current operation before deleting this comment.");
         mutationInFlight.current = true; setBusy(true);
         try {
           await command("delete_comment", { id: deleting.comment.id });

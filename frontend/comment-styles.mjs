@@ -1,5 +1,25 @@
 // Lane-owned additions use the existing native theme, type and control sizes.
 export const commentStyles = `
+.ws-comment-heading { display:flex; align-items:flex-start; flex-wrap:wrap; gap:0; min-width:0; }
+.ws-root .ws-comment-heading > .ws-bubble-summary { flex:1 1 110px; width:auto; min-width:0; padding-right:6px; }
+.ws-comment-action-area { flex:0 0 96px; min-width:0; padding:8px 6px 4px 0; }
+.ws-comment-actions { display:flex; align-items:center; justify-content:flex-end; gap:4px; }
+.ws-comment-actions button, .ws-comment-revert-target { flex:0 0 28px; min-width:28px; width:28px; height:28px; }
+.ws-comment-actions .ws-comment-resolve { margin:0; width:24px; height:24px; min-width:24px; border:1px solid var(--ui-text-secondary); }
+.ws-comment-revert-target { display:inline-flex; border-radius:var(--radius-sm,4px); }
+.ws-comment-revert-target:focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; }
+.ws-comment-action-state { display:block; text-align:right; font-size:10px; line-height:1.5; color:var(--ui-text-secondary); }
+.ws-comment-action-area { position:relative; }
+.ws-comment-action-reason { display:none; position:absolute; right:0; top:100%; z-index:10; width:min(220px,calc(100vw - 64px)); padding:8px; border:1px solid var(--ui-stroke-secondary); border-radius:var(--radius-sm,4px); background:var(--ui-bg-elevated); color:var(--ui-text-secondary); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
+.ws-comment-action-area:focus-within .ws-comment-action-reason, .ws-comment-action-area:hover .ws-comment-action-reason { display:block; }
+.ws-comment-touch-labels { display:none; color:var(--ui-text-secondary); font-size:10px; text-align:right; }
+@media (pointer:coarse) {
+ .ws-comment-action-area { flex-basis:132px; }
+ .ws-comment-actions button, .ws-comment-revert-target { min-width:40px; width:40px; height:40px; }
+ .ws-comment-actions .ws-comment-resolve { min-width:32px; width:32px; height:32px; }
+ .ws-comment-touch-labels, .ws-comment-action-reason { display:block; }
+ .ws-comment-action-reason { position:static; width:auto; border:0; padding:4px 0 0; background:transparent; }
+}
 .ws-comment-surfaces { display: contents; }
 .ws-author { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:100%; vertical-align:middle; }
 .ws-author-avatar { display:inline-flex; flex:0 0 20px; width:20px; height:20px; align-items:center; justify-content:center; border-radius:50%; overflow:hidden; background:var(--ui-bg-elevated); color:var(--ui-text-secondary); font-size:11px; font-weight:600; }

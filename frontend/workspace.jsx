@@ -49,8 +49,8 @@ import { Database, RecordProperties } from "./tables.jsx";
 import { reviewScope, ScopeReviewDialog } from "./scope-review.jsx";
 import { Comments } from "./comments.jsx";
 import { IdentityProvider, UsernameDialog } from "./identity.jsx";
-import { numberComments } from "./comment-highlights.jsx";
-import { commentAnchor } from "./editor.mjs";
+import { numberComments, anchorRange } from "./comment-highlights.jsx";
+import { commentAnchor, captureAnchor } from "./editor.mjs";
 import { activeRun } from "./database.mjs";
 import { fileBase64, backupFileBase64, downloadFile } from "./editor.mjs";
 import { createWorkflowAdapter } from "./workflow.js";
@@ -1133,26 +1133,49 @@ function Document({
       dataset_epoch: preview.dataset_epoch, content_hash: preview.content_hash, manual_revision: preview.manual_revision, confirmed,
     });
   });
+  const restoreSectionReading = reading => {
+    if (!reading) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!client.current() || !reading.pane.isConnected) return;
+      const editor = reading.pane.querySelector('.ws-editor[contenteditable]');
+      const range = reading.anchor && editor && anchorRange(editor, reading.anchor);
+      // Restore only an exact surviving selection, independently of changed
+      // section text. Keep dialog/action focus and never guess a new passage.
+      if (range) {
+        const focused = document.activeElement, selection = getSelection();
+        selection.removeAllRanges(); selection.addRange(range);
+        focused?.focus?.({ preventScroll: true });
+      }
+      reading.pane.scrollTop = reading.top; reading.pane.scrollLeft = reading.left;
+    }));
+  };
   const revertSection = (comment, opener) => {
     const change = comment.section_change;
     if (!change || change.status !== "available" || locked) return;
-    void sectionTask(async () => {
+    const pane = opener?.closest('.ws-work'), editor = pane?.querySelector('.ws-editor[contenteditable]');
+    const reading = pane ? { pane, top: pane.scrollTop, left: pane.scrollLeft, anchor: editor && captureAnchor(editor) } : null;
+    let reviewing = false;
+    return sectionTask(async () => {
       await flushEditors();
       client.assertCurrent();
       const preview = await command("preview_section_revert", {
         version_id: change.version_id, generation_id: change.generation_id, change_id: change.change_id,
       });
-      if (preview.requires_confirmation) setSectionReview({ preview, opener, commentId: comment.id });
+      if (preview.requires_confirmation) {
+        reviewing = true;
+        setSectionReview({ preview, opener, commentId: comment.id, reading });
+      }
       else await command("revert_section", {
         version_id: preview.version_id, generation_id: preview.generation_id, change_id: preview.change_id,
         dataset_epoch: preview.dataset_epoch, content_hash: preview.content_hash, manual_revision: preview.manual_revision, confirmed: false,
       });
     }).then(() => {
+      if (!reviewing) restoreSectionReading(reading);
       requestAnimationFrame(() => {
         if (document.activeElement === document.body || document.activeElement === opener)
           document.getElementById(`ws-bubble-${comment.id}`)?.focus({ preventScroll: true });
       });
-    }).catch(onError);
+    }).catch(error => { restoreSectionReading(reading); onError(error); });
   };
   const pageComments = numberComments(state.comments.filter(
     c => c.item_id === item.id,
@@ -1270,7 +1293,7 @@ function Document({
         setSectionReview({ ...sectionReview, preview, expired: false });
       }) } : undefined,
       returnFocus: sectionReview.opener,
-      description: "You edited this page after Hermes changed it. Reverting restores only this highlighted section. Manual edits inside it may be overwritten; every unrelated change stays intact.",
+      description: "You edited this page after Hermes changed it. Reverting restores only this highlighted section and removes its associated AI responses. Manual edits inside it may be overwritten; every unrelated change and human reply stays intact. Saved history retains the recovery receipt.",
       renderHelp: () => h("div", { className: "ws-section-preview" },
         h("strong", null, "Current section"), h(RichPreview, { label: "Current section preview",
           html: sectionReview.preview.current_html, text: sectionReview.preview.current_text, attachments: state.attachments }),
@@ -1280,7 +1303,7 @@ function Document({
           sectionReview.preview.before_html !== sectionReview.preview.current_html &&
           h("p", { className: "ws-muted" }, "The text is unchanged; the highlighted section’s formatting will change."),
         h("p", { className: "ws-muted" }, "If the page changes while this dialog is open, this approval expires. Cancel keeps all current changes.")),
-      onClose: () => setSectionReview(null),
+      onClose: () => { setSectionReview(null); restoreSectionReading(sectionReview.reading); },
       onSubmit: async () => {
         try { await applySection(sectionReview.preview, true); }
         catch (error) {
