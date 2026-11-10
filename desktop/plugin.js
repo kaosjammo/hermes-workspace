@@ -6,7 +6,7 @@ import { ROUTES_AREA, SIDEBAR_NAV_AREA, host as host4, gatewayActivationEpoch as
 import {
   useCallback as useCallback4,
   useEffect as useEffect8,
-  useId as useId6,
+  useId as useId7,
   useLayoutEffect as useLayoutEffect9,
   useMemo as useMemo3,
   useRef as useRef15,
@@ -5867,8 +5867,8 @@ function ScopeReviewDialog({
 }
 
 // frontend/comments.jsx
-import { useCallback as useCallback3, useEffect as useEffect7, useId as useId5, useLayoutEffect as useLayoutEffect8, useRef as useRef14, useState as useState14 } from "react";
-import { Checkbox as Checkbox3, Textarea as Textarea2, Popover as Popover4, PopoverTrigger as PopoverTrigger4, PopoverContent as PopoverContent4, Tip as Tip2 } from "@hermes/plugin-sdk";
+import { useCallback as useCallback3, useEffect as useEffect7, useId as useId6, useLayoutEffect as useLayoutEffect8, useRef as useRef14, useState as useState14 } from "react";
+import { Checkbox as Checkbox4, Textarea as Textarea2, Popover as Popover4, PopoverTrigger as PopoverTrigger4, PopoverContent as PopoverContent4, Tip as Tip3 } from "@hermes/plugin-sdk";
 
 // frontend/comment-bubbles.jsx
 import { useLayoutEffect as useLayoutEffect7, useRef as useRef11, useState as useState11 } from "react";
@@ -6227,6 +6227,26 @@ function ThreadPicker({ workflow, itemId, locked, onBound, onClose }) {
 
 // frontend/comment-styles.mjs
 var commentStyles = `
+.ws-comment-heading { display:flex; align-items:flex-start; flex-wrap:wrap; gap:0; min-width:0; }
+.ws-root .ws-comment-heading > .ws-bubble-summary { flex:1 1 110px; width:auto; min-width:0; padding-right:6px; }
+.ws-comment-action-area { flex:0 0 96px; min-width:0; padding:8px 6px 4px 0; }
+.ws-comment-actions { display:flex; align-items:center; justify-content:flex-end; gap:4px; }
+.ws-comment-actions button, .ws-comment-revert-target { flex:0 0 28px; min-width:28px; width:28px; height:28px; }
+.ws-comment-actions .ws-comment-resolve { margin:0; width:24px; height:24px; min-width:24px; border:1px solid var(--ui-text-secondary); }
+.ws-comment-revert-target { display:inline-flex; border-radius:var(--radius-sm,4px); }
+.ws-comment-revert-target:focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; }
+.ws-comment-action-state { display:block; text-align:right; font-size:10px; line-height:1.5; color:var(--ui-text-secondary); }
+.ws-comment-action-area { position:relative; }
+.ws-comment-action-reason { display:none; position:absolute; right:0; top:100%; z-index:10; width:min(220px,calc(100vw - 64px)); padding:8px; border:1px solid var(--ui-stroke-secondary); border-radius:var(--radius-sm,4px); background:var(--ui-bg-elevated); color:var(--ui-text-secondary); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
+.ws-comment-action-area:focus-within .ws-comment-action-reason, .ws-comment-action-area:hover .ws-comment-action-reason { display:block; }
+.ws-comment-touch-labels { display:none; color:var(--ui-text-secondary); font-size:10px; text-align:right; }
+@media (pointer:coarse) {
+ .ws-comment-action-area { flex-basis:132px; }
+ .ws-comment-actions button, .ws-comment-revert-target { min-width:40px; width:40px; height:40px; }
+ .ws-comment-actions .ws-comment-resolve { min-width:32px; width:32px; height:32px; }
+ .ws-comment-touch-labels, .ws-comment-action-reason { display:block; }
+ .ws-comment-action-reason { position:static; width:auto; border:0; padding:4px 0 0; background:transparent; }
+}
 .ws-comment-surfaces { display: contents; }
 .ws-author { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:100%; vertical-align:middle; }
 .ws-author-avatar { display:inline-flex; flex:0 0 20px; width:20px; height:20px; align-items:center; justify-content:center; border-radius:50%; overflow:hidden; background:var(--ui-bg-elevated); color:var(--ui-text-secondary); font-size:11px; font-weight:600; }
@@ -6270,6 +6290,61 @@ var commentStyles = `
 .ws-related-scope[open] { flex:1 1 auto; }
 .ws-related-scope .ws-comment { padding:8px; margin-block:6px; }
 `;
+
+// frontend/comment-actions.jsx
+import { useId as useId5 } from "react";
+import { Checkbox as Checkbox3, Tip as Tip2 } from "@hermes/plugin-sdk";
+function ResolveCheckbox({ "data-state": tooltipState, ...props }) {
+  return h(Checkbox3, props);
+}
+function CommentActions({ comment, locked, pending, onResolve, onDelete, onRevert }) {
+  const reasonId = useId5(), stateId = useId5();
+  const change = comment.section_change;
+  const reason = locked ? "This discussion is locked while an operation is active." : pending ? "Wait for the current comment action to finish." : change?.status === "available" ? null : change?.status === "reverted" ? "This section was reverted." : change?.reason ?? "No eligible addressed section is saved for this comment.";
+  const disabled = locked || pending;
+  const revert = h(Action, {
+    variant: "ghost",
+    size: "icon-xs",
+    disabled: Boolean(reason),
+    "aria-label": `Revert changes: ${comment.text}`,
+    "aria-describedby": reason ? reasonId : void 0,
+    onClick: (event) => {
+      if (!reason) onRevert(event.currentTarget);
+    }
+  }, h(Codicon, { name: "discard", "aria-hidden": true }));
+  return h(
+    "div",
+    { className: "ws-comment-action-area" },
+    h(
+      "div",
+      { className: "ws-comment-actions", role: "group", "aria-label": `Actions for comment ${comment.passageNumber}` },
+      h(Tip2, { label: "Resolve" }, h(ResolveCheckbox, {
+        className: "ws-checkbox ws-comment-resolve",
+        checked: comment.resolved,
+        disabled,
+        "aria-label": `Resolve: ${comment.text}`,
+        "aria-describedby": stateId,
+        onCheckedChange: (value) => onResolve(value === true)
+      })),
+      h(Tip2, { label: "delete comment" }, h(Action, {
+        variant: "ghost",
+        size: "icon-xs",
+        disabled,
+        "aria-label": `delete comment: ${comment.text}`,
+        onClick: (event) => onDelete(event.currentTarget)
+      }, h(Codicon, { name: "trash", "aria-hidden": true }))),
+      h(Tip2, { label: "Revert changes" }, change?.status !== "available" ? h("span", {
+        className: "ws-comment-revert-target",
+        tabIndex: 0,
+        "aria-label": `Revert changes unavailable: ${reason}`,
+        "aria-describedby": reasonId
+      }, revert) : revert)
+    ),
+    h("span", { id: stateId, className: "ws-comment-action-state" }, comment.resolved ? "Resolved. Uncheck to reopen." : "Open discussion"),
+    reason && h("span", { id: reasonId, className: "ws-comment-action-reason" }, reason),
+    h("span", { className: "ws-comment-touch-labels", "aria-hidden": true }, "Resolve \xB7 Delete \xB7 Revert")
+  );
+}
 
 // frontend/identity.jsx
 import { createContext, useContext, useEffect as useEffect6, useMemo as useMemo2, useRef as useRef13, useState as useState13 } from "react";
@@ -6549,9 +6624,11 @@ function Comment({
   showContext = true,
   originalAnchor = comment.anchor,
   onDelete = () => {
-  }
+  },
+  onReplyPending = () => true
 }) {
   const [reply, setReply] = useState14(retainedReply), [busy, setBusy] = useState14(false), [replyOpen, setReplyOpen] = useState14(Boolean(retainedReply));
+  const replying = useRef14(false);
   const location = locateAnchor(text, comment.anchor);
   return h(
     "article",
@@ -6578,36 +6655,6 @@ function Comment({
         comment.resolved ? "Resolved" : "Open discussion"
       )
     ),
-    h(
-      "label",
-      { className: "ws-check" },
-      h(Checkbox3, {
-        className: "ws-checkbox",
-        "aria-label": `Resolve: ${comment.text}`,
-        checked: comment.resolved,
-        disabled: locked || busy,
-        onCheckedChange: (value) => {
-          const card = document.getElementById(`ws-discussion-${comment.id}`);
-          const control = document.activeElement;
-          const ownedFocus = card?.contains(control);
-          setBusy(true);
-          void command("resolve_comment", {
-            id: comment.id,
-            resolved: value === true
-          }).catch(onError).finally(() => {
-            setBusy(false);
-            if (ownedFocus) onResolutionFinished({ id: comment.id, card, control });
-          });
-        }
-      }),
-      comment.resolved ? "Resolved \u2014 uncheck to reopen" : "Resolve comment"
-    ),
-    h(Action, {
-      variant: "text",
-      style: { color: "var(--ui-text-secondary)" },
-      disabled: locked || busy,
-      onClick: (event) => onDelete(comment, event.currentTarget)
-    }, "Delete comment"),
     comment.anchor ? h(
       "div",
       { className: "ws-anchor" },
@@ -6651,11 +6698,6 @@ function Comment({
         )
       )
     ),
-    comment.section_change && h(
-      "div",
-      { className: "ws-section-change" },
-      comment.section_change.status === "available" ? h(Action, { disabled: locked || busy, onClick: (event) => onRevertSection(comment, event.currentTarget) }, "Revert section") : h("p", { className: "ws-muted", role: "status" }, comment.section_change.status === "reverted" ? "This section was reverted." : `Section revert unavailable. ${comment.section_change.reason ?? "The original passage cannot be mapped safely."}`)
-    ),
     comment.replies.map(
       (reply2) => h(
         "div",
@@ -6673,7 +6715,9 @@ function Comment({
         {
           onSubmit: async (e) => {
             e.preventDefault();
-            if (locked || busy || !reply.trim()) return;
+            if (locked || busy || replying.current || !reply.trim()) return;
+            if (!onReplyPending(true)) return;
+            replying.current = true;
             setBusy(true);
             try {
               await command("reply_comment", { id: comment.id, text: reply });
@@ -6682,6 +6726,8 @@ function Comment({
             } catch (error) {
               onError(error);
             } finally {
+              replying.current = false;
+              onReplyPending(false);
               setBusy(false);
             }
           }
@@ -6742,13 +6788,28 @@ function Comments({
   }
 }) {
   const retained = useRef14(draftBuffer?.read()?.draft ?? {});
-  const composerId = useId5();
+  const composerId = useId6();
   const resolvedControl = useRef14(null);
   const resolvedAction = useRef14(null), composeFromOptions = useRef14(false);
   const [optionsOpen, setOptionsOpen] = useState14(false);
   const [deleting, setDeleting] = useState14(null);
   const deletedIds = useRef14(/* @__PURE__ */ new Set());
   const mutationInFlight = useRef14(false), composing = useRef14(false);
+  const actionInFlight = useRef14(/* @__PURE__ */ new Set());
+  const [pendingActions, setPendingActions] = useState14(/* @__PURE__ */ new Set());
+  const commentAction = async (comment, work) => {
+    if (locked || busy || mutationInFlight.current || actionInFlight.current.has(comment.id)) return;
+    actionInFlight.current.add(comment.id);
+    setPendingActions(new Set(actionInFlight.current));
+    try {
+      await work();
+    } catch (error) {
+      onError(error);
+    } finally {
+      actionInFlight.current.delete(comment.id);
+      setPendingActions(new Set(actionInFlight.current));
+    }
+  };
   const revealFrame = useRef14(null);
   const saveViewport = useRef14(null);
   useEffect7(() => () => {
@@ -6880,7 +6941,7 @@ function Comments({
     const { id, card, control } = resolutionFocus;
     if (document.activeElement !== document.body && !card?.contains(document.activeElement)) return;
     const visible2 = visibleComments(all, showResolved), remaining = new Set(visible2.map((c) => c.id));
-    const current = document.getElementById(`ws-discussion-${id}`);
+    const current = remaining.has(id) && (document.getElementById(`ws-discussion-${id}`) ?? document.getElementById(`ws-bubble-${id}`));
     if (current) {
       (control?.isConnected && !control.disabled ? control : current).focus();
       return;
@@ -6996,7 +7057,7 @@ function Comments({
       })
     ),
     h(
-      Tip2,
+      Tip3,
       { label: "Add comment (Ctrl+Enter)" },
       h(
         Action,
@@ -7030,34 +7091,65 @@ function Comments({
         }
       },
       h(
-        Action,
-        {
-          id: `ws-bubble-${comment.id}`,
-          className: "ws-bubble-summary",
-          variant: "ghost",
-          "aria-expanded": selected,
-          "aria-label": `${context}: ${comment.text} \xB7 ${authorName(comment)} \xB7 ${selected ? "Collapse thread" : "Open thread"}`,
-          "aria-controls": selected ? `ws-discussion-${comment.id}` : void 0,
-          onClick: () => selected ? setActiveComment(null) : select(comment.id)
-        },
+        "div",
+        { className: "ws-comment-heading" },
         h(
-          "span",
-          { className: "ws-bubble-author" },
-          h(AuthorHeader, { entry: comment }),
-          h("span", { className: "ws-bubble-context" }, `${!grouped ? context : `Comment ${number}`}${comment.resolved ? " \xB7 Resolved" : ""}`)
+          Action,
+          {
+            id: `ws-bubble-${comment.id}`,
+            className: "ws-bubble-summary",
+            variant: "ghost",
+            "aria-expanded": selected,
+            "aria-label": `${context}: ${comment.text} \xB7 ${authorName(comment)} \xB7 ${selected ? "Collapse thread" : "Open thread"}`,
+            "aria-controls": selected ? `ws-discussion-${comment.id}` : void 0,
+            onClick: () => selected ? setActiveComment(null) : select(comment.id)
+          },
+          h(
+            "span",
+            { className: "ws-bubble-author" },
+            h(AuthorHeader, { entry: comment }),
+            h("span", { className: "ws-bubble-context" }, `${!grouped ? context : `Comment ${number}`}${comment.resolved ? " \xB7 Resolved" : ""}`)
+          ),
+          !selected && h("span", { className: "ws-bubble-preview" }, comment.text),
+          h("span", { className: "ws-bubble-context" }, `${comment.replies.length} ${comment.replies.length === 1 ? "reply" : "replies"} \xB7 ${selected ? "Collapse thread" : "Open thread"}${discussion.current.replies[comment.id] ? " \xB7 Draft reply" : ""}`)
         ),
-        !selected && h("span", { className: "ws-bubble-preview" }, comment.text),
-        h("span", { className: "ws-bubble-context" }, `${comment.replies.length} ${comment.replies.length === 1 ? "reply" : "replies"} \xB7 ${selected ? "Collapse thread" : "Open thread"}${discussion.current.replies[comment.id] ? " \xB7 Draft reply" : ""}`)
+        h(CommentActions, {
+          comment,
+          locked: locked || busy,
+          pending: pendingActions.has(comment.id),
+          onResolve: (resolved) => {
+            const card = document.getElementById(`ws-discussion-${comment.id}`) ?? document.getElementById(`ws-bubble-${comment.id}`)?.closest("section");
+            const control = document.activeElement, ownedFocus = card?.contains(control);
+            return commentAction(comment, async () => {
+              try {
+                await command("resolve_comment", { id: comment.id, resolved });
+              } finally {
+                if (ownedFocus) setResolutionFocus({ id: comment.id, card, control });
+              }
+            });
+          },
+          onDelete: (opener) => {
+            if (!locked && !busy && !actionInFlight.current.has(comment.id)) setDeleting({ comment, opener });
+          },
+          onRevert: (opener) => commentAction(comment, () => onRevertSection(comment, opener))
+        })
       ),
       selected && h(Comment, {
         comment,
         text,
         command,
-        locked,
+        locked: locked || pendingActions.has(comment.id),
         onError,
         state,
         retainedReply: discussion.current.replies[comment.id] ?? "",
         retainReply,
+        onReplyPending: (value) => {
+          if (value && actionInFlight.current.has(comment.id)) return false;
+          if (value) actionInFlight.current.add(comment.id);
+          else actionInFlight.current.delete(comment.id);
+          setPendingActions(new Set(actionInFlight.current));
+          return true;
+        },
         passageNumber: number,
         originalAnchor: comment.originalAnchor,
         active: true,
@@ -7176,7 +7268,7 @@ function Comments({
             }
           }
         },
-        h("label", { className: "ws-check" }, h(Checkbox3, {
+        h("label", { className: "ws-check" }, h(Checkbox4, {
           className: "ws-checkbox",
           "aria-label": "Show resolved comments",
           checked: showResolved,
@@ -7232,7 +7324,7 @@ function Comments({
         }
       },
       onSubmit: async () => {
-        if (locked || busy || mutationInFlight.current) throw new Error("Wait for the current operation before deleting this comment.");
+        if (locked || busy || mutationInFlight.current || actionInFlight.current.size) throw new Error("Wait for the current operation before deleting this comment.");
         mutationInFlight.current = true;
         setBusy(true);
         try {
@@ -7566,7 +7658,7 @@ var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOp
   );
 });
 function FolderNavigation({ childrenByParent, contexts, onOpen, selected, scope, reorder }) {
-  const treeId = useId6();
+  const treeId = useId7();
   const tree = useRef15(null), defaultOpen = useRef15(true);
   const initializeDisclosure = useCallback4((node) => {
     if (node) node.open = defaultOpen.current;
@@ -7738,7 +7830,7 @@ function FolderNavigation({ childrenByParent, contexts, onOpen, selected, scope,
   );
 }
 function WorkspaceSource({ ctx, profile, sourceKey }) {
-  const queryInstance = useId6();
+  const queryInstance = useId7();
   const client = useMemo3(
     () => new WorkspaceClient(ctx, ownerNow),
     [ctx, sourceKey]
@@ -7767,7 +7859,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
   );
   const [usernameDialog, setUsernameDialog] = useState15(null);
   const [selected, setSelected] = useState15(null), [error, setError] = useState15(""), [dialog, setDialog] = useState15(null), [confirmation, setConfirmation] = useState15(null), [restore, setRestore] = useState15(null), [replacementLoad, setReplacementLoad] = useState15(null), [notice, setNotice] = useState15(""), [trash, setTrash] = useState15(false), [navExpanded, setNavExpanded] = useState15(false), [errorAction, setErrorAction] = useState15("action"), [errorContext, setErrorContext] = useState15(null);
-  const navId = useId6(), navToggle = useRef15(null), workPane = useRef15(null);
+  const navId = useId7(), navToggle = useRef15(null), workPane = useRef15(null);
   const importing = useRef15(false), [importBusy, setImportBusy] = useState15(false), [importedItem, setImportedItem] = useState15(null);
   useLayoutEffect9(() => {
     if (workPane.current) {
@@ -8268,7 +8360,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
   ));
 }
 function Home({ items, state, drafts, onOpen, create, setDialog, contexts, itemIndex }) {
-  const descriptionPrefix = useId6();
+  const descriptionPrefix = useId7();
   const recoverable = drafts ? ["content", "title", "property", "discussion"].flatMap((field) => drafts.list(state.scope_id, field)) : [];
   const pageRows = useMemo3(
     () => items.filter((item) => item.kind === "page" || item.kind === "database").map((item) => {
@@ -8520,7 +8612,7 @@ function Document({
     setLocalDialog(name);
   };
   const attachment = useRef15(null), editorFocus = useRef15(null);
-  const headingId = useId6();
+  const headingId = useId7();
   const titleBuffer = useMemo3(() => drafts?.bind(state.scope_id, item.id, "title") ?? null, [drafts, state.scope_id, item.id]);
   const editorFlushes = useRef15({ title: async () => {
   }, body: async () => {
@@ -8602,10 +8694,29 @@ function Document({
       confirmed
     });
   });
+  const restoreSectionReading = (reading) => {
+    if (!reading) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!client.current() || !reading.pane.isConnected) return;
+      const editor = reading.pane.querySelector(".ws-editor[contenteditable]");
+      const range = reading.anchor && editor && anchorRange(editor, reading.anchor);
+      if (range) {
+        const focused = document.activeElement, selection = getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        focused?.focus?.({ preventScroll: true });
+      }
+      reading.pane.scrollTop = reading.top;
+      reading.pane.scrollLeft = reading.left;
+    }));
+  };
   const revertSection = (comment, opener) => {
     const change = comment.section_change;
     if (!change || change.status !== "available" || locked) return;
-    void sectionTask(async () => {
+    const pane = opener?.closest(".ws-work"), editor = pane?.querySelector(".ws-editor[contenteditable]");
+    const reading = pane ? { pane, top: pane.scrollTop, left: pane.scrollLeft, anchor: editor && captureAnchor(editor) } : null;
+    let reviewing = false;
+    return sectionTask(async () => {
       await flushEditors();
       client.assertCurrent();
       const preview = await command("preview_section_revert", {
@@ -8613,8 +8724,10 @@ function Document({
         generation_id: change.generation_id,
         change_id: change.change_id
       });
-      if (preview.requires_confirmation) setSectionReview({ preview, opener, commentId: comment.id });
-      else await command("revert_section", {
+      if (preview.requires_confirmation) {
+        reviewing = true;
+        setSectionReview({ preview, opener, commentId: comment.id, reading });
+      } else await command("revert_section", {
         version_id: preview.version_id,
         generation_id: preview.generation_id,
         change_id: preview.change_id,
@@ -8624,11 +8737,15 @@ function Document({
         confirmed: false
       });
     }).then(() => {
+      if (!reviewing) restoreSectionReading(reading);
       requestAnimationFrame(() => {
         if (document.activeElement === document.body || document.activeElement === opener)
           document.getElementById(`ws-bubble-${comment.id}`)?.focus({ preventScroll: true });
       });
-    }).catch(onError);
+    }).catch((error) => {
+      restoreSectionReading(reading);
+      onError(error);
+    });
   };
   const pageComments = numberComments(state.comments.filter(
     (c) => c.item_id === item.id
@@ -8732,7 +8849,7 @@ function Document({
         setSectionReview({ ...sectionReview, preview, expired: false });
       }) } : void 0,
       returnFocus: sectionReview.opener,
-      description: "You edited this page after Hermes changed it. Reverting restores only this highlighted section. Manual edits inside it may be overwritten; every unrelated change stays intact.",
+      description: "You edited this page after Hermes changed it. Reverting restores only this highlighted section and removes its associated AI responses. Manual edits inside it may be overwritten; every unrelated change and human reply stays intact. Saved history retains the recovery receipt.",
       renderHelp: () => h(
         "div",
         { className: "ws-section-preview" },
@@ -8753,7 +8870,10 @@ function Document({
         sectionReview.preview.before_text === sectionReview.preview.current_text && sectionReview.preview.before_html !== sectionReview.preview.current_html && h("p", { className: "ws-muted" }, "The text is unchanged; the highlighted section\u2019s formatting will change."),
         h("p", { className: "ws-muted" }, "If the page changes while this dialog is open, this approval expires. Cancel keeps all current changes.")
       ),
-      onClose: () => setSectionReview(null),
+      onClose: () => {
+        setSectionReview(null);
+        restoreSectionReading(sectionReview.reading);
+      },
       onSubmit: async () => {
         try {
           await applySection(sectionReview.preview, true);
