@@ -5868,7 +5868,7 @@ function ScopeReviewDialog({
 
 // frontend/comments.jsx
 import { useCallback as useCallback3, useEffect as useEffect7, useId as useId5, useLayoutEffect as useLayoutEffect8, useRef as useRef14, useState as useState14 } from "react";
-import { Checkbox as Checkbox3, Textarea as Textarea2, Popover as Popover3, PopoverTrigger as PopoverTrigger3, PopoverContent as PopoverContent3, Tip as Tip2 } from "@hermes/plugin-sdk";
+import { Checkbox as Checkbox3, Textarea as Textarea2, Popover as Popover4, PopoverTrigger as PopoverTrigger4, PopoverContent as PopoverContent4, Tip as Tip2 } from "@hermes/plugin-sdk";
 
 // frontend/comment-bubbles.jsx
 import { useLayoutEffect as useLayoutEffect7, useRef as useRef11, useState as useState11 } from "react";
@@ -6232,6 +6232,10 @@ var commentStyles = `
 .ws-author-avatar { display:inline-flex; flex:0 0 20px; width:20px; height:20px; align-items:center; justify-content:center; border-radius:50%; overflow:hidden; background:var(--ui-bg-elevated); color:var(--ui-text-secondary); font-size:11px; font-weight:600; }
 .ws-author-avatar img { width:20px; height:20px; object-fit:cover; }
 .ws-author-name { min-width:0; overflow-wrap:anywhere; white-space:normal; text-align:left; color:var(--ui-text-primary); font-size:12px; line-height:1.4; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.ws-author-disclosure { height:auto; max-width:100%; padding:2px; margin:-2px; justify-content:flex-start; text-align:left; white-space:normal; }
+.ws-author-disclosure .ws-author-name { text-decoration:underline dotted; text-underline-offset:3px; }
+.ws-author-details { max-width:min(24rem,calc(100vw - 32px)); max-height:min(24rem,60vh); overflow:auto; }
+.ws-author-full-name { margin:0 0 8px; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--ui-text-primary); }
 .ws-bubble-author { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:4px 8px; width:100%; min-width:0; }
 .ws-bubble-author .ws-author { flex:1 1 100px; }
 .ws-bubble-author .ws-bubble-context { flex:0 1 auto; }
@@ -6270,7 +6274,17 @@ var commentStyles = `
 // frontend/identity.jsx
 import { createContext, useContext, useEffect as useEffect6, useMemo as useMemo2, useRef as useRef13, useState as useState13 } from "react";
 import { host } from "@hermes/plugin-sdk";
-import { Dialog as Dialog5, DialogContent as DialogContent5, DialogHeader as DialogHeader5, DialogTitle as DialogTitle5, DialogDescription as DialogDescription5, DialogFooter as DialogFooter5 } from "@hermes/plugin-sdk";
+import {
+  Dialog as Dialog5,
+  DialogContent as DialogContent5,
+  DialogHeader as DialogHeader5,
+  DialogTitle as DialogTitle5,
+  DialogDescription as DialogDescription5,
+  DialogFooter as DialogFooter5,
+  Popover as Popover3,
+  PopoverTrigger as PopoverTrigger3,
+  PopoverContent as PopoverContent3
+} from "@hermes/plugin-sdk";
 
 // frontend/identity.mjs
 var MAX_AVATAR_BYTES = 256 * 1024;
@@ -6370,6 +6384,7 @@ function IdentityProvider({ client, children }) {
 function AuthorHeader({ entry }) {
   const loadAvatar = useContext(IdentityContext), author = entry?.author_identity;
   const name = authorName(entry), [loaded, setLoaded] = useState13(null);
+  const [open, setOpen] = useState13(false), trigger = useRef13(null), close = useRef13(null);
   const key = JSON.stringify(author);
   const image = loaded && loaded.key === key ? loaded.data : null;
   const pending = Boolean(loadAvatar && author?.kind === "agent" && (!loaded || loaded.key !== key));
@@ -6386,9 +6401,7 @@ function AuthorHeader({ entry }) {
       current = false;
     };
   }, [loadAvatar, key]);
-  return h(
-    "span",
-    { className: "ws-author", title: name, "aria-busy": pending },
+  const contents = [
     h("span", { className: "ws-author-avatar", "aria-hidden": true, "data-avatar-state": pending ? "loading" : image ? "image" : "fallback" }, image ? h("img", {
       src: image,
       alt: "",
@@ -6401,6 +6414,42 @@ function AuthorHeader({ entry }) {
       onError: () => setLoaded({ key, data: null })
     }) : h("span", null, Array.from(name)[0]?.toLocaleUpperCase() || "\u2022")),
     h("strong", { className: "ws-author-name" }, name)
+  ];
+  if (entry?.author !== "user" && entry?.author !== "agent")
+    return h("span", { className: "ws-author", title: name, "aria-busy": pending }, ...contents);
+  return h(
+    Popover3,
+    { open, onOpenChange: setOpen },
+    h(
+      PopoverTrigger3,
+      { asChild: true },
+      h(Action, {
+        ref: trigger,
+        variant: "ghost",
+        className: "ws-author ws-author-disclosure",
+        "aria-label": `Show full author name: ${name}`,
+        "aria-busy": pending,
+        onMouseDown: (event) => event.preventDefault()
+      }, ...contents)
+    ),
+    h(
+      PopoverContent3,
+      {
+        className: "ws-author-details",
+        align: "start",
+        onOpenAutoFocus: (event) => {
+          event.preventDefault();
+          close.current?.focus({ preventScroll: true });
+        },
+        onCloseAutoFocus: (event) => {
+          event.preventDefault();
+          trigger.current?.focus({ preventScroll: true });
+        },
+        onClick: (event) => event.stopPropagation()
+      },
+      h("p", { className: "ws-author-full-name" }, name),
+      h(Action, { ref: close, variant: "text", onClick: () => setOpen(false), "aria-label": "Close author name" }, "Close")
+    )
   );
 }
 function UsernameDialog({ client, onClose, returnFocus }) {
@@ -7112,11 +7161,11 @@ function Comments({
       }, `${showResolved ? "Hide" : "Show"} resolved (${all.length})`)
     ),
     all.length > 0 && h(
-      Popover3,
+      Popover4,
       { open: optionsOpen, onOpenChange: setOptionsOpen },
-      h(PopoverTrigger3, { asChild: true }, h(Action, { ref: resolvedControl, variant: "ghost", size: "icon-xs", "aria-label": "Comment options" }, h(Codicon, { name: "ellipsis" }))),
+      h(PopoverTrigger4, { asChild: true }, h(Action, { ref: resolvedControl, variant: "ghost", size: "icon-xs", "aria-label": "Comment options" }, h(Codicon, { name: "ellipsis" }))),
       h(
-        PopoverContent3,
+        PopoverContent4,
         {
           align: "end",
           className: "ws-comment-options",
