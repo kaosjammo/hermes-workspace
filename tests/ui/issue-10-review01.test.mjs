@@ -16,10 +16,10 @@ const {AuthorHeader,UsernameDialog,h,act,createRoot}=await import(out+'/build/re
 const root=createRoot(document.getElementById('app'));
 after(async()=>{await act(()=>root.unmount());window.close();require('esbuild').stop()});
 test('F005 long human and native agent reply names have an operable full-name disclosure',async()=>{
- for(const [author,name]of [['user','庭🌿'.repeat(35)],['agent','Engineer 👩‍💻 '+ 'Native 東京 '.repeat(30)]]){
+ for(const [author,name]of [['user','庭🌿'.repeat(35)],['agent','Engineer 👩‍💻 <b>literal</b> '+ 'Native 東京 '.repeat(30)]]){
   await act(()=>root.render(h(AuthorHeader,{key:author,entry:{id:author,author,author_identity:{kind:author==='user'?'human':'agent',name}}})));
   const trigger=document.querySelector('button[aria-label^="Show full author name"]');assert.ok(trigger,'F005 keyboard/touch disclosure trigger exists');
-  await act(()=>trigger.click());const content=document.querySelector('.ws-author-full-name');assert.ok(content);assert.ok(content.textContent.includes(name));
+  await act(()=>trigger.click());const content=document.querySelector('.ws-author-full-name');assert.ok(content);assert.ok(content.textContent.includes(name));assert.equal(content.querySelector('b'),null);
   await act(()=>[...content.parentElement.querySelectorAll('button')].find(b=>b.textContent==='Close').click());assert.equal(document.querySelector('.ws-author-full-name'),null);
  }
 });

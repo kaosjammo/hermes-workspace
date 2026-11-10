@@ -69,11 +69,14 @@ try{
   // physical selection/touch claim. Real pointer activation exercises disclosure.
   await page.setViewportSize({width:1440,height:900});await page.evaluate(()=>window.issue10.theme('light'));
   await humanTrigger.scrollIntoViewIfNeeded();
+  const pointerScroll=await page.locator('.ws-work').evaluate(n=>n.scrollTop);
   const selection=await page.locator('.ws-editor').evaluate(editor=>{const node=[...editor.querySelectorAll('p')][0].firstChild;const r=document.createRange();r.setStart(node,0);r.setEnd(node,5);const s=getSelection();s.removeAllRanges();s.addRange(r);return s.toString()});
   await humanTrigger.click();await page.locator('.ws-author-details').waitFor();assert.equal(await page.evaluate(()=>getSelection().toString()),selection);
   await button('Close author name').click();await page.locator('.ws-author-details').waitFor({state:'hidden'});
   await page.waitForFunction(label=>document.activeElement?.getAttribute('aria-label')===label,'Show full author name: '+humanName);
-  assert.equal(await humanTrigger.evaluate(n=>n===document.activeElement),true);pass('F005 pointer open/close preserves selected reader text and returns focus');
+  assert.equal(await humanTrigger.evaluate(n=>n===document.activeElement),true);
+  assert.equal(await page.evaluate(()=>getSelection().toString()),selection);
+  assert.equal(await page.locator('.ws-work').evaluate(n=>n.scrollTop),pointerScroll);pass('F005 pointer open/close preserves selected reader text and returns focus');
   await page.evaluate(()=>{window.issue10.selectShared(false);window.issue10.switchProfile('alpha')});await page.locator('.ws-nav').waitFor();await openPage('River garden notes');await openThread();
   const longName=await page.evaluate(()=>window.issue10.config.long_agent_name);
   const row=page.locator('.ws-reply').filter({hasText:'Long native recorded response'});
