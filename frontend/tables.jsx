@@ -174,8 +174,9 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
   const cancel = () => { if (gate.current) return; setOpen(false); setValues(empty()); setError(null); };
   return h(ContextPopover, { open, onOpenChange: next => { if (!gate.current) { if (!next) closePending.current = true; setOpen(next); } },
     onCloseAutoFocus: event => { closePending.current = false; if (reopenAfterClose.current) { reopenAfterClose.current = false; event.preventDefault(); setOpen(true); } },
-    triggerTip: "Add property", trigger: h(Action, { variant: "ghost", size: "icon-sm", disabled: locked || busy, "aria-label": "Add property", className: "ws-db-add-property" }, h(Codicon, { name: "add", "aria-hidden": true })),
+    trigger: h(Action, { variant: "ghost", disabled: locked || busy, "aria-label": "Add property", className: "ws-db-add-property" }, h(Codicon, { name: "add", "aria-hidden": true }), "Add property"),
     className: "ws-db-property-popover", align: "end", side: "bottom",
+    onEscapeKeyDown: event => { if (gate.current || composing.current || event.isComposing || event.keyCode === 229) event.preventDefault(); },
     onOpenAutoFocus: event => { event.preventDefault(); requestAnimationFrame(() => input.current?.focus({ preventScroll: true })); } },
       h("form", { ref: form, "aria-label": "New property", "aria-busy": busy, "aria-describedby": error && !error.field ? errorId : undefined,
         onCompositionStart: () => { composing.current = true; }, onCompositionEnd: () => { composing.current = false; },
@@ -222,6 +223,7 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
 
 function NewRecordCreator({ draft, locked, onDraft, onCreate, onCancel, label = "New record", groupKey, onFocus }) {
   const form = useRef(null), input = useRef(null), composing = useRef(false);
+  const titleId = useId(), messageId = useId();
   useEffect(() => {
     if (draft.open && !draft.busy && (document.activeElement === document.body || form.current?.contains(document.activeElement))) {
       form.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
@@ -236,12 +238,13 @@ function NewRecordCreator({ draft, locked, onDraft, onCreate, onCancel, label = 
       if (event.key === "Escape" && !draft.busy && !composing.current && !event.isComposing && !event.nativeEvent?.isComposing) { event.preventDefault(); event.stopPropagation(); onCancel(); }
       if (event.key === "Enter" && (composing.current || !isSubmitEnter(event) || event.repeat || event.ctrlKey || event.metaKey || event.altKey)) event.preventDefault();
     }, onSubmit: event => { event.preventDefault(); if (!composing.current) void onCreate(); } },
-    h(Input, { ref: input, "aria-label": "New record title", placeholder: "Record name…", value: draft.title, maxLength: 500,
+    h("label", { className: "ws-db-draft-label", htmlFor: titleId }, "New record"),
+    h(Input, { ref: input, id: titleId, "aria-label": "New record title", "aria-describedby": draft.error || draft.status ? messageId : undefined, placeholder: "Enter record title…", value: draft.title, maxLength: 500,
       required: true, disabled: locked || draft.busy, "aria-invalid": Boolean(draft.error),
       onChange: event => onDraft({ ...draft, title: event.target.value, error: "", status: "" }) }),
     h("div", { className: "ws-db-form-actions" }, h(Action, { type: "submit", disabled: locked || draft.busy || !draft.title.trim() }, draft.busy ? "Creating…" : "Create record"),
       h(Action, { "aria-label": "Cancel new record", disabled: draft.busy, onClick: onCancel }, "Cancel")),
-    (draft.error || draft.status) && h("p", { role: draft.error ? "alert" : "status", className: draft.error ? "ws-field-error" : "ws-muted" }, draft.error || draft.status));
+    (draft.error || draft.status) && h("p", { id: messageId, role: draft.error ? "alert" : "status", className: draft.error ? "ws-field-error" : "ws-muted" }, draft.error || draft.status));
 }
 
 export function Database({ item, state, command, onOpen, onError, locked, confirm, propertyBuffer, registerPropertyFlush }) {
@@ -332,7 +335,7 @@ export function Database({ item, state, command, onOpen, onError, locked, confir
         h(ContextTip, { label: activeRecord.title }, h(Action, { variant: "link", onClick: () => onOpen(activeRecord.id) }, h("span", { className: "ws-db-record-label" }, activeRecord.title))))),
     view === "board" ? h("div", { className: "ws-db-board-view" },
       h("div", { className: "ws-db-board-tools" }, groupColumn && h(Choice, { label: "Group board by", value: groupColumn.id, disabled: rowDraft.open, options: selectColumns.map(c => [c.id, c.name]), onChange: setGroup }),
-        h("span", null, "Properties"), h(PropertyCreator, { item, state, command, locked: schemaLocked, registerFlush: registerCreationFlush })),
+        h(PropertyCreator, { item, state, command, locked: schemaLocked, registerFlush: registerCreationFlush })),
       !groupColumn ? h("p", { className: "ws-db-empty" }, "Add a single-select property to group records on a board.") :
         h("div", { className: "ws-board", role: "region", "aria-label": "Database board, scroll for more groups", tabIndex: 0 },
           [...boardGroups(rows, groupColumn)].map(([value, groupRows]) => h("section", { className: "ws-board-group", key: JSON.stringify(value), role: "region", "aria-label": `Board group: ${groupName(value)}` },
