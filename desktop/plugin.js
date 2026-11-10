@@ -231,8 +231,9 @@ function sanitizeHTML(html, doc = globalThis.document) {
 }
 function commentAnchor(comment) {
   const change = comment.section_change;
-  if (!change || change.status === "reverted") return comment.anchor;
+  if (!change) return comment.anchor;
   if (change.anchor && (change.highlight_status === "available" || change.status === "available" && change.highlight_status !== "unavailable")) return change.anchor;
+  if (change.status === "reverted" && change.highlight_status === void 0) return comment.anchor;
   return comment.anchor ? { ...comment.anchor, unavailable: true } : null;
 }
 function locateAnchor(text, anchor) {
