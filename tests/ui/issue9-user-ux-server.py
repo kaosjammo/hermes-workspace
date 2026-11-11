@@ -16,6 +16,13 @@ if not config_path.exists():
     # An intentional user body is data, distinct from representative seed copy.
     discussion = next(c for c in store.snapshot()['comments'] if c['text'] == 'South feedback Delete')
     store.execute('reply_comment', {'id':discussion['id'], 'text':'Human reply: I intentionally wrote this literal prefix.'})
+    database = store.execute('create_item', {'kind':'database', 'title':'Untouched typed preservation data'})
+    store.execute('set_columns', {'id':database['id'], 'columns':[
+        {'id':'n','name':'Number','type':'number'}, {'id':'c','name':'Done','type':'checkbox'},
+        {'id':'d','name':'Date','type':'date'}, {'id':'s','name':'Status','type':'select','options':['Todo','Done']},
+        {'id':'f','name':'Double','type':'formula','formula':'n * 2'}]})
+    store.execute('create_item', {'kind':'record','title':'Preserved typed record','database_id':database['id'],
+        'properties':{'n':7,'c':True,'d':'2026-11-11','s':'Todo'}})
     config_path.write_text(json.dumps({'item_id':next(p['id'] for p in store.snapshot()['items'] if p['title']=='Actions garden')},indent=2))
 @app.get('/fixture/user-ux')
 def user_ux(): return json.loads(config_path.read_text())
