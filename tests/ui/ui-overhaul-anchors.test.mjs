@@ -11,13 +11,13 @@ function root(html) {
   const { window } = new JSDOM("<article>" + html + "</article>");
   return window.document.querySelector("article");
 }
-test("per-comment addressed display stays small and unavailable changes never use a broad fallback", () => {
+test("per-comment addressed display spans its paragraph and unavailable changes never use a broad fallback", () => {
   const el = root("<p>First addressed. Second addressed. Unchanged outside.</p>");
   const first = { quote: "addressed", prefix: "First ", suffix: ". Second addressed. Unchanged out" };
   const second = { quote: "addressed", prefix: "First addressed. Second ", suffix: ". Unchanged outside." };
   for (const value of [first, second]) {
     const c = { anchor: { quote: el.textContent }, section_change: { status: "available", anchor: value } };
-    assert.equal(anchorRange(el, commentAnchor(c)).toString(), "addressed");
+    assert.equal(anchorRange(el, commentAnchor(c)).toString(), el.textContent);
   }
   assert.notEqual(locateAnchor(el.textContent, first).start, locateAnchor(el.textContent, second).start);
   const original = { quote: el.textContent };

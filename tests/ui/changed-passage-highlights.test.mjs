@@ -44,8 +44,8 @@ window.Range.prototype.getClientRects = function () {
 };
 const source = fixture.comments[0], anchor = commentAnchor(source), calls = [];
 const comment = { ...source, anchor };
-const render = active => act(async () => root.render(h(CommentHighlights, {
-  editorRef: { current: editor }, comments: [comment], active, onComment: id => calls.push(id),
+const render = (active, list = [comment]) => act(async () => root.render(h(CommentHighlights, {
+  editorRef: { current: editor }, comments: list, active, onComment: id => calls.push(id),
 })));
 const painted = suffix => [...CSS.highlights].filter(([key]) => suffix ? key.endsWith(suffix) : /^ws-passage-[^-]+$/.test(key))
   .flatMap(([, ranges]) => [...ranges].map(range => range.toString()));
@@ -57,24 +57,24 @@ after(async () => {
   require('esbuild').stop(); rmSync(out, { recursive: true, force: true });
 });
 
-test('saved multi-part rewrites locate exact replacement ranges without changing the stored anchor', () => {
+test('saved multi-part rewrites highlight their whole paragraph without changing the stored anchor', () => {
   assert.equal(source.section_change.highlight_status, 'available');
   assert.equal(locateAnchor(editor.textContent, anchor).status, 'attached');
-  assert.deepEqual(anchorRanges(editor, anchor).map(range => range.toString()), ['Azure', 'Ochre']);
+  assert.deepEqual(anchorRanges(editor, anchor).map(range => range.toString()), ['Azure hue. Unchanged middle. Ochre hue.']);
   assert.equal(source.anchor.quote, 'Scarlet hue. Unchanged middle. Violet hue.');
   assert.equal(source.resolved, false);
 });
 
-test('one comment paints all its replacements; hover, click and active state retain the same discussion', async () => {
+test('paragraph hover, click and active state retain the same discussion', async () => {
   const html = editor.innerHTML;
   await render(source.id);
-  assert.deepEqual(painted(), ['Azure', 'Ochre']);
-  assert.deepEqual(painted('-active'), ['Azure', 'Ochre']);
+  assert.deepEqual(painted(), ['Azure hue. Unchanged middle. Ochre hue.']);
+  assert.deepEqual(painted('-active'), ['Azure hue. Unchanged middle. Ochre hue.']);
   assert.equal(document.querySelectorAll('.ws-passage-marker').length, 1);
   assert.equal(document.querySelector('.ws-passage-marker').textContent, '1');
-  const second = anchorRanges(editor, anchor)[1].getClientRects()[0];
+  const second = anchorRanges(editor, anchor)[0].getClientRects()[0];
   await act(async () => editor.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: second.left + 1, clientY: 25 })));
-  assert.deepEqual(painted('-hover'), ['Azure', 'Ochre']);
+  assert.deepEqual(painted('-hover'), ['Azure hue. Unchanged middle. Ochre hue.']);
   await act(async () => editor.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: second.left + 1, clientY: 25 })));
   assert.deepEqual(calls, [source.id]);
   assert.equal(editor.innerHTML, html);
@@ -84,4 +84,35 @@ test('missing secondary ranges detach without painting a partial or broad stale 
   const incomplete = document.createElement('div'); incomplete.textContent = 'Azure hue. Unchanged middle. Removed hue.';
   assert.equal(locateAnchor(incomplete.textContent, anchor).status, 'detached');
   assert.deepEqual(anchorRanges(incomplete, anchor), []);
+});
+
+
+test('two comments on one paragraph keep independent choices and active identities', async () => {
+  const other = { ...comment, id: 'second-discussion', passageNumber: 2, text: 'Other feedback' };
+  calls.length = 0;
+  await render(other.id, [comment, other]);
+  assert.deepEqual(painted('-active'), ['Azure hue. Unchanged middle. Ochre hue.']);
+  const marker = document.querySelector('.ws-passage-marker');
+  assert.match(marker.getAttribute('aria-label'), /Open comments 1, 2/);
+  const buttons = [...document.querySelectorAll('[role="menuitem"],button')];
+  const first = buttons.find(b => b.textContent.startsWith('Comment 1:'));
+  const second = buttons.find(b => b.textContent.startsWith('Comment 2:'));
+  assert.ok(first); assert.ok(second);
+  await act(async () => first.click());
+  await act(async () => second.click());
+  assert.deepEqual(calls, [source.id, other.id]);
+  await render(other.id, [other]);
+  assert.equal(document.querySelector('.ws-passage-marker').textContent, '2');
+  assert.deepEqual(painted(), ['Azure hue. Unchanged middle. Ochre hue.']);
+});
+
+test('paragraph expansion preserves rich text and excludes untouched neighbouring blocks', () => {
+  const el = document.createElement('article');
+  el.innerHTML = '<p>Before.</p><p>A <strong>warm</strong> greeting.</p><p>Between.</p><p>A clear ending.</p><p>After.</p>';
+  const html = el.innerHTML;
+  const a = { quote:'warm', prefix:'Before.A ', suffix:' greeting.Between.A clear ending.After.' };
+  const b = { quote:'clear', prefix:'Before.A warm greeting.Between.A ', suffix:' ending.After.' };
+  assert.deepEqual(anchorRanges(el,{...a,paragraphs:true,ranges:[a,b]}).map(r=>r.toString()), ['A warm greeting.','A clear ending.']);
+  assert.deepEqual(anchorRanges(el,a).map(r=>r.toString()), ['warm'], 'Unaddressed selections remain exact');
+  assert.equal(el.innerHTML, html);
 });

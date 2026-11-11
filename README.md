@@ -169,3 +169,8 @@ The local PDF conversion child inherits the host process environment. Its timeou
 ![Earlier synthetic database demonstration](docs/screenshots/database-demo.png)
 
 This earlier-build capture uses fictional records, illustrates the interface only, and is not native acceptance of this pin. [Media provenance](docs/MEDIA.md).
+
+
+### Tested paragraph feedback behaviour (0.1.2)
+
+Addressed feedback highlights its replacement paragraph, including merged or overlapping passages. Separate discussions keep independent identities and replies. Display recovery never enables an unproven independent revert. The included Desktop bundle is the exact author-tested installed artifact; native/provider acceptance remains distinct from automated validation.

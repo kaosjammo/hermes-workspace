@@ -93,7 +93,8 @@ export function commentAnchor(comment) {
   const change = comment.section_change;
   if (!change) return comment.anchor;
   if (change.anchor && (change.highlight_status === "available" || change.status === "available" && change.highlight_status !== "unavailable"))
-    return change.anchors?.length > 1 ? { ...change.anchor, ranges: change.anchors } : change.anchor;
+    return { ...change.anchor, paragraphs: true,
+      ...(change.anchors?.length > 1 ? { ranges: change.anchors } : {}) };
   if (change.status === "reverted" && change.highlight_status === undefined) return comment.anchor;
   return comment.anchor ? { ...comment.anchor, unavailable: true } : null;
 }

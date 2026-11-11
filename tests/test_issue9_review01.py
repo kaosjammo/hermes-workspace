@@ -158,7 +158,8 @@ class Review01(unittest.TestCase):
         self.apply(run,'<p>Completely replaced passage.</p>','Replacement outcome')
         self.store.finish_run(run['id'],'completed')
         c=self.comment()['section_change'];before=self.store.backup_snapshot()
-        self.assertEqual(c['status'],'unavailable');self.assertEqual(c['highlight_status'],'unavailable')
+        self.assertEqual(c['status'],'unavailable');self.assertEqual(c['highlight_status'],'available')
+        self.assertEqual(c['anchor']['quote'],'Completely replaced passage.')
         with self.assertRaises(StoreError):self.revert()
         self.assertEqual(Store(self.home).backup_snapshot(),before)
         # Old persisted application links load as data but cannot assert v2 proof.

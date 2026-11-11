@@ -136,7 +136,7 @@ This is a development preview submitted for catalogue review. Current submission
 
 Source tests cover editor structure, comments, navigation, typed data, converters, backup/restore and native-authority boundaries. Some native lifecycle tests deliberately use synthetic terminal records. Their presence is not proof that those tests passed on this submission, and synthetic completion is not a successful live-provider run.
 
-The independent documentation audit was static. Subsequent release preparation reproduced the installed Desktop bundle in two independent builds and ran separate checks; see [current release status](../../docs/RELEASE-STATUS.md). Same-candidate provider-positive saved editing, active-provider Stop, full restart/compaction/approval lifecycle behaviour, native visual acceptance and macOS/Windows execution require separate evidence. Older catalogue-check totals and earlier demo media are not acceptance receipts for this candidate.
+The independent documentation audit was static. Subsequent release preparation reproduced the installed Desktop bundle in two independent builds and ran separate checks; see [current release status](docs/RELEASE-STATUS.md). Same-candidate provider-positive saved editing, active-provider Stop, full restart/compaction/approval lifecycle behaviour, native visual acceptance and macOS/Windows execution require separate evidence. Older catalogue-check totals and earlier demo media are not acceptance receipts for this candidate.
 
 ## Build from source
 
@@ -162,10 +162,15 @@ The package includes the Desktop bundle, authenticated API, Python backend, decl
 
 The catalogue entry targets `dist/workspace`, the generated 22-file runtime package. The same pinned repository retains the complete editable source, test corpus and documentation at its root. No documents, profile settings, databases, credentials or native conversation histories are included.
 
-See the [complete production feature audit](../../docs/PRODUCTION-FEATURES.md), [original detailed register](../../docs/FEATURE-REGISTER.md), [current release status](../../docs/RELEASE-STATUS.md) and [third-party notices](THIRD-PARTY-NOTICES.md). The bundled React DOM code carries its complete MIT notice there; Hermes supplies the React singleton and plugin SDK. Workspace's own reuse licence is not selected, and this submission makes no open-source permission claim.
+See the [complete production feature audit](docs/PRODUCTION-FEATURES.md), [original detailed register](docs/FEATURE-REGISTER.md), [current release status](docs/RELEASE-STATUS.md) and [third-party notices](THIRD-PARTY-NOTICES.md). The bundled React DOM code carries its complete MIT notice there; Hermes supplies the React singleton and plugin SDK. Workspace's own reuse licence is not selected, and this submission makes no open-source permission claim.
 
 The local PDF conversion child inherits the host process environment. Its timeout and POSIX limits are resource bounds, not a sandbox or network-isolation guarantee. SDK-selector cautions and undocumented native-host dependencies require maintainer review. Passing automated checks is not catalogue admission.
 
-![Earlier synthetic database demonstration](../../docs/screenshots/database-demo.png)
+![Earlier synthetic database demonstration](docs/screenshots/database-demo.png)
 
-This earlier-build capture uses fictional records, illustrates the interface only, and is not native acceptance of this pin. [Media provenance](../../docs/MEDIA.md).
+This earlier-build capture uses fictional records, illustrates the interface only, and is not native acceptance of this pin. [Media provenance](docs/MEDIA.md).
+
+
+### Tested paragraph feedback behaviour (0.1.2)
+
+Addressed feedback highlights its replacement paragraph, including merged or overlapping passages. Separate discussions keep independent identities and replies. Display recovery never enables an unproven independent revert. The included Desktop bundle is the exact author-tested installed artifact; native/provider acceptance remains distinct from automated validation.

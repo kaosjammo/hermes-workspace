@@ -13,7 +13,7 @@ export function numberComments(comments) {
 }
 
 /** Translate textContent offsets to live ranges without changing editor nodes. */
-export function anchorRange(root, anchor) {
+function textRange(root, anchor) {
   const location = locateAnchor(root.textContent, anchor);
   if (location.status !== "attached") return null;
   const walker = root.ownerDocument.createTreeWalker(root, 4);
@@ -38,11 +38,34 @@ export function anchorRange(root, anchor) {
   return range;
 }
 
-/** One discussion can address several replacements without highlighting gaps. */
+/** Addressed feedback paints complete reading blocks. Stored quotes stay exact. */
 export function anchorRanges(root, anchor) {
   if (locateAnchor(root.textContent, anchor).status !== "attached") return [];
-  const ranges = (anchor.ranges ?? [anchor]).map(value => anchorRange(root, value));
-  return ranges.every(Boolean) ? ranges : [];
+  const ranges = (anchor.ranges ?? [anchor]).map(value => textRange(root, value));
+  if (!ranges.every(Boolean)) return [];
+  if (!anchor.paragraphs) return ranges;
+  const selector = "p,li,h1,h2,h3,h4,h5,h6,blockquote,pre,td,th";
+  const blocks = [...root.querySelectorAll(selector)].filter(block => !block.querySelector(selector));
+  const expanded = new Map(), loose = [];
+  for (const range of ranges) {
+    let found = false;
+    for (const block of blocks) {
+      const contents = root.ownerDocument.createRange();
+      contents.selectNodeContents(block);
+      // Strict intersection avoids painting an adjacent paragraph at a shared
+      // endpoint. Compare text ranges, so inline marks never split a paragraph.
+      if (!block.textContent || range.compareBoundaryPoints(range.END_TO_START, contents) >= 0 || range.compareBoundaryPoints(range.START_TO_END, contents) <= 0) continue;
+      expanded.set(block, contents);
+      found = true;
+    }
+    if (!found) loose.push(range);
+  }
+  return [...expanded.values(), ...loose].sort((a,b) => a.compareBoundaryPoints(0,b));
+}
+
+/** Navigation and inline discussion slots use the first highlighted paragraph. */
+export function anchorRange(root, anchor) {
+  return anchor?.paragraphs ? anchorRanges(root, anchor)[0] ?? null : textRange(root, anchor);
 }
 
 /** CSS highlights and gutter controls are presentation only, never saved HTML. */

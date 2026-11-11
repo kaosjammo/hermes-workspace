@@ -548,8 +548,9 @@ function commentAnchor(comment) {
   const change = comment.section_change;
   if (!change) return comment.anchor;
   if (change.anchor && (change.highlight_status === "available" || change.status === "available" && change.highlight_status !== "unavailable"))
-    return change.anchors?.length > 1 ? { ...change.anchor, ranges: change.anchors } : change.anchor;
-  if (change.status === "reverted" && change.highlight_status === void 0) return comment.anchor;
+    return { ...change.anchor, paragraphs: true,
+      ...(change.anchors?.length > 1 ? { ranges: change.anchors } : {}) };
+  if (change.status === "reverted" && change.highlight_status === undefined) return comment.anchor;
   return comment.anchor ? { ...comment.anchor, unavailable: true } : null;
 }
 function locateAnchor(text, anchor) {
@@ -3926,12 +3927,15 @@ function numberComments(comments) {
     passageNumber: Number.isSafeInteger(comment.passageNumber) && comment.passageNumber > 0 ? comment.passageNumber : index + 1
   }));
 }
-function anchorRange(root, anchor) {
+function textRange(root, anchor) {
   const location = locateAnchor(root.textContent, anchor);
   if (location.status !== "attached") return null;
   const walker = root.ownerDocument.createTreeWalker(root, 4);
-  let node, offset = 0, start = null, end = null;
-  while (node = walker.nextNode()) {
+  let node,
+    offset = 0,
+    start = null,
+    end = null;
+  while ((node = walker.nextNode())) {
     const next = offset + node.length;
     if (!start && location.start >= offset && location.start < next)
       start = [node, location.start - offset];
@@ -3947,11 +3951,37 @@ function anchorRange(root, anchor) {
   range.setEnd(...end);
   return range;
 }
+
+/** Addressed feedback paints complete reading blocks. Stored quotes stay exact. */
 function anchorRanges(root, anchor) {
   if (locateAnchor(root.textContent, anchor).status !== "attached") return [];
-  const ranges = (anchor.ranges ?? [anchor]).map((value) => anchorRange(root, value));
-  return ranges.every(Boolean) ? ranges : [];
+  const ranges = (anchor.ranges ?? [anchor]).map(value => textRange(root, value));
+  if (!ranges.every(Boolean)) return [];
+  if (!anchor.paragraphs) return ranges;
+  const selector = "p,li,h1,h2,h3,h4,h5,h6,blockquote,pre,td,th";
+  const blocks = [...root.querySelectorAll(selector)].filter(block => !block.querySelector(selector));
+  const expanded = new Map(), loose = [];
+  for (const range of ranges) {
+    let found = false;
+    for (const block of blocks) {
+      const contents = root.ownerDocument.createRange();
+      contents.selectNodeContents(block);
+      // Strict intersection avoids painting an adjacent paragraph at a shared
+      // endpoint. Compare text ranges, so inline marks never split a paragraph.
+      if (!block.textContent || range.compareBoundaryPoints(range.END_TO_START, contents) >= 0 || range.compareBoundaryPoints(range.START_TO_END, contents) <= 0) continue;
+      expanded.set(block, contents);
+      found = true;
+    }
+    if (!found) loose.push(range);
+  }
+  return [...expanded.values(), ...loose].sort((a,b) => a.compareBoundaryPoints(0,b));
 }
+
+/** Navigation and inline discussion slots use the first highlighted paragraph. */
+function anchorRange(root, anchor) {
+  return anchor?.paragraphs ? anchorRanges(root, anchor)[0] ?? null : textRange(root, anchor);
+}
+
 function CommentHighlights({
   editorRef,
   comments,

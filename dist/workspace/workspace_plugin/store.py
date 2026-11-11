@@ -37,7 +37,7 @@ import uuid
 from urllib.parse import urlsplit
 
 from .formulas import FormulaError, dependencies, evaluate, validate
-from .sections import SectionUnavailable, capture_sections, locate_anchor, plan_revert, addressed_anchors, map_anchor
+from .sections import SectionUnavailable, capture_sections, locate_anchor, plan_revert, addressed_anchors, map_anchor, paragraph_replacement_anchor
 
 
 class StoreError(ValueError):
@@ -842,8 +842,25 @@ class Store:
             change = next((c for c in generation['changes'] if c['comment_id']==comment['id']),None)
             if change:
                 if not change.get('reverted_at'):
-                    plan = plan_revert(change,generation['post_content'],item['content'],_plain,_content)
-                    anchors = addressed_anchors(change,plan,item['content'],_plain) if addressed else [plan['anchor']]
+                    try:
+                        plan = plan_revert(change,generation['post_content'],item['content'],_plain,_content)
+                    except SectionUnavailable:
+                        # Historical revert receipts must retain their exact
+                        # original mapping. Recover display geometry separately:
+                        # a popular-word diff can falsely swallow unchanged
+                        # paragraphs after a complete passage replacement.
+                        recovered = capture_sections(version['snapshot']['content'],generation['post_content'],
+                            generation['anchors'],_plain,exact_boundaries=True,precise=True).get(comment['id'])
+                        if not recovered or recovered['status'] != 'available':
+                            if not addressed:
+                                raise
+                            anchors = [paragraph_replacement_anchor(version['snapshot']['content'],generation['post_content'],
+                                item['content'],generation['anchors'],comment['id'],_plain,_content)]
+                        else:
+                            plan = plan_revert(recovered,generation['post_content'],item['content'],_plain,_content,precise=True)
+                            anchors = [plan['anchor']]
+                    else:
+                        anchors = addressed_anchors(change,plan,item['content'],_plain) if addressed else [plan['anchor']]
                     return {'anchor':anchors[0], **({'anchors':anchors} if len(anchors)>1 else {}),
                             'highlight_generation_id':generation['id'],'highlight_change_id':change['id']}
                 reverted = True
