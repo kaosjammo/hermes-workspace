@@ -438,7 +438,7 @@ export function Comments({
     if (!activeComment) return;
     const doc = surfaces.current?.ownerDocument;
     if (!doc) return;
-    let pointer = false;
+    let pointer = false, tabFocus = false, tabFrame = null;
     const popup = '[role="dialog"],[role="menu"],[role="listbox"],[data-slot="popover-content"],[data-slot="dropdown-menu-content"]';
     const protectedTarget = target => target?.closest?.('.ws-bubble') === doc.getElementById(`ws-bubble-${activeComment}`)?.closest('.ws-bubble') ||
       target?.closest?.('.ws-passage-controls') || target?.closest?.(popup) || doc.querySelector(popup);
@@ -458,12 +458,25 @@ export function Comments({
       retainSaveViewport(pane, pane?.contains(range?.startContainer) ? range : null);
       setActiveComment(null);
     };
-    const down = () => { pointer = true; };
+    const down = () => { pointer = true; tabFocus = false; };
     const click = event => {
       pointer = false;
       if (!event.defaultPrevented && !event.target?.closest?.('.ws-bubble') && !passageHit(event)) collapse(event.target);
     };
-    const focus = event => { if (!pointer) collapse(event.target); };
+    const key = event => {
+      tabFocus = event.key === 'Tab' && !event.isComposing;
+      if (tabFocus) {
+        pointer = false;
+        doc.defaultView.cancelAnimationFrame(tabFrame);
+        tabFrame = doc.defaultView.requestAnimationFrame(() => { tabFocus = false; });
+      }
+    };
+    const focus = event => {
+      const keyboard = tabFocus; tabFocus = false;
+      // Passage navigation and section-reading recovery move focus internally.
+      // Only a user's Tab transition is outside keyboard intent.
+      if (!pointer && keyboard) collapse(event.target);
+    };
     const cancelPointer = () => { pointer = false; };
     // Wait for a pointer gesture to finish before collapsing. Native focus,
     // selections and portaled dialog/popover interactions keep their lifecycle.
@@ -471,11 +484,14 @@ export function Comments({
     doc.addEventListener('pointercancel', cancelPointer, true);
     doc.addEventListener('click', click);
     doc.addEventListener('focusin', focus);
+    doc.addEventListener('keydown', key, true);
     return () => {
       doc.removeEventListener('pointerdown', down, true);
       doc.removeEventListener('pointercancel', cancelPointer, true);
       doc.removeEventListener('click', click);
       doc.removeEventListener('focusin', focus);
+      doc.removeEventListener('keydown', key, true);
+      doc.defaultView.cancelAnimationFrame(tabFrame);
     };
   }, [activeComment, geometry, deleting, locked, busy, setActiveComment]);
   const select = id => {

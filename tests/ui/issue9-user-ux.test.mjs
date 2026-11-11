@@ -44,7 +44,8 @@ test('new UX: card background expands; outside click/focus collapse without comm
  const textarea=card('a').querySelector('textarea');await act(()=>{Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set.call(textarea,'Unsent 庭');textarea.dispatchEvent(new Event('input',{bubbles:true}))});
  await click(textarea);assert.equal(active,'a');await click(document.getElementById('outside'));await tick();assert.equal(active,null);assert.deepEqual(calls,[]);
  await click(summary('a'));await tick();assert.equal(active,'a');assert.equal(card('a').querySelector('textarea').value,'Unsent 庭');
- await act(()=>document.getElementById('outside').focus());await tick();assert.equal(active,null);assert.deepEqual(calls,[]);assert.deepEqual(errors,[]);
+ await act(()=>document.getElementById('outside').focus());await tick();assert.equal(active,'a','internal programmatic focus does not invent outside intent');
+ await act(()=>{summary('a').focus();summary('a').dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));document.getElementById('outside').focus()});await tick();assert.equal(active,null);assert.deepEqual(calls,[]);assert.deepEqual(errors,[]);
 });
 test('new UX: literal saved prefix survives; reply origin controls alignment and composer follows history',async()=>{
  await reset({initial:'a'});const body=document.getElementById('ws-discussion-a'),replies=[...body.querySelectorAll('.ws-reply')];
