@@ -5,7 +5,7 @@ import { DraftRepository } from "../../frontend/drafts.mjs";
 import { editorHTML } from "../../frontend/editor.mjs";
 const require = createRequire(new URL("../../.local/toolchain/package.json", import.meta.url));
 const { JSDOM } = require("jsdom");
-const dom = new JSDOM('<div id="app"></div>', { url: "https://workspace.test" });
+const dom = new JSDOM('<div id="app"></div>', { url: "https://workspace.test", pretendToBeVisual: true });
 for (const name of ["window", "document", "HTMLElement", "Node", "Event", "MouseEvent", "InputEvent"])
   globalThis[name] = dom.window[name];
 globalThis.getSelection = () => dom.window.getSelection();
