@@ -326,16 +326,43 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
     flush = useRef(async () => {}),
     selectionIntent = useRef(0);
   const nextSelectionIntent = useCallback(() => ++selectionIntent.current, []);
+  const errorReceipt = useRef(null);
   const report = useCallback(
     (err, action = "action") => {
       if (client.current() && err instanceof UnsavedEditError) return;
       if (client.current()) {
         const context = typeof action === "string" ? { operation: action } : action;
+        // A later report, even for this section, belongs to another attempt.
+        errorReceipt.current = { context, client };
         setError(err?.message ?? String(err)); setErrorAction(context?.operation ?? "action"); setErrorContext(context);
       }
     },
     [client],
   );
+  const sectionFeedback = useMemo(() => ({
+    begin(itemId, change) {
+      const context = { operation: "revertSection", itemId,
+        scopeId: client.snapshot()?.scope_id, scopeVersion: client.scopeVersion,
+        versionId: change.version_id, generationId: change.generation_id, changeId: change.change_id };
+      return { context, previous: errorReceipt.current };
+    },
+    complete(attempt, result) {
+      const previous = attempt.previous, context = attempt.context;
+      if (!client.current() || !previous || previous.client !== client || errorReceipt.current !== previous ||
+          context.scopeId !== client.snapshot()?.scope_id || context.scopeVersion !== client.scopeVersion ||
+          Object.keys(context).some(key => previous.context?.[key] !== context[key])) return;
+      const checkpoint = client.snapshot()?.versions.find(version => version.id === result?.recovery_version_id);
+      // Preview and consent are not recovery. The accepted command result and
+      // published Store checkpoint must agree before retiring its prior error.
+      if (result?.reverted !== true || result.item_id !== context.itemId || result.change_id !== context.changeId ||
+          checkpoint?.section_revert_of !== context.changeId ||
+          checkpoint.section_revert_receipt?.generation_id !== context.generationId ||
+          !Array.isArray(result.removed_reply_ids) ||
+          JSON.stringify(checkpoint.section_revert_receipt.removed_reply_ids) !== JSON.stringify(result.removed_reply_ids)) return;
+      errorReceipt.current = null;
+      setError(""); setErrorContext(null);
+    },
+  }), [client]);
   const command = useCallback(
     (op, payload) => client.command(op, payload),
     [client],
@@ -753,6 +780,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
                       refresh,
                       onOpen: open,
                       onError: report,
+                      sectionFeedback,
                       registerFlush,
                       flush,
                       confirm,
@@ -1030,6 +1058,7 @@ function Document({
   refresh,
   onOpen,
   onError,
+  sectionFeedback,
   registerFlush,
   flush,
   confirm,
@@ -1125,13 +1154,14 @@ function Document({
     sectionOperation.current = operation;
     return operation;
   };
-  const applySection = (preview, confirmed) => sectionTask(async () => {
+  const applySection = (preview, confirmed, feedback) => sectionTask(async () => {
     await flushEditors();
     client.assertCurrent();
-    await command("revert_section", {
+    const result = await command("revert_section", {
       version_id: preview.version_id, generation_id: preview.generation_id, change_id: preview.change_id,
       dataset_epoch: preview.dataset_epoch, content_hash: preview.content_hash, manual_revision: preview.manual_revision, confirmed,
     });
+    sectionFeedback.complete(feedback, result);
   });
   const restoreSectionReading = reading => {
     if (!reading) return;
@@ -1152,6 +1182,7 @@ function Document({
   const revertSection = (comment, opener) => {
     const change = comment.section_change;
     if (!change || change.status !== "available" || locked) return;
+    const feedback = sectionFeedback.begin(item.id, change);
     const pane = opener?.closest('.ws-work'), editor = pane?.querySelector('.ws-editor[contenteditable]');
     const reading = pane ? { pane, top: pane.scrollTop, left: pane.scrollLeft, anchor: editor && captureAnchor(editor) } : null;
     let reviewing = false;
@@ -1163,19 +1194,22 @@ function Document({
       });
       if (preview.requires_confirmation) {
         reviewing = true;
-        setSectionReview({ preview, opener, commentId: comment.id, reading });
+        setSectionReview({ preview, opener, commentId: comment.id, reading, feedback });
       }
-      else await command("revert_section", {
-        version_id: preview.version_id, generation_id: preview.generation_id, change_id: preview.change_id,
-        dataset_epoch: preview.dataset_epoch, content_hash: preview.content_hash, manual_revision: preview.manual_revision, confirmed: false,
-      });
+      else {
+        const result = await command("revert_section", {
+          version_id: preview.version_id, generation_id: preview.generation_id, change_id: preview.change_id,
+          dataset_epoch: preview.dataset_epoch, content_hash: preview.content_hash, manual_revision: preview.manual_revision, confirmed: false,
+        });
+        sectionFeedback.complete(feedback, result);
+      }
     }).then(() => {
       if (!reviewing) restoreSectionReading(reading);
       requestAnimationFrame(() => {
         if (document.activeElement === document.body || document.activeElement === opener)
           document.getElementById(`ws-bubble-${comment.id}`)?.focus({ preventScroll: true });
       });
-    }).catch(error => { restoreSectionReading(reading); onError(error); });
+    }).catch(error => { restoreSectionReading(reading); onError(error, feedback.context); });
   };
   const pageComments = numberComments(state.comments.filter(
     c => c.item_id === item.id,
@@ -1305,7 +1339,7 @@ function Document({
         h("p", { className: "ws-muted" }, "If the page changes while this dialog is open, this approval expires. Cancel keeps all current changes.")),
       onClose: () => { setSectionReview(null); restoreSectionReading(sectionReview.reading); },
       onSubmit: async () => {
-        try { await applySection(sectionReview.preview, true); }
+        try { await applySection(sectionReview.preview, true, sectionReview.feedback); }
         catch (error) {
           // Every failed application retires this approval. Re-read current
           // provenance/content before another explicit confirmation.
