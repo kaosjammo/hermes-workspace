@@ -6,6 +6,7 @@ const require = createRequire(
 );
 const { JSDOM } = require("jsdom");
 const dom = new JSDOM('<div id="app"></div>', {
+  pretendToBeVisual: true,
   url: "https://workspace.test",
 });
 for (const key of [
