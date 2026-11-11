@@ -6290,26 +6290,41 @@ function ThreadPicker({ workflow, itemId, locked, onBound, onClose }) {
 
 // frontend/comment-styles.mjs
 var commentStyles = `
-.ws-comment-heading { display:flex; align-items:flex-start; flex-wrap:wrap; gap:0; min-width:0; }
-.ws-root .ws-comment-heading > .ws-bubble-summary { flex:1 1 110px; width:auto; min-width:0; padding-right:6px; }
-.ws-comment-action-area { flex:0 0 96px; min-width:0; padding:8px 6px 4px 0; }
-.ws-comment-actions { display:flex; align-items:center; justify-content:flex-end; gap:4px; }
-.ws-comment-actions button, .ws-comment-revert-target { flex:0 0 28px; min-width:28px; width:28px; height:28px; }
-.ws-comment-actions .ws-comment-resolve { margin:0; width:24px; height:24px; min-width:24px; border:1px solid var(--ui-text-secondary); }
-.ws-comment-revert-target { display:inline-flex; border-radius:var(--radius-sm,4px); }
-.ws-comment-revert-target:focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; }
-.ws-comment-action-state { display:block; text-align:right; font-size:10px; line-height:1.5; color:var(--ui-text-secondary); }
-.ws-comment-action-area { position:relative; }
+/* One header owns its entire hover surface; native controls keep their roles. */
+.ws-comment-heading { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:8px; min-width:0; padding:10px; border-radius:inherit; }
+.ws-bubble .ws-comment-heading:hover, .ws-bubble .ws-comment-heading:focus-within { background:var(--ui-bg-hover); }
+.ws-root .ws-comment-heading > .ws-bubble-summary { width:100%; min-width:0; padding:0; border:0; border-radius:var(--radius-sm,4px); background:transparent; box-shadow:none; }
+.ws-root .ws-comment-heading > .ws-bubble-summary:hover { background:transparent; }
+.ws-comment-action-area { position:relative; min-width:0; padding:0; }
+.ws-comment-actions { display:flex; align-items:center; gap:4px; }
+.ws-root .ws-comment-actions .ws-comment-control, .ws-comment-revert-target { box-sizing:border-box; flex:0 0 28px; width:28px; min-width:28px; height:28px; min-height:28px; margin:0; padding:0; border-radius:var(--radius-sm,4px); }
+.ws-root .ws-comment-actions .ws-comment-control { display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--ui-stroke-secondary); box-shadow:none; }
+.ws-root .ws-comment-actions .ws-comment-control:not([data-state=checked]) { background:var(--ui-bg-editor); color:var(--ui-text-secondary); }
+.ws-root .ws-comment-actions .ws-comment-control[data-state=checked] { border-color:var(--ui-accent); }
+.ws-root .ws-comment-actions .ws-comment-control:not(:disabled):not([data-state=checked]):hover { background:var(--ui-bg-hover); color:var(--ui-text-primary); }
+.ws-root .ws-comment-actions .ws-comment-control:disabled { cursor:not-allowed; opacity:.5; }
+.ws-root .ws-comment-actions .ws-comment-control:focus-visible, .ws-comment-revert-target:focus-visible, .ws-root .ws-bubble-summary:focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; box-shadow:none; }
+.ws-comment-revert-target { display:inline-flex; }
+/* Accessible status only; never clip the actual controls or their focus ring. */
+.ws-comment-action-state { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 .ws-comment-action-reason { display:none; position:absolute; right:0; top:100%; z-index:10; width:min(220px,calc(100vw - 64px)); padding:8px; border:1px solid var(--ui-stroke-secondary); border-radius:var(--radius-sm,4px); background:var(--ui-bg-elevated); color:var(--ui-text-secondary); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
 .ws-comment-action-area:focus-within .ws-comment-action-reason, .ws-comment-action-area:hover .ws-comment-action-reason { display:block; }
 .ws-comment-touch-labels { display:none; color:var(--ui-text-secondary); font-size:10px; text-align:right; }
 @media (pointer:coarse) {
- .ws-comment-action-area { flex-basis:132px; }
- .ws-comment-actions button, .ws-comment-revert-target { min-width:40px; width:40px; height:40px; }
- .ws-comment-actions .ws-comment-resolve { min-width:32px; width:32px; height:32px; }
+ .ws-root .ws-comment-actions .ws-comment-control, .ws-comment-revert-target { flex-basis:40px; min-width:40px; width:40px; min-height:40px; height:40px; }
  .ws-comment-touch-labels, .ws-comment-action-reason { display:block; }
  .ws-comment-action-reason { position:static; width:auto; border:0; padding:4px 0 0; background:transparent; }
 }
+.ws-bubble { cursor:pointer; }
+.ws-comment-body { cursor:auto; }
+.ws-comment-body p, .ws-bubble-preview { -webkit-user-select:text; user-select:text; }
+.ws-comment-body[hidden] { display:none; }
+.ws-comment .ws-reply { box-sizing:border-box; width:fit-content; max-width:calc(100% - 12px); margin:8px 0; padding:8px 10px; border:1px solid var(--ui-stroke-tertiary); border-radius:var(--radius-md,6px); background:var(--ui-bg-elevated); overflow-wrap:anywhere; }
+.ws-comment .ws-reply[data-origin=human] { margin-left:auto; }
+.ws-comment .ws-reply[data-origin=unknown] { width:auto; max-width:100%; background:transparent; }
+.ws-comment .ws-reply p { margin:6px 0 0; text-align:left; }
+.ws-reply-compose > summary { width:fit-content; min-height:28px; display:list-item; cursor:pointer; }
+.ws-reply-compose > summary:focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; }
 .ws-comment-surfaces { display: contents; }
 .ws-author { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:100%; vertical-align:middle; }
 .ws-author-avatar { display:inline-flex; flex:0 0 20px; width:20px; height:20px; align-items:center; justify-content:center; border-radius:50%; overflow:hidden; background:var(--ui-bg-elevated); color:var(--ui-text-secondary); font-size:11px; font-weight:600; }
@@ -6366,6 +6381,7 @@ function CommentActions({ comment, locked, pending, onResolve, onDelete, onRever
   const reason = locked ? "This discussion is locked while an operation is active." : pending ? "Wait for the current comment action to finish." : change?.status === "available" ? null : change?.status === "reverted" ? "This section was reverted." : change?.reason ?? "No eligible addressed section is saved for this comment.";
   const disabled = locked || pending;
   const revert = h(Action, {
+    className: "ws-comment-control",
     variant: "ghost",
     size: "icon-xs",
     disabled: Boolean(reason),
@@ -6382,7 +6398,7 @@ function CommentActions({ comment, locked, pending, onResolve, onDelete, onRever
       "div",
       { className: "ws-comment-actions", role: "group", "aria-label": `Actions for comment ${comment.passageNumber}` },
       h(Tip2, { label: "Resolve" }, h(ResolveCheckbox, {
-        className: "ws-checkbox ws-comment-resolve",
+        className: "ws-checkbox ws-comment-resolve ws-comment-control",
         checked: comment.resolved,
         disabled,
         "aria-label": `Resolve: ${comment.text}`,
@@ -6390,6 +6406,7 @@ function CommentActions({ comment, locked, pending, onResolve, onDelete, onRever
         onCheckedChange: (value) => onResolve(value === true)
       })),
       h(Tip2, { label: "delete comment" }, h(Action, {
+        className: "ws-comment-control",
         variant: "ghost",
         size: "icon-xs",
         disabled,
@@ -6403,7 +6420,7 @@ function CommentActions({ comment, locked, pending, onResolve, onDelete, onRever
         "aria-describedby": reasonId
       }, revert) : revert)
     ),
-    h("span", { id: stateId, className: "ws-comment-action-state" }, comment.resolved ? "Resolved. Uncheck to reopen." : "Open discussion"),
+    h("span", { id: stateId, className: "ws-comment-action-state" }, comment.resolved ? "Resolved. Uncheck to reopen." : "Unresolved."),
     reason && h("span", { id: reasonId, className: "ws-comment-action-reason" }, reason),
     h("span", { className: "ws-comment-touch-labels", "aria-hidden": true }, "Resolve \xB7 Delete \xB7 Revert")
   );
@@ -6715,7 +6732,7 @@ function Comment({
       h(
         "span",
         { className: "ws-muted" },
-        comment.resolved ? "Resolved" : "Open discussion"
+        comment.resolved ? "Resolved" : "Unresolved"
       )
     ),
     comment.anchor ? h(
@@ -6764,7 +6781,12 @@ function Comment({
     comment.replies.map(
       (reply2) => h(
         "div",
-        { className: "ws-reply", key: reply2.id },
+        {
+          className: "ws-reply",
+          key: reply2.id,
+          // Saved origin is display authority; names and literal content are not.
+          "data-origin": reply2.author === "user" ? "human" : reply2.author === "agent" ? "agent" : "unknown"
+        },
         h(AuthorHeader, { entry: reply2 }),
         h("p", null, reply2.text)
       )
@@ -6851,6 +6873,8 @@ function Comments({
   }
 }) {
   const retained = useRef14(draftBuffer?.read()?.draft ?? {});
+  const surfaces = useRef14(null), opened = useRef14(/* @__PURE__ */ new Set()), pointerStart = useRef14(null);
+  if (activeComment) opened.current.add(activeComment);
   const composerId = useId6();
   const resolvedControl = useRef14(null);
   const resolvedAction = useRef14(null), composeFromOptions = useRef14(false);
@@ -6879,17 +6903,18 @@ function Comments({
     window.cancelAnimationFrame?.(revealFrame.current);
     saveViewport.current?.stop();
   }, []);
-  const retainSaveViewport = () => {
+  const retainSaveViewport = (pane = composer.current?.closest(".ws-work"), range = null) => {
     saveViewport.current?.stop();
-    const pane = composer.current?.closest(".ws-work");
     if (!pane) return;
     const view = pane.ownerDocument.defaultView, doc = pane.ownerDocument;
-    const saved = { pane, top: pane.scrollTop, left: pane.scrollLeft, frame: null };
+    const bounds = range?.getBoundingClientRect?.();
+    const saved = { pane, top: pane.scrollTop, left: pane.scrollLeft, range, rangeTop: bounds?.height ? bounds.top : null, frame: null };
     saved.restore = () => {
-      if (saveViewport.current === saved && pane.isConnected) {
-        pane.scrollTop = saved.top;
-        pane.scrollLeft = saved.left;
-      }
+      if (saveViewport.current !== saved || !pane.isConnected) return;
+      pane.scrollTop = saved.top;
+      pane.scrollLeft = saved.left;
+      const next = saved.range?.startContainer.isConnected && saved.range.getBoundingClientRect?.();
+      if (saved.rangeTop !== null && next?.height) pane.scrollTop += next.top - saved.rangeTop;
     };
     saved.stop = () => {
       view.cancelAnimationFrame(saved.frame);
@@ -6991,6 +7016,7 @@ function Comments({
   };
   const currentCommentIds = new Set(state.comments.map((c) => c.id));
   for (const id of deletedIds.current) if (!currentCommentIds.has(id)) deletedIds.current.delete(id);
+  for (const id of opened.current) if (!currentCommentIds.has(id)) opened.current.delete(id);
   const all = numberComments(state.comments.filter((c) => c.item_id === item.id && !deletedIds.current.has(c.id))).map((c) => ({ ...c, originalAnchor: c.anchor, anchor: commentAnchor(c) }));
   const [pageComposerOpen, setPageComposerOpen] = useState14(Boolean(discussion.current.text || discussion.current.targets.length));
   useEffect7(() => {
@@ -7132,6 +7158,68 @@ function Comments({
   );
   const visible = visibleComments(all, showResolved);
   const attached = new Set(geometry.map((p) => p.id));
+  useEffect7(() => {
+    if (!activeComment) return;
+    const doc = surfaces.current?.ownerDocument;
+    if (!doc) return;
+    let pointer = false, tabFocus = false, tabFrame = null;
+    const popup = '[role="dialog"],[role="menu"],[role="listbox"],[data-slot="popover-content"],[data-slot="dropdown-menu-content"]';
+    const protectedTarget = (target) => target?.closest?.(".ws-bubble") === doc.getElementById(`ws-bubble-${activeComment}`)?.closest(".ws-bubble") || target?.closest?.(".ws-passage-controls") || target?.closest?.(popup) || doc.querySelector(popup);
+    const passageHit = (event) => {
+      const editor = event.target?.closest?.(".ws-editor");
+      if (!editor || event.target.closest("a,input") || !doc.getSelection()?.isCollapsed) return false;
+      return geometry.some((position) => {
+        const range = anchorRange(editor, position.anchor);
+        return [...range?.getClientRects?.() ?? []].some((r) => event.clientX >= r.left && event.clientX <= r.right && event.clientY >= r.top && event.clientY <= r.bottom);
+      });
+    };
+    const collapse = (target) => {
+      if (deleting || locked || busy || mutationInFlight.current || actionInFlight.current.size || protectedTarget(target)) return;
+      const pane = doc.getElementById(`ws-bubble-${activeComment}`)?.closest(".ws-work");
+      const selection = doc.getSelection(), range = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+      retainSaveViewport(pane, pane?.contains(range?.startContainer) ? range : null);
+      setActiveComment(null);
+    };
+    const down = () => {
+      pointer = true;
+      tabFocus = false;
+    };
+    const click = (event) => {
+      pointer = false;
+      if (!event.defaultPrevented && !event.target?.closest?.(".ws-bubble") && !passageHit(event)) collapse(event.target);
+    };
+    const key = (event) => {
+      tabFocus = event.key === "Tab" && !event.isComposing;
+      if (tabFocus) {
+        pointer = false;
+        doc.defaultView.cancelAnimationFrame(tabFrame);
+        tabFrame = doc.defaultView.requestAnimationFrame(() => {
+          tabFocus = false;
+        });
+      }
+    };
+    const focus = (event) => {
+      const keyboard = tabFocus;
+      tabFocus = false;
+      if (!pointer && keyboard) collapse(event.target);
+    };
+    const cancelPointer = () => {
+      pointer = false;
+    };
+    doc.addEventListener("pointerdown", down, true);
+    doc.addEventListener("pointercancel", cancelPointer, true);
+    doc.addEventListener("click", click);
+    doc.addEventListener("focusin", focus);
+    doc.addEventListener("keydown", key, true);
+    return () => {
+      doc.removeEventListener("pointerdown", down, true);
+      doc.removeEventListener("pointercancel", cancelPointer, true);
+      doc.removeEventListener("click", click);
+      doc.removeEventListener("focusin", focus);
+      doc.removeEventListener("keydown", key, true);
+      doc.defaultView.cancelAnimationFrame(tabFrame);
+    };
+  }, [activeComment, geometry, deleting, locked, busy, setActiveComment]);
   const select = (id) => {
     setActiveComment(id);
     (window.requestAnimationFrame ?? ((fn) => setTimeout(fn, 0)))(() => document.getElementById(`ws-discussion-${id}`)?.focus({ preventScroll: true }));
@@ -7146,6 +7234,24 @@ function Comments({
       {
         key: comment.id,
         className: `ws-bubble${selected ? " ws-bubble-selected" : ""}${hoveredComment === comment.id ? " ws-bubble-emphasis" : ""}`,
+        onPointerDown: (event) => {
+          pointerStart.current = [event.clientX, event.clientY];
+        },
+        onClick: (event) => {
+          if (event.target.closest('button,input,textarea,select,a,summary,[role="button"],[role="checkbox"],[contenteditable="true"]')) return;
+          if (pointerStart.current && Math.hypot(event.clientX - pointerStart.current[0], event.clientY - pointerStart.current[1]) > 4) return;
+          const selection = event.currentTarget.ownerDocument.getSelection();
+          if (!selection?.isCollapsed && selection?.rangeCount && selection.getRangeAt(0).intersectsNode(event.currentTarget)) return;
+          select(comment.id);
+        },
+        onKeyDown: (event) => {
+          if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || event.nativeEvent?.isComposing || event.target.closest('[role="dialog"],[role="menu"],[data-slot="popover-content"]') || actionInFlight.current.size) return;
+          event.preventDefault();
+          event.stopPropagation();
+          retainSaveViewport(event.currentTarget.closest(".ws-work"));
+          setActiveComment(null);
+          document.getElementById(`ws-bubble-${comment.id}`)?.focus({ preventScroll: true });
+        },
         onPointerEnter: () => setHoveredComment(comment.id),
         onPointerLeave: () => setHoveredComment(null),
         onFocusCapture: () => setHoveredComment(comment.id),
@@ -7163,7 +7269,7 @@ function Comments({
             className: "ws-bubble-summary",
             variant: "ghost",
             "aria-expanded": selected,
-            "aria-label": `${context}: ${comment.text} \xB7 ${authorName(comment)} \xB7 ${selected ? "Collapse thread" : "Open thread"}`,
+            "aria-label": `${context}: ${comment.text} \xB7 ${authorName(comment)} \xB7 ${selected ? "Collapse comment" : "Expand comment"}`,
             "aria-controls": selected ? `ws-discussion-${comment.id}` : void 0,
             onClick: () => selected ? setActiveComment(null) : select(comment.id)
           },
@@ -7174,7 +7280,7 @@ function Comments({
             h("span", { className: "ws-bubble-context" }, `${!grouped ? context : `Comment ${number}`}${comment.resolved ? " \xB7 Resolved" : ""}`)
           ),
           !selected && h("span", { className: "ws-bubble-preview" }, comment.text),
-          h("span", { className: "ws-bubble-context" }, `${comment.replies.length} ${comment.replies.length === 1 ? "reply" : "replies"} \xB7 ${selected ? "Collapse thread" : "Open thread"}${discussion.current.replies[comment.id] ? " \xB7 Draft reply" : ""}`)
+          h("span", { className: "ws-bubble-context" }, `${comment.replies.length} ${comment.replies.length === 1 ? "reply" : "replies"}`)
         ),
         h(CommentActions, {
           comment,
@@ -7197,32 +7303,36 @@ function Comments({
           onRevert: (opener) => commentAction(comment, () => onRevertSection(comment, opener))
         })
       ),
-      selected && h(Comment, {
-        comment,
-        text,
-        command,
-        locked: locked || pendingActions.has(comment.id),
-        onError,
-        state,
-        retainedReply: discussion.current.replies[comment.id] ?? "",
-        retainReply,
-        onReplyPending: (value) => {
-          if (value && actionInFlight.current.has(comment.id)) return false;
-          if (value) actionInFlight.current.add(comment.id);
-          else actionInFlight.current.delete(comment.id);
-          setPendingActions(new Set(actionInFlight.current));
-          return true;
-        },
-        passageNumber: number,
-        originalAnchor: comment.originalAnchor,
-        active: true,
-        onActivate: setActiveComment,
-        onPassage,
-        onResolutionFinished: setResolutionFocus,
-        onDelete: (comment2, opener) => setDeleting({ comment: comment2, opener }),
-        onRevertSection,
-        showContext: false
-      })
+      opened.current.has(comment.id) && h(
+        "div",
+        { className: "ws-comment-body", hidden: !selected },
+        h(Comment, {
+          comment,
+          text,
+          command,
+          locked: locked || pendingActions.has(comment.id),
+          onError,
+          state,
+          retainedReply: discussion.current.replies[comment.id] ?? "",
+          retainReply,
+          onReplyPending: (value) => {
+            if (value && actionInFlight.current.has(comment.id)) return false;
+            if (value) actionInFlight.current.add(comment.id);
+            else actionInFlight.current.delete(comment.id);
+            setPendingActions(new Set(actionInFlight.current));
+            return true;
+          },
+          passageNumber: number,
+          originalAnchor: comment.originalAnchor,
+          active: true,
+          onActivate: setActiveComment,
+          onPassage,
+          onResolutionFinished: setResolutionFocus,
+          onDelete: (comment2, opener) => setDeleting({ comment: comment2, opener }),
+          onRevertSection,
+          showContext: false
+        })
+      )
     );
   };
   const linkedThread = h(
@@ -7350,7 +7460,7 @@ function Comments({
         }, item.kind === "database" ? "Comment on database" : "Comment on whole page")
       )
     ),
-    hasDraft && h("p", { className: "ws-muted ws-discussion-draft", role: "status" }, "Unsubmitted feedback is retained for this Workspace."),
+    hasDraft && h("p", { className: "ws-comment-action-state", role: "status" }, "Unsubmitted feedback is retained for this Workspace."),
     linkedThread
   );
   const footer = h(
@@ -7366,7 +7476,7 @@ function Comments({
   );
   return h(
     "div",
-    { className: "ws-comment-surfaces" },
+    { ref: surfaces, className: "ws-comment-surfaces" },
     h("style", null, commentStyles),
     deleting && h(FormDialog, {
       title: "Delete comment?",
