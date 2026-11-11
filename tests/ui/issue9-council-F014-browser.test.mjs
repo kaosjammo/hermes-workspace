@@ -28,7 +28,7 @@ try{
  await page.goto(base);await page.locator('.ws-nav').waitFor();await open('Pending');
  const before=await state(),beforeRaw=await raw();await fs.writeFile(out+'/logs/before.json',JSON.stringify(beforeRaw,null,2));
  await page.request.post(base+'/fixture/mode/fail');await revert('Pending').click();await expect(banner).toContainText('Synthetic revert transport failure');assert.deepEqual(await state(),before);
- await page.locator('.ws-bubble-summary').first().click();await page.locator('.ws-reply-compose summary').first().click();
+ const summary=page.locator('.ws-bubble-summary').first();if(await summary.getAttribute('aria-expanded')!=='true')await summary.click();await expect(summary).toHaveAttribute('aria-expanded','true');await page.locator('.ws-reply-compose summary').first().click();
  const reply=page.getByRole('textbox',{name:'Reply to North feedback Pending',exact:true});await reply.fill('Retained F014 reply draft 庭');
  await page.evaluate(()=>{const pane=document.querySelector('.ws-work'),editor=pane.querySelector('.ws-editor');pane.scrollTop=80;const node=[...editor.querySelectorAll('p')].find(p=>p.textContent.startsWith('Observation 4:'))?.firstChild;if(!node)throw Error('Exact outside selection missing');const range=document.createRange();range.setStart(node,0);range.setEnd(node,5);getSelection().removeAllRanges();getSelection().addRange(range)});
  await settled();const positionBefore=await page.evaluate(()=>({scroll:document.querySelector('.ws-work').scrollTop,selection:getSelection().toString()}));
