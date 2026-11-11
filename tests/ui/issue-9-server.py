@@ -20,7 +20,7 @@ if not store.snapshot()['items']:
         page=store.execute('create_item',{'kind':'page','title':name+' garden','content':original})
         a,b=[store.execute('add_comment',{'item_id':page['id'],'text':label+' feedback '+name,'anchor':{'quote':quote,'prefix':'','suffix':''}})
             for label,quote in [('North','North river.'),('South','South garden.')]]
-        store.execute('reply_comment',{'id':a['id'],'text':'Human reply: keep the morning detail.'})
+        store.execute('reply_comment',{'id':a['id'],'text':'Keep the morning detail.'})
         run=store.begin_run(page['id'],'synthetic-native-'+name)
         store.apply_run(run['id'],[],[{'comment_id':cid,'text':'Unrelated earlier AI outcome.'}for cid in run['comment_ids']])
         after=original.replace('North river.','North stream.').replace('South garden.','South orchard.')

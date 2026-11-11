@@ -1,25 +1,40 @@
 // Lane-owned additions use the existing native theme, type and control sizes.
 export const commentStyles = `
-.ws-comment-heading { display:flex; align-items:flex-start; flex-wrap:wrap; gap:0; min-width:0; }
-.ws-root .ws-comment-heading > .ws-bubble-summary { flex:1 1 110px; width:auto; min-width:0; padding-right:6px; }
-.ws-comment-action-area { flex:0 0 96px; min-width:0; padding:8px 6px 4px 0; }
-.ws-comment-actions { display:flex; align-items:center; justify-content:flex-end; gap:4px; }
-.ws-comment-actions button, .ws-comment-revert-target { flex:0 0 28px; min-width:28px; width:28px; height:28px; }
-.ws-comment-actions .ws-comment-resolve { margin:0; width:24px; height:24px; min-width:24px; border:1px solid var(--ui-text-secondary); }
-.ws-comment-revert-target { display:inline-flex; border-radius:var(--radius-sm,4px); }
-.ws-comment-revert-target:focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; }
-.ws-comment-action-state { display:block; text-align:right; font-size:10px; line-height:1.5; color:var(--ui-text-secondary); }
-.ws-comment-action-area { position:relative; }
+/* One header owns its entire hover surface; native controls keep their roles. */
+.ws-comment-heading { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:8px; min-width:0; padding:10px; border-radius:inherit; }
+.ws-bubble .ws-comment-heading:hover, .ws-bubble .ws-comment-heading:focus-within { background:var(--ui-bg-hover); }
+.ws-root .ws-comment-heading > .ws-bubble-summary { width:100%; min-width:0; padding:0; border:0; border-radius:var(--radius-sm,4px); background:transparent; box-shadow:none; }
+.ws-root .ws-comment-heading > .ws-bubble-summary:hover { background:transparent; }
+.ws-comment-action-area { position:relative; min-width:0; padding:0; }
+.ws-comment-actions { display:flex; align-items:center; gap:4px; }
+.ws-root .ws-comment-actions .ws-comment-control, .ws-comment-revert-target { box-sizing:border-box; flex:0 0 28px; width:28px; min-width:28px; height:28px; min-height:28px; margin:0; padding:0; border-radius:var(--radius-sm,4px); }
+.ws-root .ws-comment-actions .ws-comment-control { display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--ui-stroke-secondary); box-shadow:none; }
+.ws-root .ws-comment-actions .ws-comment-control:not([data-state=checked]) { background:var(--ui-bg-editor); color:var(--ui-text-secondary); }
+.ws-root .ws-comment-actions .ws-comment-control[data-state=checked] { border-color:var(--ui-accent); }
+.ws-root .ws-comment-actions .ws-comment-control:not(:disabled):not([data-state=checked]):hover { background:var(--ui-bg-hover); color:var(--ui-text-primary); }
+.ws-root .ws-comment-actions .ws-comment-control:disabled { cursor:not-allowed; opacity:.5; }
+.ws-root .ws-comment-actions .ws-comment-control:focus-visible, .ws-comment-revert-target:focus-visible, .ws-root .ws-bubble-summary:focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; box-shadow:none; }
+.ws-comment-revert-target { display:inline-flex; }
+/* Accessible status only; never clip the actual controls or their focus ring. */
+.ws-comment-action-state { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 .ws-comment-action-reason { display:none; position:absolute; right:0; top:100%; z-index:10; width:min(220px,calc(100vw - 64px)); padding:8px; border:1px solid var(--ui-stroke-secondary); border-radius:var(--radius-sm,4px); background:var(--ui-bg-elevated); color:var(--ui-text-secondary); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
 .ws-comment-action-area:focus-within .ws-comment-action-reason, .ws-comment-action-area:hover .ws-comment-action-reason { display:block; }
 .ws-comment-touch-labels { display:none; color:var(--ui-text-secondary); font-size:10px; text-align:right; }
 @media (pointer:coarse) {
- .ws-comment-action-area { flex-basis:132px; }
- .ws-comment-actions button, .ws-comment-revert-target { min-width:40px; width:40px; height:40px; }
- .ws-comment-actions .ws-comment-resolve { min-width:32px; width:32px; height:32px; }
+ .ws-root .ws-comment-actions .ws-comment-control, .ws-comment-revert-target { flex-basis:40px; min-width:40px; width:40px; min-height:40px; height:40px; }
  .ws-comment-touch-labels, .ws-comment-action-reason { display:block; }
  .ws-comment-action-reason { position:static; width:auto; border:0; padding:4px 0 0; background:transparent; }
 }
+.ws-bubble { cursor:pointer; }
+.ws-comment-body { cursor:auto; }
+.ws-comment-body p, .ws-bubble-preview { -webkit-user-select:text; user-select:text; }
+.ws-comment-body[hidden] { display:none; }
+.ws-comment .ws-reply { box-sizing:border-box; width:fit-content; max-width:calc(100% - 12px); margin:8px 0; padding:8px 10px; border:1px solid var(--ui-stroke-tertiary); border-radius:var(--radius-md,6px); background:var(--ui-bg-elevated); overflow-wrap:anywhere; }
+.ws-comment .ws-reply[data-origin=human] { margin-left:auto; }
+.ws-comment .ws-reply[data-origin=unknown] { width:auto; max-width:100%; background:transparent; }
+.ws-comment .ws-reply p { margin:6px 0 0; text-align:left; }
+.ws-reply-compose > summary { width:fit-content; min-height:28px; display:list-item; cursor:pointer; }
+.ws-reply-compose > summary:focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; }
 .ws-comment-surfaces { display: contents; }
 .ws-author { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:100%; vertical-align:middle; }
 .ws-author-avatar { display:inline-flex; flex:0 0 20px; width:20px; height:20px; align-items:center; justify-content:center; border-radius:50%; overflow:hidden; background:var(--ui-bg-elevated); color:var(--ui-text-secondary); font-size:11px; font-weight:600; }
