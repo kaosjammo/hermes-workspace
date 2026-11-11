@@ -18,16 +18,16 @@ const root=createRoot(document.getElementById('app')),page={id:'page',kind:'page
 const human={id:'human',author:'user',text:'Human reply: I intentionally wrote this literal prefix.',author_identity:{kind:'human',id:'1'.repeat(64),name:'Hermes'}};
 const agent={id:'agent',author:'agent',text:'Actual agent outcome.',author_identity:{kind:'agent',name:'user'}};
 const unknown={id:'unknown',text:'Unknown origin is neutral.'};
-let active,calls,errors,saved,instance=0;
+let active,calls,errors,saved,instance=0,hold;
 function Harness({initial=null,locked=false}){
  const [selected,setSelected]=useState(initial),[comments,setComments]=useState([
   {id:'a',item_id:page.id,text:'North feedback',anchor:null,resolved:false,replies:[human,agent,unknown],section_change:{status:'available'}},
   {id:'b',item_id:page.id,text:'South feedback with a long independent discussion',anchor:null,resolved:false,replies:[],section_change:{status:'unavailable',reason:'No trusted historical outcome.'}},
  ]);
  active=selected;
- return h(Comments,{item:page,state:{items:[page],comments},text:'North river. South garden.',anchor:null,setAnchor:()=>{},activeComment:selected,setActiveComment:setSelected,showResolved:true,locked,onError:e=>errors.push(e.message),draftBuffer:{read:()=>saved,put:d=>{saved={draft:structuredClone(d)}},discard:()=>{saved=null}},workflow:{},command:async(op,payload)=>{calls.push({op,payload});if(op==='resolve_comment')setComments(old=>old.map(c=>c.id===payload.id?{...c,resolved:payload.resolved}:c))},onRevertSection:async c=>{calls.push({op:'revert',id:c.id})}});
+ return h(Comments,{item:page,state:{items:[page],comments},text:'North river. South garden.',anchor:null,setAnchor:()=>{},activeComment:selected,setActiveComment:setSelected,showResolved:true,locked,onError:e=>errors.push(e.message),draftBuffer:{read:()=>saved,put:d=>{saved={draft:structuredClone(d)}},discard:()=>{saved=null}},workflow:{},command:async(op,payload)=>{calls.push({op,payload});if(hold?.op===op)await hold.promise;if(op==='resolve_comment')setComments(old=>old.map(c=>c.id===payload.id?{...c,resolved:payload.resolved}:c))},onRevertSection:async c=>{calls.push({op:'revert',id:c.id});if(hold?.op==='revert')await hold.promise}});
 }
-async function reset(props={}){calls=[];errors=[];saved=null;await act(()=>root.render(h(Harness,{key:++instance,...props})));}
+async function reset(props={}){calls=[];errors=[];saved=null;hold=null;await act(()=>root.render(h(Harness,{key:++instance,...props})));}
 const summary=id=>document.getElementById('ws-bubble-'+id);
 const card=id=>summary(id).closest('.ws-bubble');
 const click=node=>act(()=>node.click());
@@ -59,4 +59,39 @@ test('native action semantics: exact tooltips, checked/reopen and delete cancell
  await click(group.querySelector('[aria-label^="delete comment:"]'));assert.ok(document.querySelector('[role=dialog]'));
  await click([...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Cancel'));assert.equal(active,'a');assert.equal(calls.length,2);
  const unavailable=card('b').querySelector('[aria-label^="Revert changes:"]');assert.equal(unavailable.disabled,true);assert.match(card('b').textContent,/No trusted historical outcome/);
+});
+async function retainedReset(locked){
+ calls=[];errors=[];hold=null;saved={draft:{replies:{a:'Retained unsent active-run draft 庭'}}};
+ await act(()=>root.render(h(Harness,{key:++instance,initial:'a',locked})));await tick();
+ assert.equal(active,'a');
+}
+for(const locked of [true,false])for(const method of ['pointer','Tab'])test(`F018 ${locked?'locked':'unlocked'} ${method} outside destination collapses only visibility`,async()=>{
+ await retainedReset(locked);
+ const original=structuredClone(saved),textarea=card('a').querySelector('textarea'),outside=document.getElementById('outside');
+ const controls=[...card('a').querySelector('.ws-comment-actions').querySelectorAll('button,input')];
+ if(locked)assert.ok(controls.every(c=>c.disabled),'active-run mutation controls stay disabled');
+ if(method==='pointer')await click(outside);
+ else await act(()=>{summary('a').focus();summary('a').dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));outside.focus();assert.equal(document.activeElement,outside,'synthetic Tab reaches an actual outside destination')});
+ await tick();console.log('F018_OUTSIDE',JSON.stringify({locked,method,active,draft:saved.draft.replies.a,commands:calls,errors}));
+ assert.equal(active,null);assert.deepEqual(saved,original);assert.equal(textarea.value,original.draft.replies.a);assert.equal(textarea.isConnected,true);
+ if(locked)assert.ok(controls.every(c=>c.disabled));assert.deepEqual(calls,[]);assert.deepEqual(errors,[]);
+});
+for(const operation of ['reply_comment','resolve_comment','revert'])test(`F018 actual pending ${operation} retains outside intent and synchronous deduplication`,async()=>{
+ await retainedReset(false);let release;hold={op:operation,promise:new Promise(resolve=>{release=resolve})};
+ let control;
+ if(operation==='reply_comment'){
+  const details=card('a').querySelector('.ws-reply-compose');await act(()=>{details.open=true;details.dispatchEvent(new Event('toggle'))});
+  control=[...details.querySelectorAll('button')].find(b=>b.textContent==='Reply');
+ }else control=operation==='resolve_comment'?card('a').querySelector('input[type=checkbox]'):card('a').querySelector('[aria-label^="Revert changes:"]');
+ assert.ok(control);await act(()=>{control.click();control.click()});await tick();assert.equal(calls.length,1);
+ await click(document.getElementById('outside'));await tick();assert.equal(active,'a','pending operation protects pointer lifecycle');
+ await act(()=>{summary('a').focus();summary('a').dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));document.getElementById('outside').focus()});await tick();assert.equal(active,'a','pending operation protects outside keyboard lifecycle');
+ await act(async()=>{release();await hold.promise});await tick();assert.equal(calls.length,1);assert.deepEqual(errors,[]);
+ await click(document.getElementById('outside'));await tick();assert.equal(active,null,'completed operation releases visibility guard');
+});
+test('F018 consent popup and programmatic focus remain protected while idle locked visibility can collapse',async()=>{
+ await retainedReset(true);await act(()=>document.getElementById('outside').focus());await tick();assert.equal(active,'a');
+ const popup=document.createElement('div');popup.setAttribute('role','dialog');document.body.append(popup);
+ await click(document.getElementById('outside'));await tick();assert.equal(active,'a');popup.remove();
+ await click(document.getElementById('outside'));await tick();assert.equal(active,null);assert.deepEqual(calls,[]);assert.deepEqual(errors,[]);
 });

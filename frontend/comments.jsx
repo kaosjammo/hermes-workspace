@@ -452,7 +452,9 @@ export function Comments({
       });
     };
     const collapse = target => {
-      if (deleting || locked || busy || mutationInFlight.current || actionInFlight.current.size || protectedTarget(target)) return;
+      // A run lock forbids mutations, not changing discussion visibility.
+      // Retain the actual in-flight/consent lifecycles before collapsing.
+      if (deleting || busy || mutationInFlight.current || actionInFlight.current.size || protectedTarget(target)) return;
       const pane = doc.getElementById(`ws-bubble-${activeComment}`)?.closest('.ws-work');
       const selection = doc.getSelection(), range = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
       retainSaveViewport(pane, pane?.contains(range?.startContainer) ? range : null);
@@ -493,7 +495,7 @@ export function Comments({
       doc.removeEventListener('keydown', key, true);
       doc.defaultView.cancelAnimationFrame(tabFrame);
     };
-  }, [activeComment, geometry, deleting, locked, busy, setActiveComment]);
+  }, [activeComment, geometry, deleting, busy, setActiveComment]);
   const select = id => {
     setActiveComment(id);
     (window.requestAnimationFrame ?? (fn => setTimeout(fn,0)))(() => document.getElementById(`ws-discussion-${id}`)?.focus({ preventScroll: true }));
