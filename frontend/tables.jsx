@@ -88,6 +88,11 @@ export function Property({ column, value, onChange, state, disabled: authorityDi
     type: column.type === "number" ? "number" : column.type === "date" ? "date" : "text", value: draft ?? "",
     onChange: event => change(event.target.value), onBlur: () => { if (!recovery.current && !error) void flush().catch(() => {}); },
     onKeyDown: event => { if (isSubmitEnter(event)) event.currentTarget.blur(); } });
+  if (compact && column.type === "text") control = h("div", { className: "ws-db-text-cell" },
+    control,
+    draft && h(ContextTip, { label: h("span", { className: "ws-db-full-text" }, draft) }, h(Action, { variant: "ghost", size: "icon-xs", className: "ws-db-text-read",
+      "aria-label": `Read full ${column.name}`, onMouseDown: event => event.preventDefault() },
+      h(Codicon, { name: "info", className: "ws-db-text-read-hint", "aria-hidden": true }))));
   return h("div", { ref: container, className: "ws-property" }, control,
     (status || error) && h("div", { id: errorId, className: "ws-property-status", role: error ? "alert" : "status" }, error ? `Property not saved. ${error}` : status,
       (error || recovery.current) && h("div", { className: "ws-actions" },
@@ -221,7 +226,8 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
               // unknown/transport/revision/authority failures stay form-level.
               const formulaValidation = /^(?:Formula (?:must contain|nesting limit|node limit|dependency)|Invalid formula syntax$|Unsupported formula operation$|Unknown formula column|Private names are forbidden$|Wrong number of function arguments$|col requires a literal column name or id$)/.test(message);
               const field = err.propertyField ?? (values.type === "formula" && formulaValidation ? "formula" : /^Select options|^select option must/.test(message) ? "options" : message === "Relation target must be a Workspace database" ? "target" : /^(?:Column IDs and names must be unique|Column names\/IDs must be unambiguous|column name must)/.test(message) ? "name" : message === "Unsupported property type" ? "type" : null);
-              setError({ field, message });
+              const duplicateName = message === "Column IDs and names must be unique" || message === "Column names/IDs must be unambiguous";
+              setError({ field, message: duplicateName ? "A property with this name already exists. Choose another name." : message });
             }
           }
           finally { gate.current = false; if (alive.current) setBusy(false); }

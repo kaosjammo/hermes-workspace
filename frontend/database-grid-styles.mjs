@@ -24,6 +24,12 @@ export const databaseGridStyles = `
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger) { min-height: 30px; height: 30px; border-color: transparent; background: transparent; box-shadow: none; font-size: 13px; padding-inline: 5px; }
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger):hover { background: var(--ui-bg-tertiary); }
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger):focus-visible { border-color: var(--ui-accent); }
+.ws-db-text-cell { position: relative; min-width: 0; }
+.ws-database .ws-db-text-cell > input { padding-inline-end: 28px; text-overflow: ellipsis; }
+.ws-database .ws-db-text-cell > input:focus { text-overflow: clip; }
+.ws-db-text-read { position: absolute; inset-inline-end: 1px; top: 50%; translate: 0 -50%; color: var(--ui-text-secondary); }
+.ws-db-text-read-hint { font-size: 12px; }
+.ws-db-full-text { display: block; max-inline-size: 28rem; white-space: normal; overflow-wrap: anywhere; }
 .ws-database .ws-property-status { font-size: 12px; padding-block: 5px; }
 .ws-database .ws-formula-value output { display: block; padding: 5px; color: var(--ui-text-primary); }
 .ws-database .ws-table .ws-db-create-row > td { padding: 0; max-width: none; }
