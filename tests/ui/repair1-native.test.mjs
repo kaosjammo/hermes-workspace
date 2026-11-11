@@ -7,7 +7,10 @@ const require = createRequire(
 const { JSDOM } = require("jsdom");
 const dom = new JSDOM('<div id="app"></div>', {
   url: "https://workspace.test",
+  pretendToBeVisual: true,
 });
+globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
+globalThis.cancelAnimationFrame = dom.window.cancelAnimationFrame.bind(dom.window);
 for (const key of [
   "window",
   "document",
