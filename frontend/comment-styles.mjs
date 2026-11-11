@@ -5,7 +5,7 @@ export const commentStyles = `
 .ws-bubble .ws-comment-heading:hover, .ws-bubble .ws-comment-heading:focus-within { background:var(--ui-bg-hover); }
 .ws-root .ws-comment-heading > .ws-bubble-summary { width:100%; min-width:0; padding:0; border:0; border-radius:var(--radius-sm,4px); background:transparent; box-shadow:none; }
 .ws-root .ws-comment-heading > .ws-bubble-summary:hover { background:transparent; }
-.ws-comment-action-area { position:relative; min-width:0; padding:0; }
+.ws-comment-action-area { display:contents; }
 .ws-comment-actions { display:flex; align-items:center; gap:4px; }
 .ws-root .ws-comment-actions .ws-comment-control, .ws-comment-revert-target { box-sizing:border-box; flex:0 0 28px; width:28px; min-width:28px; height:28px; min-height:28px; margin:0; padding:0; border-radius:var(--radius-sm,4px); }
 .ws-root .ws-comment-actions .ws-comment-control { display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--ui-stroke-secondary); box-shadow:none; }
@@ -17,19 +17,18 @@ export const commentStyles = `
 .ws-comment-revert-target { display:inline-flex; }
 /* Accessible status only; never clip the actual controls or their focus ring. */
 .ws-comment-action-state { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
-.ws-comment-action-reason { display:none; position:absolute; right:0; top:100%; z-index:10; width:min(220px,calc(100vw - 64px)); padding:8px; border:1px solid var(--ui-stroke-secondary); border-radius:var(--radius-sm,4px); background:var(--ui-bg-elevated); color:var(--ui-text-secondary); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
-.ws-comment-action-area:focus-within .ws-comment-action-reason, .ws-comment-action-area:hover .ws-comment-action-reason { display:block; }
+/* Availability is persistent context, not an overlay triggered by other actions.
+   Reserve a complete row below both the summary and painted control focus. */
+.ws-comment-action-reason { display:block; grid-column:1 / -1; min-width:0; padding:4px 0 0; color:var(--ui-text-secondary); font-size:11px; line-height:1.5; overflow-wrap:anywhere; }
 .ws-comment-touch-labels { display:none; color:var(--ui-text-secondary); font-size:10px; text-align:right; }
 @media (pointer:coarse) {
  /* Reuse the author's reading basis. Wrap the controls rather than squeeze
     identity/number/count; explanations never size the top-right control row. */
  .ws-comment-heading { display:flex; flex-wrap:wrap; }
  .ws-root .ws-comment-heading > .ws-bubble-summary { flex:1 1 100px; width:auto; }
- .ws-comment-action-area { display:contents; }
  .ws-comment-actions { flex:0 0 auto; margin-left:auto; }
  .ws-root .ws-comment-actions .ws-comment-control, .ws-comment-revert-target { flex-basis:40px; min-width:40px; width:40px; min-height:40px; height:40px; }
  .ws-comment-touch-labels, .ws-comment-action-reason { display:block; flex:1 1 100%; min-width:0; }
- .ws-comment-action-reason { position:static; width:auto; border:0; padding:4px 0 0; background:transparent; }
 }
 .ws-bubble { cursor:pointer; }
 .ws-comment-body { cursor:auto; }
