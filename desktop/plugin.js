@@ -4841,6 +4841,13 @@ var databaseGridStyles = `
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger) { min-height: 30px; height: 30px; border-color: transparent; background: transparent; box-shadow: none; font-size: 13px; padding-inline: 5px; }
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger):hover { background: var(--ui-bg-tertiary); }
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger):focus-visible { border-color: var(--ui-accent); }
+.ws-db-text-cell { position: relative; min-width: 0; }
+/* Match the compact editor rule's specificity; reserve the cue and its native focus ring. */
+.ws-database .ws-property .ws-db-text-cell > input { padding-inline-end: 32px; text-overflow: ellipsis; }
+.ws-database .ws-db-text-cell > input:focus { text-overflow: clip; }
+.ws-db-text-read { position: absolute; inset-inline-end: 1px; top: 50%; translate: 0 -50%; color: var(--ui-text-secondary); }
+.ws-db-text-read-hint { font-size: 12px; }
+.ws-db-full-text { display: block; max-inline-size: 28rem; white-space: normal; overflow-wrap: anywhere; }
 .ws-database .ws-property-status { font-size: 12px; padding-block: 5px; }
 .ws-database .ws-formula-value output { display: block; padding: 5px; color: var(--ui-text-primary); }
 .ws-database .ws-table .ws-db-create-row > td { padding: 0; max-width: none; }
@@ -5095,6 +5102,22 @@ function Property({ column, value, onChange, state, disabled: authorityDisabled,
       if (isSubmitEnter2(event)) event.currentTarget.blur();
     }
   });
+  if (compact && column.type === "text") control = h(
+    "div",
+    { className: "ws-db-text-cell" },
+    control,
+    draft && h(ContextTip, { label: h("span", { className: "ws-db-full-text" }, draft) }, h(
+      Action,
+      {
+        variant: "ghost",
+        size: "icon-xs",
+        className: "ws-db-text-read",
+        "aria-label": `Read full ${column.name}`,
+        onMouseDown: (event) => event.preventDefault()
+      },
+      h(Codicon, { name: "info", className: "ws-db-text-read-hint", "aria-hidden": true })
+    ))
+  );
   return h(
     "div",
     { ref: container, className: "ws-property" },
@@ -5327,7 +5350,8 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
               const message = errorMessage(err);
               const formulaValidation = /^(?:Formula (?:must contain|nesting limit|node limit|dependency)|Invalid formula syntax$|Unsupported formula operation$|Unknown formula column|Private names are forbidden$|Wrong number of function arguments$|col requires a literal column name or id$)/.test(message);
               const field = err.propertyField ?? (values.type === "formula" && formulaValidation ? "formula" : /^Select options|^select option must/.test(message) ? "options" : message === "Relation target must be a Workspace database" ? "target" : /^(?:Column IDs and names must be unique|Column names\/IDs must be unambiguous|column name must)/.test(message) ? "name" : message === "Unsupported property type" ? "type" : null);
-              setError({ field, message });
+              const duplicateName = message === "Column IDs and names must be unique" || message === "Column names/IDs must be unambiguous";
+              setError({ field, message: duplicateName ? "A property with this name already exists. Choose another name." : message });
             }
           } finally {
             gate.current = false;
