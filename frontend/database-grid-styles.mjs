@@ -25,7 +25,8 @@ export const databaseGridStyles = `
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger):hover { background: var(--ui-bg-tertiary); }
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger):focus-visible { border-color: var(--ui-accent); }
 .ws-db-text-cell { position: relative; min-width: 0; }
-.ws-database .ws-db-text-cell > input { padding-inline-end: 28px; text-overflow: ellipsis; }
+/* Match the compact editor rule's specificity; reserve the cue and its native focus ring. */
+.ws-database .ws-property .ws-db-text-cell > input { padding-inline-end: 32px; text-overflow: ellipsis; }
 .ws-database .ws-db-text-cell > input:focus { text-overflow: clip; }
 .ws-db-text-read { position: absolute; inset-inline-end: 1px; top: 50%; translate: 0 -50%; color: var(--ui-text-secondary); }
 .ws-db-text-read-hint { font-size: 12px; }
