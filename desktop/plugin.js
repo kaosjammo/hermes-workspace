@@ -6311,8 +6311,14 @@ var commentStyles = `
 .ws-comment-action-area:focus-within .ws-comment-action-reason, .ws-comment-action-area:hover .ws-comment-action-reason { display:block; }
 .ws-comment-touch-labels { display:none; color:var(--ui-text-secondary); font-size:10px; text-align:right; }
 @media (pointer:coarse) {
+ /* Reuse the author's reading basis. Wrap the controls rather than squeeze
+    identity/number/count; explanations never size the top-right control row. */
+ .ws-comment-heading { display:flex; flex-wrap:wrap; }
+ .ws-root .ws-comment-heading > .ws-bubble-summary { flex:1 1 100px; width:auto; }
+ .ws-comment-action-area { display:contents; }
+ .ws-comment-actions { flex:0 0 auto; margin-left:auto; }
  .ws-root .ws-comment-actions .ws-comment-control, .ws-comment-revert-target { flex-basis:40px; min-width:40px; width:40px; min-height:40px; height:40px; }
- .ws-comment-touch-labels, .ws-comment-action-reason { display:block; }
+ .ws-comment-touch-labels, .ws-comment-action-reason { display:block; flex:1 1 100%; min-width:0; }
  .ws-comment-action-reason { position:static; width:auto; border:0; padding:4px 0 0; background:transparent; }
 }
 .ws-bubble { cursor:pointer; }
