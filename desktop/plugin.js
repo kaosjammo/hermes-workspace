@@ -5193,28 +5193,46 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
   const [open, setOpen] = useState9(false), [busy, setBusy] = useState9(false), [error, setError] = useState9(null);
   const empty = () => ({ name: "", type: "text", options: "", target: "", formula: "" });
   const [values, setValues] = useState9(empty), gate = useRef9(false), alive = useRef9(true), composing = useRef9(false);
-  const input = useRef9(null), form = useRef9(null), errorId = useId3();
-  const closePending = useRef9(false), reopenAfterClose = useRef9(false);
+  const input = useRef9(null), form = useRef9(null), errorId = useId3(), recoveryId = useId3();
+  const [recoveryNotice, setRecoveryNotice] = useState9("");
+  const recoveryFrame = useRef9(null), recovering = useRef9(false);
+  const cancelRecovery = () => {
+    cancelAnimationFrame(recoveryFrame.current);
+    recoveryFrame.current = null;
+    recovering.current = false;
+  };
+  const recover = () => {
+    cancelRecovery();
+    recovering.current = true;
+    setRecoveryNotice(latest.current.busy ? "Wait for this property to finish saving before switching views or leaving this database." : "Finish or cancel this property before switching views or leaving this database.");
+    recoveryFrame.current = requestAnimationFrame(() => {
+      recoveryFrame.current = requestAnimationFrame(() => {
+        if (!alive.current) return;
+        setOpen(true);
+        recoveryFrame.current = requestAnimationFrame(() => {
+          if (alive.current) input.current?.focus({ preventScroll: true });
+          recovering.current = false;
+          recoveryFrame.current = null;
+        });
+      });
+    });
+  };
   const latest = useRef9(null);
   latest.current = { item, state, command, locked, values, error, busy };
   useEffect4(() => {
     alive.current = true;
     return () => {
       alive.current = false;
+      cancelRecovery();
     };
   }, []);
   useEffect4(() => registerFlush?.(`creation:property:${item.id}`, async () => {
     const value = latest.current;
     const dirty = Object.entries(value.values).some(([key, text]) => key === "type" ? text !== "text" : Boolean(text));
-    if (value.busy || value.error || dirty) throw new UnsavedEditError("Finish or cancel the new property before leaving this database.", () => {
-      if (closePending.current) reopenAfterClose.current = true;
-      else {
-        setOpen(true);
-        requestAnimationFrame(() => input.current?.focus());
-      }
-    });
+    if (value.busy || value.error || dirty) throw new UnsavedEditError("Finish or cancel the new property before leaving this database.", recover);
   }), [registerFlush, item.id]);
-  const fieldProps = (field) => ({ "aria-invalid": error?.field === field, "aria-describedby": error?.field === field ? errorId : void 0 });
+  const describedBy = (field) => [recoveryNotice && recoveryId, error && error.field === field && errorId].filter(Boolean).join(" ") || void 0;
+  const fieldProps = (field) => ({ "aria-invalid": error?.field === field, "aria-describedby": describedBy(field) });
   const invalid = (field, message) => Object.assign(Error(message), { propertyField: field });
   useEffect4(() => {
     if (error?.field && !busy && (document.activeElement === document.body || form.current?.contains(document.activeElement)))
@@ -5226,6 +5244,8 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
   };
   const cancel = () => {
     if (gate.current) return;
+    cancelRecovery();
+    setRecoveryNotice("");
     setOpen(false);
     setValues(empty());
     setError(null);
@@ -5235,18 +5255,10 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
     {
       open,
       onOpenChange: (next) => {
-        if (!gate.current) {
-          if (!next) closePending.current = true;
-          setOpen(next);
-        }
+        if (!gate.current && (next || !recovering.current)) setOpen(next);
       },
       onCloseAutoFocus: (event) => {
-        closePending.current = false;
-        if (reopenAfterClose.current) {
-          reopenAfterClose.current = false;
-          event.preventDefault();
-          setOpen(true);
-        }
+        if (recovering.current) event.preventDefault();
       },
       trigger: h(Action, { variant: "ghost", disabled: locked || busy, "aria-label": "Add property", className: "ws-db-add-property" }, h(Codicon, { name: "add", "aria-hidden": true }), "Add property"),
       className: "ws-db-property-popover",
@@ -5266,7 +5278,7 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
         ref: form,
         "aria-label": "New property",
         "aria-busy": busy,
-        "aria-describedby": error && !error.field ? errorId : void 0,
+        "aria-describedby": describedBy(null),
         onCompositionStart: () => {
           composing.current = true;
         },
@@ -5305,6 +5317,8 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
             const id = latest.current.item.id;
             await latest.current.command("set_columns", (current) => ({ id, columns: [...current.items.find((i) => i.id === id).columns, column] }));
             if (alive.current) {
+              cancelRecovery();
+              setRecoveryNotice("");
               setOpen(false);
               setValues(empty());
             }
@@ -5325,6 +5339,7 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
       h(
         "div",
         { className: "ws-db-property-fields" },
+        recoveryNotice && h("p", { id: recoveryId, role: "alert", className: "ws-muted" }, recoveryNotice),
         h(Field, { ref: input, label: "Property name", value: values.name, required: true, maxLength: 200, disabled: locked || busy, ...fieldProps("name"), onChange: change("name") }),
         h(Choice, { label: "Property type", triggerProps: fieldProps("type"), value: values.type, options: propertyTypes, disabled: locked || busy, onChange: (value) => {
           setValues((old) => ({ ...old, type: value }));
@@ -5436,6 +5451,7 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
   };
   const [rowDraft, setRowDraft] = useState9({ open: false, title: "", error: "", status: "", busy: false });
   const creationGuards = useRef9(/* @__PURE__ */ new Map());
+  const viewFocusActive = useRef9(false), viewRecovery = useRef9(null);
   const registerCreationFlush = useCallback2((id, fn) => {
     creationGuards.current.set(id, fn);
     const unregister = registerPropertyFlush?.(id, fn);
@@ -5449,7 +5465,10 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
       for (const flush of creationGuards.current.values()) await flush();
       setView(next);
     } catch (error) {
-      if (error instanceof UnsavedEditError) error.focus();
+      if (error instanceof UnsavedEditError) {
+        if (viewFocusActive.current) viewRecovery.current = error;
+        else error.focus();
+      }
       onError?.(error);
     }
   };
@@ -5554,7 +5573,26 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
       "div",
       { className: "ws-database-tools" },
       h(SearchField2, { value: filter, "aria-label": "Filter records", placeholder: "Filter records\u2026", containerClassName: "ws-db-filter opacity-100", onChange: setFilter, onClear: () => setFilter("") }),
-      h(Choice, { label: "View", showLabel: false, value: view, disabled: rowDraft.open, options: [["table", "Table"], ["board", "Board"]], onChange: changeView }),
+      h(Choice, {
+        label: "View",
+        showLabel: false,
+        value: view,
+        disabled: rowDraft.open,
+        options: [["table", "Table"], ["board", "Board"]],
+        onChange: changeView,
+        onOpenChange: (next) => {
+          if (next) viewFocusActive.current = true;
+        },
+        onCloseAutoFocus: (event) => {
+          viewFocusActive.current = false;
+          const recovery = viewRecovery.current;
+          viewRecovery.current = null;
+          if (recovery) {
+            event.preventDefault();
+            recovery.focus();
+          }
+        }
+      }),
       h(
         ContextPopover,
         {
@@ -7871,11 +7909,13 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
   const importInput = useRef15(null), backupInput = useRef15(null), flush = useRef15(async () => {
   }), selectionIntent = useRef15(0);
   const nextSelectionIntent = useCallback4(() => ++selectionIntent.current, []);
+  const errorReceipt = useRef15(null);
   const report = useCallback4(
     (err, action = "action") => {
       if (client.current() && err instanceof UnsavedEditError) return;
       if (client.current()) {
         const context = typeof action === "string" ? { operation: action } : action;
+        errorReceipt.current = { context, client };
         setError(err?.message ?? String(err));
         setErrorAction(context?.operation ?? "action");
         setErrorContext(context);
@@ -7883,6 +7923,29 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
     },
     [client]
   );
+  const sectionFeedback = useMemo3(() => ({
+    begin(itemId, change) {
+      const context = {
+        operation: "revertSection",
+        itemId,
+        scopeId: client.snapshot()?.scope_id,
+        scopeVersion: client.scopeVersion,
+        versionId: change.version_id,
+        generationId: change.generation_id,
+        changeId: change.change_id
+      };
+      return { context, previous: errorReceipt.current };
+    },
+    complete(attempt, result) {
+      const previous = attempt.previous, context = attempt.context;
+      if (!client.current() || !previous || previous.client !== client || errorReceipt.current !== previous || context.scopeId !== client.snapshot()?.scope_id || context.scopeVersion !== client.scopeVersion || Object.keys(context).some((key) => previous.context?.[key] !== context[key])) return;
+      const checkpoint = client.snapshot()?.versions.find((version) => version.id === result?.recovery_version_id);
+      if (result?.reverted !== true || result.item_id !== context.itemId || result.change_id !== context.changeId || checkpoint?.section_revert_of !== context.changeId || checkpoint.section_revert_receipt?.generation_id !== context.generationId || !Array.isArray(result.removed_reply_ids) || JSON.stringify(checkpoint.section_revert_receipt.removed_reply_ids) !== JSON.stringify(result.removed_reply_ids)) return;
+      errorReceipt.current = null;
+      setError("");
+      setErrorContext(null);
+    }
+  }), [client]);
   const command = useCallback4(
     (op, payload) => client.command(op, payload),
     [client]
@@ -8308,6 +8371,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
           refresh,
           onOpen: open,
           onError: report,
+          sectionFeedback,
           registerFlush,
           flush,
           confirm,
@@ -8569,6 +8633,7 @@ function Document({
   refresh,
   onOpen,
   onError,
+  sectionFeedback,
   registerFlush,
   flush,
   confirm,
@@ -8682,10 +8747,10 @@ function Document({
     sectionOperation.current = operation;
     return operation;
   };
-  const applySection = (preview, confirmed) => sectionTask(async () => {
+  const applySection = (preview, confirmed, feedback) => sectionTask(async () => {
     await flushEditors();
     client.assertCurrent();
-    await command("revert_section", {
+    const result = await command("revert_section", {
       version_id: preview.version_id,
       generation_id: preview.generation_id,
       change_id: preview.change_id,
@@ -8694,6 +8759,7 @@ function Document({
       manual_revision: preview.manual_revision,
       confirmed
     });
+    sectionFeedback.complete(feedback, result);
   });
   const restoreSectionReading = (reading) => {
     if (!reading) return;
@@ -8714,6 +8780,7 @@ function Document({
   const revertSection = (comment, opener) => {
     const change = comment.section_change;
     if (!change || change.status !== "available" || locked) return;
+    const feedback = sectionFeedback.begin(item.id, change);
     const pane = opener?.closest(".ws-work"), editor = pane?.querySelector(".ws-editor[contenteditable]");
     const reading = pane ? { pane, top: pane.scrollTop, left: pane.scrollLeft, anchor: editor && captureAnchor(editor) } : null;
     let reviewing = false;
@@ -8727,16 +8794,19 @@ function Document({
       });
       if (preview.requires_confirmation) {
         reviewing = true;
-        setSectionReview({ preview, opener, commentId: comment.id, reading });
-      } else await command("revert_section", {
-        version_id: preview.version_id,
-        generation_id: preview.generation_id,
-        change_id: preview.change_id,
-        dataset_epoch: preview.dataset_epoch,
-        content_hash: preview.content_hash,
-        manual_revision: preview.manual_revision,
-        confirmed: false
-      });
+        setSectionReview({ preview, opener, commentId: comment.id, reading, feedback });
+      } else {
+        const result = await command("revert_section", {
+          version_id: preview.version_id,
+          generation_id: preview.generation_id,
+          change_id: preview.change_id,
+          dataset_epoch: preview.dataset_epoch,
+          content_hash: preview.content_hash,
+          manual_revision: preview.manual_revision,
+          confirmed: false
+        });
+        sectionFeedback.complete(feedback, result);
+      }
     }).then(() => {
       if (!reviewing) restoreSectionReading(reading);
       requestAnimationFrame(() => {
@@ -8745,7 +8815,7 @@ function Document({
       });
     }).catch((error) => {
       restoreSectionReading(reading);
-      onError(error);
+      onError(error, feedback.context);
     });
   };
   const pageComments = numberComments(state.comments.filter(
@@ -8877,7 +8947,7 @@ function Document({
       },
       onSubmit: async () => {
         try {
-          await applySection(sectionReview.preview, true);
+          await applySection(sectionReview.preview, true, sectionReview.feedback);
         } catch (error) {
           setSectionReview((current) => current?.preview === sectionReview.preview ? { ...current, expired: true } : current);
           throw error;
