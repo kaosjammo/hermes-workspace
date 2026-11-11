@@ -10,7 +10,10 @@ const require = createRequire(
 const { JSDOM } = require("jsdom");
 const dom = new JSDOM('<div id="app"></div>', {
   url: "https://workspace.test",
+  pretendToBeVisual: true,
 });
+globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
+globalThis.cancelAnimationFrame = dom.window.cancelAnimationFrame.bind(dom.window);
 for (const key of [
   "window",
   "document",
@@ -41,14 +44,16 @@ const {
 } = await import("../../.local/frontend/repair-1/native-runtime.mjs");
 const root = createRoot(document.querySelector("#app"));
 const tick = () => act(() => new Promise((r) => setTimeout(r, 0)));
-const choose = async (label, value) => {
+const choose = async (label, text) => {
   const parent = [...document.querySelectorAll("label")].find((n) =>
     n.querySelector(`button[aria-label="${label}"]`),
   );
   const select = parent?.querySelector("select");
   assert.ok(select, label);
+  const option = [...select.options].find(option => option.textContent.trim() === text);
+  assert.ok(option, `${label}: ${text}`);
   await act(async () => {
-    select.value = value;
+    select.value = option.value;
     select.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await tick();
@@ -127,10 +132,10 @@ test("production table/record/board nullable clears persist and reopen through a
       ),
     );
     if (surface === "board") {
-      await choose("View", "board");
-      await choose("Move Record", "__none");
+      await choose("View", "Board");
+      await choose("Move Record", "No value");
     } else {
-      await choose("Status", "__none");
+      await choose("Status", "No value");
       for (const label of ["Due", "Text"]) {
         const input = document.querySelector(`input[aria-label="${label}"]`);
         await act(async () => {

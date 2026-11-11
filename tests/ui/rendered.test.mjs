@@ -48,6 +48,16 @@ const click = async (node) => {
   await act(async () => node.click());
   await tick();
 };
+const selectOption = async (label, text) => {
+  const node = document.querySelector(`select[aria-label="${label}"]`);
+  assert.ok(node, `Select exists: ${label}`);
+  const option = [...node.options].find(option => option.textContent.trim() === text);
+  assert.ok(option, `Option exists: ${label}: ${text}`);
+  await act(async () => {
+    node.value = option.value;
+    node.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+};
 const input = async (node, value) => {
   await act(async () => {
     Object.getOwnPropertyDescriptor(
@@ -92,15 +102,15 @@ test("scope submit retains its name and unchecked permissions while pending and 
     currentTitle: "Current page", currentId: "page", onClose: () => {},
     onSubmit: ids => { submissions++; assert.deepEqual(ids, []); return new Promise((_resolve, reject) => { release = () => reject(Error("Synthetic pending scope failure")); }); },
   })));
-  const action = button("Address selected scope"), permission = document.querySelector('input[type="checkbox"]');
-  assert.equal(action.getAttribute("aria-label"), "Address selected scope"); assert.equal(permission.checked, false);
+  const action = button("Address current page"), permission = document.querySelector('input[type="checkbox"]');
+  assert.equal(action.getAttribute("aria-label"), "Address current page"); assert.equal(permission.checked, false);
   await click(action);
   assert.equal(action.disabled, true); assert.equal(permission.disabled, true);
-  assert.equal(action.getAttribute("aria-label"), "Address selected scope");
+  assert.equal(action.getAttribute("aria-label"), "Address current page");
   await click(action); assert.equal(submissions, 1);
   await act(async () => release()); await tick();
   assert.equal(action.disabled, false); assert.equal(permission.checked, false);
-  assert.equal(action.getAttribute("aria-label"), "Address selected scope");
+  assert.equal(action.getAttribute("aria-label"), "Address current page");
   await act(async () => root.render(null));
 });
 test("same-name attachment labels distinguish exact files without changing their download identity", () => {
@@ -311,7 +321,7 @@ test("production Workspace renders editor/comments, autosaves, resolves only use
     text: "Earlier answer",
   });
   await click(button("Address comments (1)"));
-  await click(button('Address selected scope'));
+  await click(button('Address current page'));
   assert.equal(
     document.querySelector("[contenteditable]").getAttribute("contenteditable"),
     "false",
@@ -355,10 +365,8 @@ test("production Workspace renders editor/comments, autosaves, resolves only use
     document.querySelector('article[aria-label="Please improve this"]'),
     null,
   );
-  await click(button("Comment options"));
-  await click(
-    document.querySelector('input[aria-label="Show resolved comments"]'),
-  );
+  await click(button("Page actions"));
+  await click(document.querySelector('button[aria-label^="Resolved comments ("]'));
   assert.ok(
     document.querySelector('article[aria-label="Please improve this"]'),
   );
@@ -505,15 +513,8 @@ test("production database table/board controls persist typed edits and exact boa
     confirm: () => {},
   };
   await act(async () => root.render(h(Database, props)));
-  const choose = async (label, value) => {
-    const node = document.querySelector(`select[aria-label="${label}"]`);
-    await act(async () => {
-      node.value = value;
-      node.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-  };
   await click(button("Sort"));
-  await choose("Sort", "n");
+  await selectOption("Sort", "Count");
   assert.equal(document.querySelector("tbody tr th button").textContent, "Second");
   await input(
     document.querySelector('input[aria-label="Filter records"]'),
@@ -521,8 +522,8 @@ test("production database table/board controls persist typed edits and exact boa
   );
   assert.equal(document.querySelectorAll("tbody tr:not(.ws-db-create-row)").length, 1);
   await input(document.querySelector('input[aria-label="Filter records"]'), "");
-  await choose("View", "board");
-  await choose("Move First", "Done");
+  await selectOption("View", "Board");
+  await selectOption("Move First", "Done");
   assert.equal(records[0].properties.status, "Done");
   assert.equal(commands.at(-1).payload.patch.properties.f, undefined);
   assert.equal(commands.at(-1).payload.patch.properties.n, 10);
@@ -560,7 +561,7 @@ test("board group creation keeps its exact typed target through failure, retry a
   const command = (_op, payload) => { calls.push(payload); return new Promise((resolve, reject) => { finish = error => error ? reject(error) : resolve({ id: "new-group-record", ...payload }); }); };
   await act(async () => root.render(h(Database, { item, state, locked: false, onOpen: () => {}, confirm: () => {}, command })));
   const view = document.querySelector("select[aria-label='View']");
-  await act(async () => { view.value = "board"; view.dispatchEvent(new Event("change", { bubbles: true })); });
+  await selectOption("View", "Board");
   await click(button("New record in Observed"));
   assert.equal(view.disabled, true); assert.equal(button("New record in Planned").disabled, true);
   const title = document.querySelector("input[aria-label='New record title']"); await input(title, "Keep this group");
@@ -610,7 +611,7 @@ test("property validation identifies its field while transport failures remain f
   await act(async () => root.render(h(Database, { item, state, locked: false, onOpen: () => {}, confirm: () => {}, command: async () => { calls++; throw Error(failure); } })));
   await click(button("Add property"));
   const name = document.querySelector("input[aria-label='Property name']"); await input(name, "Calculation");
-  const choose = async value => act(async () => { const type=document.querySelector("select[aria-label='Property type']");type.value=value;type.dispatchEvent(new Event("change",{bubbles:true})); });
+  const choose = value => selectOption("Property type", { formula: "Formula", select: "Single select", relation: "Relation" }[value]);
   const submit = async () => { await act(async () => name.closest("form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}))); await tick(); };
   await choose("formula"); const formula=document.querySelector("input[aria-label='Formula expression']"); await input(formula,"unsupported(1)"); await submit();
   assert.equal(calls,1);assert.equal(formula.getAttribute("aria-invalid"),"true");assert.equal(name.getAttribute("aria-invalid"),"false");assert.equal(formula.getAttribute("aria-describedby"),document.querySelector("[role='alert']").id);assert.equal(document.activeElement,formula);
@@ -864,7 +865,7 @@ test("failed section consent retires the old approval and re-review requires exp
   await act(async () => root.render(h(Workspace, { ctx }))); await tick();
   await click(button("Section consent"));
   await click(document.getElementById("ws-bubble-consent-comment"));
-  await click(button("Revert section")); await tick(30);
+  await click(document.querySelector('button[aria-label="Revert changes: Review the shade"]')); await tick(30);
   assert.equal(reviews, 1); assert.equal(applications, 0);
   await click(button("Revert section")); await tick(30);
   assert.equal(applications, 1);
@@ -951,7 +952,41 @@ test("run-status failure names its page, retains diagnostics and offers existing
   assert.equal(document.querySelector('[aria-label="Page title"]').value, "Status recovery page");
   await click(button("Open linked thread"));
   assert.ok(nativeCalls.slice(before).some(call => call.method === "open" && call.id === "thread-existing"));
+  const consumeCount = calls.filter(path => path === "/workflow/consume").length;
+  await click(button("Dismiss"));
+  await tick(3300);
+  assert.equal(calls.filter(path => path === "/workflow/consume").length, consumeCount, "a failed status is not retried forever");
+  assert.equal(document.querySelector(".ws-error"), null, "dismissed status error stays dismissed");
   assert.equal(calls.includes("/workflow/prepare"), false);
   assert.equal(nativeCalls.slice(before).some(call => call.method === "prompt.submit"), false);
+  await act(async () => root.render(null));
+});
+
+
+test("run review message dismisses across refresh and reopen, and a later run is visible", async () => {
+  const saved = new Map();
+  const run = { id: "failed-run", item_id: "p", session_id: "thread-existing", status: "error", updated_at: "first", error: "Edits were not saved" };
+  const state = { scope_id: "dismiss-run-scope", revision: 1,
+    items: [{ id: "p", kind: "page", title: "Dismiss run page", parent_id: null, content: "<p>Unchanged</p>", properties: {}, columns: [], deleted_at: null, thread_id: "thread-existing" }],
+    comments: [], runs: [run], versions: [], attachments: [], recents: [], templates: [] };
+  const calls = [];
+  const ctx = { storage: { get: (key, fallback) => saved.get(key) ?? fallback, set: (key, value) => saved.set(key, value) },
+    onDispose: () => {}, rest: async (path, options) => {
+      calls.push(path);
+      if (path === "/state") return structuredClone(state);
+      if (path === "/command") return { result: {}, state: structuredClone(state) };
+      throw Error("Unexpected operation " + path);
+    } };
+  const banner = () => document.querySelector('[aria-label="Workspace run needs review"]');
+  await act(async () => root.render(h(Workspace, { ctx }))); await tick();
+  await click(button("Dismiss run page")); assert.ok(banner());
+  await click(button("Dismiss run message")); assert.equal(banner(), null);
+  await tick(3200); assert.equal(banner(), null, "polling keeps dismissal");
+  await act(async () => root.render(null));
+  await act(async () => root.render(h(Workspace, { ctx }))); await tick();
+  await click(button("Dismiss run page")); assert.equal(banner(), null, "reopening keeps dismissal");
+  run.id = "later-failed-run"; run.updated_at = "second"; state.revision++;
+  await tick(3200); assert.ok(banner(), "new run gets its own warning");
+  assert.equal(calls.some(path => path.startsWith('/workflow/')), false, "dismissal has no run effects");
   await act(async () => root.render(null));
 });

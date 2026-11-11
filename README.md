@@ -1,95 +1,146 @@
 # Hermes Workspace
 
-**Write and organise your work inside Hermes Desktop.**
+**Documents, databases and passage-level feedback inside Hermes Desktop.**
 
-Workspace brings rich documents, structured project databases and passage-level feedback into the same place you use Hermes. Keep a client brief beside its invoice tracker, draft a chapter beside its scene database, or maintain household records without moving the work into a separate hosted application.
+Workspace keeps the material you are working on beside your Hermes conversations. Write a brief, organise a chapter outline, or track a project's records in a typed database. Select a passage, leave feedback, and explicitly ask Hermes to address the unresolved comments without handing it unrestricted access to the rest of your workspace.
 
-The review workflow connects feedback to the document it concerns: select a passage, leave a comment and explicitly ask Hermes to address unresolved feedback in a linked native conversation. You decide when a comment is resolved.
+> **Development preview.** This submission includes the complete installed package, not an earlier subset of its features. The capabilities below describe the implementation. They are not a certificate of native Electron acceptance, successful live-provider editing or catalogue approval. See [Compatibility and qualification](#compatibility-and-qualification).
 
-> **Development preview.** This repository publishes a frozen standalone source snapshot. Initial catalog validation passed 16/16 checks with three warning groups requiring review, not a clean compatibility approval. See [validation evidence and limits](docs/VALIDATION.md) and [issue #1](https://github.com/kaosjammo/hermes-workspace/issues/1). Genuine provider-positive saved edits and native Electron acceptance remain unqualified; a working interface or a preview video does not establish those outcomes. See [qualification and limitations](docs/QUALIFICATION.md).
+## Write in place
 
-## What you can work with
+- Edit page and record titles and rich text directly, with autosave and visible save failures.
+- Use Text, Heading 1–3, bold, italic, underline, numbered and bulleted lists, checklists, quotations and code blocks.
+- Add external links, links to Workspace items, simple document tables and local image attachments.
+- Open **Format text** or use the selected-text toolbar. Copy, cut and paste supported rich content, and undo or redo edits with selection-aware history.
+- Choose normal or wide document layout per page or record. Resize the navigation pane without changing document content.
+- Recover or discard retained title, body and property drafts explicitly. Workspace also retains unsent comments and replies within their original connection, profile and dataset.
 
-### Documents you can keep editing
+The editor sanitises supported HTML rather than accepting arbitrary scripts or styling. Pasted images are removed; add images through the image control. Word/PDF layout fidelity, embedded live databases and cell-level comments are not included.
 
-Write in place with headings, bold, italic, underline, lists, checklists, quotes and code blocks. Add links, images and simple tables. Use the selected-text toolbar, undo/redo and autosave. Choose normal or wide layout per page and organise pages in nested folders.
+### Editor shortcuts
 
-Workspace retains unsaved recovery drafts when a save or connection transition fails. Recover or discard them explicitly rather than silently replacing the saved document.
+These shortcuts act within their relevant editor or composer. Hermes-owned bindings have first refusal.
 
-### Databases with a document behind each record
+| Shortcut | Action |
+|---|---|
+| `Ctrl+Alt+B` | Bold in the page editor when Hermes has not claimed the chord |
+| `Ctrl/Cmd+I`, `Ctrl/Cmd+U` | Italic and underline |
+| `Ctrl/Cmd+Z` | Undo |
+| `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` | Redo |
+| `Ctrl/Cmd+Alt+M` | Start a comment on the current selection |
+| `Ctrl+Enter` | Submit a new comment from its composer; plain Enter inserts a newline |
 
-Use text, number, checkbox, date, single-select, relation and same-row formula properties. Filter and sort records, switch to a single-select-grouped board, and open a record as a full document with its own notes and feedback.
+The implementation avoids submitting during input-method composition and does not register a permanent global replacement for host shortcuts. This is not a claim of platform-by-platform keyboard qualification.
 
-For example, track subscription renewals, client invoices or a story's scenes. Those are examples of user-created databases, not separate financial integrations or built-in accounting products. Formula expressions use bounded helpers such as `col("Hours") * col("Rate")`; they do not execute arbitrary code.
+## Organise and find your work
 
-![Synthetic Northbank invoice database](docs/screenshots/database-demo.png)
+Create pages, databases and nested folders from Workspace's Home and navigation surfaces. Reopen recent items, move items between folders, and distinguish duplicate names using their location context.
 
-*Database view from the manual demo, using fictional invoice records. This earlier-build capture illustrates the interface; it is not native acceptance evidence for the current source commit. [Media provenance](docs/MEDIA.md).*
+**Expand all** and **Collapse all** operate on the nested folder tree. **Reorder** enables drag handles and Move up/Move down controls, with saved ordering among siblings. Use **Move** to change folders: dragging a reorder handle does not reparent an item or reorder database records.
 
-### Feedback that stays with the passage
+Workspace search finds titles, document text and text-valued record properties, including computed text values. Results include excerpts, location context and paging. Typing a search does not save or navigate away from the current document; opening a result uses the normal unsaved-edit checks. Search is literal Workspace search, not filesystem search, semantic retrieval or complete conversation-history search.
 
-Attach comments to selected text or leave whole-page, record or database feedback. Highlights and discussion bubbles connect the passage to its thread. Reply, reopen or delete a discussion after confirmation. Detached or ambiguous anchors stay visible instead of silently attaching to different text.
+Save a page or record as a template and create an independent copy, including its supported attachments. Record templates require a compatible database schema. Trash retains items for explicit restoration or permanent deletion; folder and database operations preserve the applicable hierarchy and reference checks.
 
-An agent reply does not resolve feedback. The user's checkbox controls resolution.
+## Use databases with a document behind each record
 
-### A native Hermes review path
+A database record has both typed properties and an editable document with its own discussion.
 
-**Address comments** captures every unresolved current-item comment, including comments with earlier replies. It uses a linked Hermes conversation and the configured Hermes model/runtime. Additional editable items require explicit per-run approval; a mention or a folder relationship grants no edit authority.
+- **Text, number, checkbox, date and single-select** properties cover everyday structured records.
+- **Relations** link records in other Workspace databases.
+- **Formula** properties calculate bounded, same-row scalar expressions, with dependency checks and visible per-record errors.
+- **Table and board views** provide filtering, sorting and grouping by a single-select property. Change a board record's group through its property control, or create a record in a particular lane, including the unassigned lane.
+- The top **New** menu offers **New record** and **New property**, alongside labelled inline creation controls. Failed creation and property edits retain their drafts for correction or retry. Run locks also apply to record and schema changes.
 
-The implementation validates the final structured proposal against the captured scope and revisions before committing edits and comment outcomes. It refuses stale or ambiguous targeted replacements. This is the source-implemented workflow, not a claim that provider-positive completion has passed the remaining native qualification gates.
+For example, a user-created invoice tracker can calculate `col("Hours") * col("Rate")`. Formula helpers include arithmetic, comparisons, conditions, `IF`, `abs`, `round`, `min`, `max`, `len`, `lower`, `upper`, `concat` and `coalesce`. They do not execute arbitrary code, read other rows or provide rollups. An invoice tracker is an example database, not an accounting integration.
 
-### Review and recovery controls
+## Keep feedback connected to the passage
 
-Run controls include item locking, progress, Stop, pre-run versions and explicit recovery. Stop revokes Workspace write authority before requesting native cancellation. Local recovery does not prove that an unconfirmed native thread has stopped.
+Select text to start an anchored comment, or leave whole-page, whole-record or whole-database feedback. Numbered passage markers and discussion cards keep separate comments identifiable, including overlapping selections. Wide panes place discussions beside the document; narrow panes reserve space in the reading flow.
 
-Eligible agent-changed passages can offer section revert, preserving unrelated content and requiring confirmation after later manual editing. Whole-item Restore is a separate operation. Unsafe section mappings are unavailable rather than guessed.
+Collapsed cards show the author, feedback preview and reply count. Click the preview, card or passage to open the discussion. Outside clicks, Tab navigation and Escape can collapse it without deleting feedback or drafts. Pending actions and confirmation dialogues keep their own interaction state. Hovering a discussion emphasises its passage without editing the document.
 
-### Bring work in and take it out
+Each discussion has separate **Resolve**, **delete comment** and **Revert changes** controls:
 
-Import Markdown, UTF-8 CSV, Word `.docx` and text-based PDF. Export Markdown, CSV, DOCX and newly laid-out PDF. Conversion runs locally and targets editable semantic content, not exact Word/PDF layout. No scanned-PDF OCR is included.
+- Resolve or reopen feedback using the user's checkbox. An agent reply never resolves a comment automatically.
+- Show or hide resolved discussions without renumbering the remaining comments as if they were different threads.
+- Delete a discussion after confirmation. Deletion does not delete the prose or undo its edits.
+- Revert an eligible agent-changed section using its saved provenance. Unsupported, stale or ambiguous mappings explain why revert is unavailable rather than guessing a larger passage.
 
-Retain supported attachments and original Word/PDF files. Export a canonical Workspace backup for the stored document/database graph, discussions, attachments, templates, Trash and recovery history. Ordinary Markdown/CSV exports are not full-fidelity backups.
+Highlights can follow the actual changed passages, including separate changed ranges, rather than colouring unchanged text between them. Detached or uncertain anchors retain their discussion and context instead of silently attaching elsewhere.
 
-## Organisation and everyday controls
+Set a Workspace username for your comments and replies, or reset it to `user`. Agent outcomes retain the executing profile's recorded display identity. Eligible avatars come through the matching Hermes profile asset route, with a neutral fallback when unavailable. Human/agent reply presentation follows the recorded origin, not the displayed name. These names and images are attribution, not authentication or edit permission.
 
-- Nested folders, item moves, recent documents and a resizable navigation tree.
-- Search across Workspace titles, document text and stored table text values.
-- Templates that create independent documents or records, including copied attachments.
-- Trash with restore and explicit permanent deletion.
-- Profile-local storage outside the plugin installation directory.
+## Ask Hermes to address unresolved comments
 
-See the [complete feature guide](docs/FEATURES.md) for the detailed controls and boundaries. The [technical feature register](docs/FEATURE-REGISTER.md) preserves all 206 overlapping source-inventory entries without advertising them as 206 distinct features.
+1. Save your edits and choose **Address comments**.
+2. Review the current item and any additional editable items. Additional items start unselected and require approval for this run. A database grant includes its records.
+3. Workspace creates or reuses the item's native Hermes conversation. You can also select an eligible conversation from the recent live/stored list or open the linked conversation.
+4. Hermes receives the captured document and comment context through the configured Hermes runtime and model provider.
+5. After confirmed native completion, Workspace validates the final structured proposal before saving edits and separate outcomes for the captured comments.
 
-## Why this is a plugin
+Every unresolved current-item comment is included, even if it already has replies. Resolved comments are excluded. Mentions, links, sibling folders and model-written instructions do not widen edit authority.
 
-A prompt can describe a workspace. This plugin supplies the persistent editor, typed databases, comment anchors, SQLite transactions, file converters and recovery controls inside Hermes Desktop. It connects those application surfaces to Hermes-owned conversations and completion handling through plugin interfaces.
+For local changes, the protocol supports exact, revision-bound replacements. Missing, ambiguous, overlapping or stale targets are rejected without a silent whole-document overwrite fallback. Whole-document replacement remains available for genuinely page-wide work. Structured updates can also change authorised titles, record properties and database schemas. Replies-only outcomes and explanations of partial or impossible work are supported.
 
-The package declares `workspace_apply`, `pre_llm_call` and `post_llm_call`, alongside its Desktop renderer and authenticated plugin API. Ordinary Address runs consume a validated final proposal after confirmed completion; they are not streaming tool writes.
+Ordinary **Address comments** uses the validated final proposal, not streaming calls to `workspace_apply`. The package retains that separately guarded tool interface for admitted native work. No provider credentials or model settings are managed by Workspace.
 
-## Local data and disclosure
+### Stop, Recover, Restore and Revert are different
 
-- Workspace stores its data under the selected Hermes profile's `plugin-data/workspace/`, outside the installation directory. Local storage is not encryption or OS-user isolation.
-- Outside its own data directory, the native review path opens the selected profile's canonical Hermes `state.db` through `SessionDB` and reads session, admission, transcript and runtime metadata. Constructing that database object is not promised to be a read-only SQLite connection. Editing/finalisation also depends on the actual same-process native owner and loop; this coupling uses private host interfaces and remains a catalog-review concern.
-- Workspace has no separate hosted account service, cloud converter or plugin telemetry. Import/export conversion is local; PDF conversion starts a local Python child process with a 20-second parent timeout and POSIX CPU/address-space limits. No plugin-managed credential store is used.
-- Starting native agent work may send the authorised document/comment context to your configured model provider. Local storage does not imply offline inference.
-- Native agent tools and approvals remain subject to Hermes policy. Workspace does not gain edit rights from model prose or bypass a host refusal.
-- Complete backup restore replaces the current Workspace dataset after validation. It is not a merge and does not restore native session authority, Hermes credentials/configuration or local frontend drafts/preferences. Download a backup before replacement.
+| Control | Meaning |
+|---|---|
+| **Stop** | Revoke Workspace write authority first, then request cancellation of the exact native admission when available. This does not by itself prove the provider stopped. |
+| **Recover document** | Explicitly release local editing when native continuity is uncertain. The native result can remain unknown. |
+| **Restore a saved version** | Restore whole-item content and applicable typed schema history. This can replace later edits. |
+| **Revert changes** | Revert an eligible saved section, preserving unrelated content. Later manual edits require fresh confirmation. A checkpoint retains the pre-revert page and the specifically associated agent responses removed from the live discussion. |
 
-## Installation and compatibility
+Admitted items are read-only during a run; other unlocked items remain usable. Run state, errors and review messages come from persisted results, not a simulated progress timer. A terminal targeted-edit conflict is reported as **not saved** and releases its locks rather than repeatedly applying the rejected proposal.
 
-The standalone source repository is [kaosjammo/hermes-workspace](https://github.com/kaosjammo/hermes-workspace). This is a development preview, not a catalog-approved release. Use the supported Hermes plugin installer with this repository only after reading the qualification limits. Catalog admission is tracked in [issue #1](https://github.com/kaosjammo/hermes-workspace/issues/1).
+## Import, export and back up locally
 
-The manifest and proposed catalog entry declare the same conservative host floor, `>=0.23.0`. The isolated catalog probe ran on Linux x64 against the public `v0.23.0` release commit `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`; the annotated upstream tag was independently resolved to that commit. Earlier hosts are outside this package's supported baseline. This is not a claim of native/provider acceptance or a guarantee that undocumented interfaces stay stable on newer releases. macOS/Windows execution, native Electron acceptance and complete provider lifecycle coverage remain unqualified. Supported profile setup must respect explicit opt-outs; automatic installation into future profiles is not claimed.
+| Format | Import | Export |
+|---|---|---|
+| Markdown | Editable page with supported semantics and retained original | Document content; not a complete Workspace backup |
+| UTF-8 CSV | Database with text properties | Database values, with formula-like text prefixed for spreadsheet safety |
+| Word `.docx` | Supported text, headings, marks, lists, links and tables; retained original | Semantic Word document with supported local raster images |
+| PDF | Extracted text in source-page order; retained original | Newly laid-out readable PDF, including supported lists, tables, code/quote styling and local raster images |
+| Workspace backup | Validated replacement of the current dataset | Canonical archive of the stored Workspace data graph |
 
-## Demo and release evidence
+Word export/import handles supported nested list numbering and preformatted code. PDF export handles supported block content and images inside table cells. Conversion is semantic, not a lossless office-document round trip. DOCX drawings and embedded images are not imported into the editable text; the original file is retained. PDF import does not preserve the source's columns, images or formatting, and does not perform OCR. Encrypted PDFs and detected image-only pages are refused. Legacy `.doc` is unsupported.
 
-The prepared demo is under 90 seconds. Public demo media and exact-commit validation results will be linked from issue #1 as they become available. Browser-preview footage does not establish native agent completion.
+Converters do not fetch remote images. Supported raster export can use a static frame for GIF/WebP. Inputs, archives, image dimensions and conversion work have operation-specific limits. PDF conversion uses a local child process with a parent timeout and POSIX resource limits where available.
 
-See [qualification and limitations](docs/QUALIFICATION.md) for the exact evidence boundary and unreleased work.
+The canonical backup includes items and hierarchy, properties and relations, comments and replies, attachment bytes and originals, templates, Trash, recents and saved recovery/provenance history. It is not a full Hermes-profile backup.
+
+**Before restoring a backup, download a backup of your current Workspace.** Restore validates before replacing the dataset; it does not merge. Native conversation bindings and execution authority are detached. Credentials, Hermes configuration, native conversations, frontend drafts/view preferences and shared-membership catalogues are not restored. If delivery is uncertain, the interface checks the restore receipt instead of automatically repeating the destructive replacement.
+
+## Local storage, privacy and permissions
+
+- The default workspace is private to the selected Hermes profile and is stored under that profile's `plugin-data/workspace/`, outside the plugin installation directory.
+- SQLite transactions, revision checks and captured connection/profile/dataset identities protect application writes from stale operations. Local storage is not encryption or isolation from other tools running as the same OS user.
+- There is no separate Workspace account service, cloud converter, plugin telemetry service or plugin-managed credential store.
+- Explicit native agent work may send authorised document and comment context to your configured model provider. Local storage does not mean offline inference. Hermes owns tool policy and approvals.
+- Native integration also accesses the selected profile's canonical Hermes `state.db` through `SessionDB`, plus admission, transcript and runtime metadata. Constructing `SessionDB` is not promised to be a read-only SQLite connection. Finalisation depends on private, same-process native owner interfaces; this remains a compatibility and catalogue-review concern.
+
+### Local shared workspaces and independent executors
+
+The package includes backend primitives for explicit local-profile memberships, editor/read-only roles, membership revocation and transactional private-to-shared moves. It also includes saved executor/source/thread data and standalone UI components.
+
+**These are not a completed sharing or executor-selection experience.** The default router does not configure a shared storage root, the sharing and page-executor components are not mounted by the Desktop entrypoint, and native execution rejects unsupported saved ownership bindings. No cloud collaboration, public sharing links, real-time co-editing, shared-project backup interface or automatic future-profile installation is claimed.
+
+## Compatibility and qualification
+
+The manifest declares Hermes `>=0.23.0`. The renderer checks the installed backend through profile-scoped host APIs before registering Workspace navigation. Default loading respects a backend opt-out; an explicit Desktop On decision can request activation of an already installed package through the host's admitted API. It does not install the plugin into every profile.
+
+This is a development preview submitted for catalogue review. Current submission tracking is [issue #13](https://github.com/kaosjammo/hermes-workspace/issues/13).
+
+Source tests cover editor structure, comments, navigation, typed data, converters, backup/restore and native-authority boundaries. Some native lifecycle tests deliberately use synthetic terminal records. Their presence is not proof that those tests passed on this submission, and synthetic completion is not a successful live-provider run.
+
+The independent documentation audit was static. Subsequent release preparation reproduced the installed Desktop bundle in two independent builds and ran separate checks; see [current release status](docs/RELEASE-STATUS.md). Same-candidate provider-positive saved editing, active-provider Stop, full restart/compaction/approval lifecycle behaviour, native visual acceptance and macOS/Windows execution require separate evidence. Older catalogue-check totals and earlier demo media are not acceptance receipts for this candidate.
 
 ## Build from source
 
-Use Node 26 or newer. From the repository root:
+Use Node 26 or newer. From a writable checkout of the repository:
 
 ```bash
 mkdir -p .local/toolchain
@@ -98,12 +149,23 @@ npm ci --prefix .local/toolchain --ignore-scripts
 node scripts/build.mjs
 ```
 
-The build writes `desktop/plugin.js`. Use an isolated Hermes environment for catalog validation with `--install-deps`; it prepares dependencies and must not share the live installation dependency state.
+The build writes `desktop/plugin.js` and performs the configured browser-module smoke check. To stage the unified plugin and deterministic archive, choose a fresh output directory:
 
-## Roadmap
+```bash
+python3 scripts/package.py --output .local/dist
+```
 
-- [Expand/Collapse all folders](https://github.com/kaosjammo/hermes-workspace/issues/2).
-- [Saved drag-and-drop reordering](https://github.com/kaosjammo/hermes-workspace/issues/3).
-- [New record and New property buttons](https://github.com/kaosjammo/hermes-workspace/issues/4).
+The package includes the Desktop bundle, authenticated API, Python backend, declared tool/hooks and dependency declarations. Use an isolated environment for dependency preparation and catalogue validation, not a live installation. The submitted Desktop bundle is preserved byte-for-byte from production. Esbuild embeds dependency-relative labels; reproducing that exact hash also requires the recorded relative dependency layout. Ordinary builds can differ in those generated labels without a frontend code change.
 
-These are open requests, not completed capabilities.
+
+## Review and distribution
+
+The catalogue entry targets `dist/workspace`, the generated 22-file runtime package. The same pinned repository retains the complete editable source, test corpus and documentation at its root. No documents, profile settings, databases, credentials or native conversation histories are included.
+
+See the [complete production feature audit](docs/PRODUCTION-FEATURES.md), [original detailed register](docs/FEATURE-REGISTER.md), [current release status](docs/RELEASE-STATUS.md) and [third-party notices](THIRD-PARTY-NOTICES.md). The bundled React DOM code carries its complete MIT notice there; Hermes supplies the React singleton and plugin SDK. Workspace's own reuse licence is not selected, and this submission makes no open-source permission claim.
+
+The local PDF conversion child inherits the host process environment. Its timeout and POSIX limits are resource bounds, not a sandbox or network-isolation guarantee. SDK-selector cautions and undocumented native-host dependencies require maintainer review. Passing automated checks is not catalogue admission.
+
+![Earlier synthetic database demonstration](docs/screenshots/database-demo.png)
+
+This earlier-build capture uses fictional records, illustrates the interface only, and is not native acceptance of this pin. [Media provenance](docs/MEDIA.md).

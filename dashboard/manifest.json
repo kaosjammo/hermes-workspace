@@ -2,6 +2,6 @@
   "name": "workspace",
   "label": "Workspace",
   "description": "Local documents, tables and native Hermes comment workflow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "api": "plugin_api.py"
 }

@@ -5,7 +5,7 @@ import { DraftRepository } from "../../frontend/drafts.mjs";
 import { editorHTML } from "../../frontend/editor.mjs";
 const require = createRequire(new URL("../../.local/toolchain/package.json", import.meta.url));
 const { JSDOM } = require("jsdom");
-const dom = new JSDOM('<div id="app"></div>', { url: "https://workspace.test" });
+const dom = new JSDOM('<div id="app"></div>', { url: "https://workspace.test", pretendToBeVisual: true });
 for (const name of ["window", "document", "HTMLElement", "Node", "Event", "MouseEvent", "InputEvent"])
   globalThis[name] = dom.window[name];
 globalThis.getSelection = () => dom.window.getSelection();
@@ -188,7 +188,7 @@ test("discussion drafts retain text, anchor, targets and replies within the exac
   assert.equal(new DraftRepository(backing, "other-connection", "profile").bind("scope", "page", "discussion").read(), null);
   assert.equal(new DraftRepository(backing, "connection", "other-profile").bind("scope", "page", "discussion").read(), null);
   assert.equal(repo.bind("replacement-scope", "page", "discussion").read(), null);
-  await act(async () => [...document.querySelectorAll("button")].find(b => b.textContent === "Use whole page").click());
+  await act(async () => [...document.querySelectorAll("button")].find(b => b.textContent === "Add whole-page comment").click());
   const wholePageComposer = document.querySelector('textarea[aria-label="New comment"]');
   assert.equal(anchor, null); assert.equal(document.activeElement, wholePageComposer);
   assert.equal(wholePageComposer.value, "Retained anchored feedback");

@@ -145,13 +145,15 @@ class Workflow:
             # matched to current data after the Store writer wait.
             epoch = self.native.runtime_epoch()
             scope_review = (lambda:self._review(conn,review_id,principal_id)['review']) if review_id is not None else None
-            run = self.store.begin_run(item_id, owner, explicit_item_ids,scope_review=scope_review)
+            from .identity import executor
+            run = self.store.begin_run(item_id, owner, explicit_item_ids,scope_review=scope_review,
+                                       executor_identity=executor(self.profile_home))
             try:
                 if review_id is not None:
                     record = self._review(conn,review_id,principal_id)
                     record['consumed_by'] = run['id']
                     conn.execute('UPDATE run_review SET body=? WHERE id=?',(json.dumps(record,allow_nan=False),review_id))
-                state = self.store.snapshot()
+                state = self.store.snapshot(include_content_revisions=True)
                 comments = [c for c in state['comments'] if c['id'] in run['comment_ids']]
                 scoped_items = [i for i in state['items'] if i['id'] in run['allowed_item_ids']]
                 prompt = self._prompt(run, comments, scoped_items, reviewed=review_id is not None)
@@ -174,8 +176,7 @@ class Workflow:
 
     @staticmethod
     def _prompt(run, comments, items, *, reviewed=False):
-        from .targeted_edits import content_revision
-        context = [{**item, 'content_revision': content_revision(item)} for item in items]
+        context = items  # Store projects revision tokens from the persisted items.
         data = json.dumps({'run_id': run['id'], 'comments': comments, 'allowed_items': context}, ensure_ascii=False)
         scope = ('Only the current item and related items explicitly selected and approved by the user for this run may be edited. '
                  if reviewed else 'Only the current item and structured comment targets explicitly selected by the user for this run may be edited. ')

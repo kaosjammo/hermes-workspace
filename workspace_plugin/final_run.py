@@ -185,8 +185,22 @@ def consume(flow, run_id, *, principal_id):
                         raise ValueError('Native final proposal changed while waiting for the Store writer')
                 accept(check)
             fingerprint = digest([proposal['edits'], proposal['replies']])
-            result = flow.store.apply_run(run_id, **proposal, authorize=authorize,
-                operation_id=fingerprint, operation_digest=fingerprint)
+            try:
+                result = flow.store.apply_run(run_id, **proposal, authorize=authorize,
+                    operation_id=fingerprint, operation_digest=fingerprint)
+            except ValueError as exc:
+                from .targeted_edits import TargetedEditConflict
+                if not isinstance(exc.__cause__, TargetedEditConflict):
+                    raise
+                # Store rolled back this exact-preimage conflict atomically.
+                # The joined native turn is terminal; retrying the immutable
+                # proposal cannot succeed. Revoke it and release document locks
+                # without inventing saved edits or successful comment replies.
+                context.update(revoked=True, native_terminal=row['outcome'])
+                message = 'The native turn ended, but its proposed edits were not saved: ' + str(exc)
+                flow.store.finish_run(run_id, 'error', message)
+                flow._save(conn, run_id, context)
+                return {'run': flow._run(run_id), 'native_terminal': row['outcome']}
             context['outcomes'] = sorted({cid for r in result['operation_receipts'] for cid in r['comment_ids']})
             context['operations'] = [r['operation_id'] for r in result['operation_receipts']]
             context['admission_id'] = row['admission_id']

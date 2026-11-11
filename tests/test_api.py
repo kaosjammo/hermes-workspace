@@ -124,7 +124,7 @@ class NativeRouteBoundaryTests(unittest.TestCase):
 
 class ApiTests(unittest.TestCase):
     def setUp(self):
-        fixture_root = Path(__file__).resolve().parents[1] / '.local/api'
+        fixture_root = (Path(__file__).resolve().parents[1] / '.local/api').resolve()
         fixture_root.mkdir(parents=True, exist_ok=True)
         self.temp = TemporaryDirectory(dir=fixture_root)
         self.home = Path(self.temp.name) / 'owner-a'

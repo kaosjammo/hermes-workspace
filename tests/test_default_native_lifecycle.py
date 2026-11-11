@@ -123,6 +123,44 @@ class DefaultNativeDataLifecycle(unittest.IsolatedAsyncioTestCase):
         self.store.execute('restore_version',{'id':prepared['run']['version_ids'][0]})
         self.assertEqual(self.content(),'Before')
 
+    async def test_prompt_revision_after_manual_edits_applies_targeted_proposal(self):
+        self.store.execute('add_comment', {'item_id': self.page['id'], 'text': 'Seed addressed section',
+            'anchor': {'quote': 'Before', 'prefix': '', 'suffix': ''}})
+        earlier = await self.prepared()
+        self.terminal_data(earlier)
+        await self.consume(earlier)
+        for index in range(6):
+            self.store.execute('update_item', {'id': self.page['id'], 'patch': {'content': f'Before {index}'}})
+        prepared = await self.prepared()
+        data = json.loads(prepared['prompt'].split('instructions:\n', 1)[1])
+        item = next(i for i in data['allowed_items'] if i['id'] == self.page['id'])
+        self.assertEqual(item['content_revision']['expected_manual_revision'], 6)
+        self.assertNotIn('_manual_revision', item)
+        self.terminal_data(prepared, patch={'content_edits': {**item['content_revision'],
+            'replacements': [{'before': 'Before 5', 'after': 'Saved scoped edit'}]}})
+        self.assertEqual((await self.consume(prepared))['run']['status'], 'completed')
+        self.assertEqual(self.content(), 'Saved scoped edit')
+
+    async def test_rejected_targeted_terminal_proposal_unlocks_without_applying_or_retrying(self):
+        from workspace_plugin.targeted_edits import content_revision
+        prepared = await self.prepared()
+        revision = content_revision(self.page)
+        revision['expected_manual_revision'] = 99
+        self.terminal_data(prepared, patch={'content_edits': {**revision,
+            'replacements': [{'before': 'Before', 'after': 'Must not save'}]}})
+        before_comments = self.store.snapshot()['comments']
+        result = await self.consume(prepared)
+        self.assertEqual(result['run']['status'], 'error')
+        self.assertEqual(result['native_terminal'], 'completed')
+        self.assertIn('not saved', result['run']['error'])
+        self.assertEqual(self.content(), 'Before')
+        self.assertEqual(self.store.snapshot()['comments'], before_comments)
+        self.assertFalse(result['run'].get('operation_receipts'))
+        before_retry = self.store.backup_snapshot()
+        self.assertEqual((await self.consume(prepared))['run']['status'], 'error')
+        self.assertEqual(self.store.backup_snapshot(), before_retry)
+        self.store.execute('update_item', {'id': self.page['id'], 'patch': {'title': 'Unlocked'}})
+
     async def test_real_owner_store_positive_data_receipt_all_unresolved_and_restore(self):
         prepared = await self.prepared()
         self.assertEqual(set(prepared['run']['comment_ids']), {self.comment['id'], self.answered['id']})

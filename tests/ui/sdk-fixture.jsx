@@ -22,6 +22,7 @@ export const host = {
   state: {
     profile,
     connectionId,
+    gateway: makeAtom("open"),
     focusedSessionOwner: {
       get: () => ({ connectionId: connectionId.get(), profile: profile.get() }),
     },
@@ -72,18 +73,24 @@ export function useQuery({
   useEffect(() => {
     if (!enabled) return;
     let active = true;
+    let timer;
     const load = () =>
       Promise.resolve()
         .then(queryFn)
         .then(
-          (data) => active && setState({ data }),
-          (error) => active && setState({ error }),
+          (data) => complete({ data }),
+          (error) => complete({ error }),
         );
+    const complete = next => {
+      if (!active) return;
+      setState(next);
+      const delay = typeof refetchInterval === "function" ? refetchInterval({ state: next }) : refetchInterval;
+      if (delay) timer = setTimeout(load, delay);
+    };
     void load();
-    const timer = refetchInterval ? setInterval(load, refetchInterval) : null;
     return () => {
       active = false;
-      clearInterval(timer);
+      clearTimeout(timer);
     };
   }, [JSON.stringify(queryKey), enabled]);
   return state;

@@ -12,12 +12,14 @@ for (const name of ['home', 'hermes', 'tmp', 'cache', 'runtime'])
 const env = {
   PATH: process.env.PATH ?? '/usr/bin:/bin',
   LANG: process.env.LANG ?? 'C.UTF-8',
-  HWS_QUALIFICATION_HOME: process.env.HWS_QUALIFICATION_HOME,
+  HWS_QUALIFICATION_HOME: process.env.HWS_QUALIFICATION_HOME ?? fixture,
+  ISSUE4_OUT: fixture,
   HERMES_HOME: path.join(fixture, 'hermes'),
   TMPDIR: path.join(fixture, 'tmp'),
   XDG_CACHE_HOME: path.join(fixture, 'cache'),
   HERMES_RUNTIME_DIR: path.join(fixture, 'runtime'),
   PYTHONDONTWRITEBYTECODE: '1',
+  PYTHONPATH: [root, path.join(root, 'tests')].join(path.delimiter),
 };
 function run(args) {
   const result = spawnSync(process.execPath, args, {
@@ -36,10 +38,11 @@ function run(args) {
 run(['tests/ui/build-runtime.mjs']);
 run(['tests/ui/build-native-runtime.mjs']);
 let total = 0;
-// Lane A is the real-browser/performance harness, launched through its own
-// isolated Python wrapper; it is not a Node DOM test-file invocation.
+// Real-browser harnesses require their own isolated hosts and are run separately
+// from these Node component suites, including Lane A's performance harness.
 const suites = readdirSync(path.join(root, 'tests/ui'))
-  .filter(n => n.endsWith('.test.mjs') && n !== 'lane-a.test.mjs').sort();
+  .filter(n => n.endsWith('.test.mjs') && n !== 'lane-a.test.mjs'
+    && !n.endsWith('-browser.test.mjs')).sort();
 if (!suites.length) throw new Error('No UI suites found');
 for (const suite of suites) {
   const output = run(['--test', '--test-isolation=none', '--test-reporter=tap',

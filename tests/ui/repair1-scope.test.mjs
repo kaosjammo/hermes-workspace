@@ -6,6 +6,7 @@ const require = createRequire(
 );
 const { JSDOM } = require("jsdom");
 const dom = new JSDOM('<div id="app"></div>', {
+  pretendToBeVisual: true,
   url: "https://workspace.test",
 });
 for (const key of [
@@ -176,7 +177,7 @@ test("inert comment target refs require fresh unchecked per-run approval; defaul
   );
   assert.ok(target);
   assert.equal(target.checked, false);
-  await click("Address selected scope");
+  await click("Address current page");
   assert.deepEqual(preparations[0].explicit_item_ids, []);
   assert.deepEqual(consumptions.map((body) => body.run_id), ["run1"]);
   assert.equal(Boolean(document.querySelector('[role="dialog"]')), false);

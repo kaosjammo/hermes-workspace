@@ -165,7 +165,7 @@ export function CommentBubbles({ geometry, header, footer, renderGroup }) {
     };
     const schedule = () => { caf(frame.current); frame.current = raf(measure); };
     const observer = globalThis.ResizeObserver ? new ResizeObserver(schedule) : null;
-    observer?.observe(page); observer?.observe(headerRef.current); observer?.observe(footerRef.current);
+    observer?.observe(page); if (headerRef.current) observer?.observe(headerRef.current); observer?.observe(footerRef.current);
     if (root.closest(".ws-work")) observer?.observe(root.closest(".ws-work"));
     for (const node of groupRefs.current.values()) observer?.observe(node);
     window.addEventListener("resize",schedule);
@@ -190,7 +190,7 @@ export function CommentBubbles({ geometry, header, footer, renderGroup }) {
   }, []);
   // This spacer belongs to the layout, outside the editable document.
   return h("aside", { ref: aside, className: `ws-comments ws-bubbles${layout.inline ? " ws-bubbles-inline" : ""}`, "aria-label": "Comments and Hermes thread", style: { minHeight: `${layout.height}px` } },
-    h("div", { ref: headerRef, className: "ws-bubble-header", style: { top: layout.header } }, header),
+    header && h("div", { ref: headerRef, className: "ws-bubble-header", style: { top: layout.header } }, header),
     groups.map(group => {
       const key = groupKey(group), position = layout.groups.find(g => g.key === key);
       return h("div", { key, ref: node => { if (node) groupRefs.current.set(key,node); else groupRefs.current.delete(key); },

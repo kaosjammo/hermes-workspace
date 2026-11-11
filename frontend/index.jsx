@@ -17,7 +17,7 @@ export default {
       ctx.register({
         id: "nav",
         area: SIDEBAR_NAV_AREA,
-        data: { path: "/workspace", label: "Workspace", codicon: "notebook" },
+        data: { path: "/workspace", label: "Workspace", codicon: "book" },
       });
     });
   },
