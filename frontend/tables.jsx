@@ -88,6 +88,11 @@ export function Property({ column, value, onChange, state, disabled: authorityDi
     type: column.type === "number" ? "number" : column.type === "date" ? "date" : "text", value: draft ?? "",
     onChange: event => change(event.target.value), onBlur: () => { if (!recovery.current && !error) void flush().catch(() => {}); },
     onKeyDown: event => { if (isSubmitEnter(event)) event.currentTarget.blur(); } });
+  if (compact && column.type === "text") control = h("div", { className: "ws-db-text-cell" },
+    control,
+    draft && h(ContextTip, { label: h("span", { className: "ws-db-full-text" }, draft) }, h(Action, { variant: "ghost", size: "icon-xs", className: "ws-db-text-read",
+      "aria-label": `Read full ${column.name}`, onMouseDown: event => event.preventDefault() },
+      h(Codicon, { name: "info", className: "ws-db-text-read-hint", "aria-hidden": true }))));
   return h("div", { ref: container, className: "ws-property" }, control,
     (status || error) && h("div", { id: errorId, className: "ws-property-status", role: error ? "alert" : "status" }, error ? `Property not saved. ${error}` : status,
       (error || recovery.current) && h("div", { className: "ws-actions" },
@@ -155,29 +160,51 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(null);
   const empty = () => ({ name: "", type: "text", options: "", target: "", formula: "" });
   const [values, setValues] = useState(empty), gate = useRef(false), alive = useRef(true), composing = useRef(false);
-  const input = useRef(null), form = useRef(null), errorId = useId();
-  const closePending = useRef(false), reopenAfterClose = useRef(false);
+  const input = useRef(null), form = useRef(null), errorId = useId(), recoveryId = useId();
+  const [recoveryNotice, setRecoveryNotice] = useState("");
+  const recoveryFrame = useRef(null), recovering = useRef(false);
+  const cancelRecovery = () => { cancelAnimationFrame(recoveryFrame.current); recoveryFrame.current = null; recovering.current = false; };
+  const recover = () => {
+    cancelRecovery(); recovering.current = true;
+    setRecoveryNotice(latest.current.busy
+      ? "Wait for this property to finish saving before switching views or leaving this database."
+      : "Finish or cancel this property before switching views or leaving this database.");
+    // Select and Popover restore their openers after dismissal. Reopen only
+    // after that native close/focus turn, then focus the committed form.
+    recoveryFrame.current = requestAnimationFrame(() => {
+      recoveryFrame.current = requestAnimationFrame(() => {
+        if (!alive.current) return;
+        setOpen(true);
+        recoveryFrame.current = requestAnimationFrame(() => {
+          if (alive.current) input.current?.focus({ preventScroll: true });
+          recovering.current = false; recoveryFrame.current = null;
+        });
+      });
+    });
+  };
   const latest = useRef(null); latest.current = { item, state, command, locked, values, error, busy };
-  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; cancelRecovery(); }; }, []);
   useEffect(() => registerFlush?.(`creation:property:${item.id}`, async () => {
     const value = latest.current;
     const dirty = Object.entries(value.values).some(([key, text]) => key === "type" ? text !== "text" : Boolean(text));
-    if (value.busy || value.error || dirty) throw new UnsavedEditError("Finish or cancel the new property before leaving this database.", () => { if (closePending.current) reopenAfterClose.current = true; else { setOpen(true); requestAnimationFrame(() => input.current?.focus()); } });
+    if (value.busy || value.error || dirty) throw new UnsavedEditError("Finish or cancel the new property before leaving this database.", recover);
   }), [registerFlush, item.id]);
-  const fieldProps = field => ({ "aria-invalid": error?.field === field, "aria-describedby": error?.field === field ? errorId : undefined });
+  const describedBy = field => [recoveryNotice && recoveryId, error && error.field === field && errorId].filter(Boolean).join(" ") || undefined;
+  const fieldProps = field => ({ "aria-invalid": error?.field === field, "aria-describedby": describedBy(field) });
   const invalid = (field, message) => Object.assign(Error(message), { propertyField: field });
   useEffect(() => {
     if (error?.field && !busy && (document.activeElement === document.body || form.current?.contains(document.activeElement)))
       form.current?.querySelector('[aria-invalid="true"]')?.focus();
   }, [error, busy]);
   const change = name => event => { setValues(old => ({ ...old, [name]: event.target.value })); setError(null); };
-  const cancel = () => { if (gate.current) return; setOpen(false); setValues(empty()); setError(null); };
-  return h(ContextPopover, { open, onOpenChange: next => { if (!gate.current) { if (!next) closePending.current = true; setOpen(next); } },
-    onCloseAutoFocus: event => { closePending.current = false; if (reopenAfterClose.current) { reopenAfterClose.current = false; event.preventDefault(); setOpen(true); } },
-    triggerTip: "Add property", trigger: h(Action, { variant: "ghost", size: "icon-sm", disabled: locked || busy, "aria-label": "Add property", className: "ws-db-add-property" }, h(Codicon, { name: "add", "aria-hidden": true })),
+  const cancel = () => { if (gate.current) return; cancelRecovery(); setRecoveryNotice(""); setOpen(false); setValues(empty()); setError(null); };
+  return h(ContextPopover, { open, onOpenChange: next => { if (!gate.current && (next || !recovering.current)) setOpen(next); },
+    onCloseAutoFocus: event => { if (recovering.current) event.preventDefault(); },
+    trigger: h(Action, { variant: "ghost", disabled: locked || busy, "aria-label": "Add property", className: "ws-db-add-property" }, h(Codicon, { name: "add", "aria-hidden": true }), "Add property"),
     className: "ws-db-property-popover", align: "end", side: "bottom",
+    onEscapeKeyDown: event => { if (gate.current || composing.current || event.isComposing || event.keyCode === 229) event.preventDefault(); },
     onOpenAutoFocus: event => { event.preventDefault(); requestAnimationFrame(() => input.current?.focus({ preventScroll: true })); } },
-      h("form", { ref: form, "aria-label": "New property", "aria-busy": busy, "aria-describedby": error && !error.field ? errorId : undefined,
+      h("form", { ref: form, "aria-label": "New property", "aria-busy": busy, "aria-describedby": describedBy(null),
         onCompositionStart: () => { composing.current = true; }, onCompositionEnd: () => { composing.current = false; },
         onKeyDown: event => { if (event.key === "Enter" && (composing.current || !isSubmitEnter(event) || event.repeat || event.ctrlKey || event.metaKey || event.altKey)) event.preventDefault(); },
         onSubmit: async event => {
@@ -191,7 +218,7 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
             if (column.type === "formula") { if (!values.formula.trim()) throw invalid("formula", "Enter a formula expression."); column.formula = values.formula; }
             const id = latest.current.item.id;
             await latest.current.command("set_columns", current => ({ id, columns: [...current.items.find(i => i.id === id).columns, column] }));
-            if (alive.current) { setOpen(false); setValues(empty()); }
+            if (alive.current) { cancelRecovery(); setRecoveryNotice(""); setOpen(false); setValues(empty()); }
           } catch (err) {
             if (alive.current) {
               const message = errorMessage(err);
@@ -199,13 +226,15 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
               // unknown/transport/revision/authority failures stay form-level.
               const formulaValidation = /^(?:Formula (?:must contain|nesting limit|node limit|dependency)|Invalid formula syntax$|Unsupported formula operation$|Unknown formula column|Private names are forbidden$|Wrong number of function arguments$|col requires a literal column name or id$)/.test(message);
               const field = err.propertyField ?? (values.type === "formula" && formulaValidation ? "formula" : /^Select options|^select option must/.test(message) ? "options" : message === "Relation target must be a Workspace database" ? "target" : /^(?:Column IDs and names must be unique|Column names\/IDs must be unambiguous|column name must)/.test(message) ? "name" : message === "Unsupported property type" ? "type" : null);
-              setError({ field, message });
+              const duplicateName = message === "Column IDs and names must be unique" || message === "Column names/IDs must be unambiguous";
+              setError({ field, message: duplicateName ? "A property with this name already exists. Choose another name." : message });
             }
           }
           finally { gate.current = false; if (alive.current) setBusy(false); }
         } },
         h("h3", null, "New property"),
         h("div", { className: "ws-db-property-fields" },
+        recoveryNotice && h("p", { id: recoveryId, role: "alert", className: "ws-muted" }, recoveryNotice),
         h(Field, { ref: input, label: "Property name", value: values.name, required: true, maxLength: 200, disabled: locked || busy, ...fieldProps("name"), onChange: change("name") }),
         h(Choice, { label: "Property type", triggerProps: fieldProps("type"), value: values.type, options: propertyTypes, disabled: locked || busy, onChange: value => { setValues(old => ({ ...old, type: value })); setError(null); } }),
         values.type === "select" && h(Field, { label: "Select options (comma separated)", ...fieldProps("options"), value: values.options, disabled: locked || busy, placeholder: "To do, In progress, Done", onChange: change("options") }),
@@ -222,6 +251,7 @@ function PropertyCreator({ item, state, command, locked, registerFlush }) {
 
 function NewRecordCreator({ draft, locked, onDraft, onCreate, onCancel, label = "New record", groupKey, onFocus }) {
   const form = useRef(null), input = useRef(null), composing = useRef(false);
+  const titleId = useId(), messageId = useId();
   useEffect(() => {
     if (draft.open && !draft.busy && (document.activeElement === document.body || form.current?.contains(document.activeElement))) {
       form.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
@@ -236,12 +266,13 @@ function NewRecordCreator({ draft, locked, onDraft, onCreate, onCancel, label = 
       if (event.key === "Escape" && !draft.busy && !composing.current && !event.isComposing && !event.nativeEvent?.isComposing) { event.preventDefault(); event.stopPropagation(); onCancel(); }
       if (event.key === "Enter" && (composing.current || !isSubmitEnter(event) || event.repeat || event.ctrlKey || event.metaKey || event.altKey)) event.preventDefault();
     }, onSubmit: event => { event.preventDefault(); if (!composing.current) void onCreate(); } },
-    h(Input, { ref: input, "aria-label": "New record title", placeholder: "Record name…", value: draft.title, maxLength: 500,
+    h("label", { className: "ws-db-draft-label", htmlFor: titleId }, "New record"),
+    h(Input, { ref: input, id: titleId, "aria-label": "New record title", "aria-describedby": draft.error || draft.status ? messageId : undefined, placeholder: "Enter record title…", value: draft.title, maxLength: 500,
       required: true, disabled: locked || draft.busy, "aria-invalid": Boolean(draft.error),
       onChange: event => onDraft({ ...draft, title: event.target.value, error: "", status: "" }) }),
     h("div", { className: "ws-db-form-actions" }, h(Action, { type: "submit", disabled: locked || draft.busy || !draft.title.trim() }, draft.busy ? "Creating…" : "Create record"),
       h(Action, { "aria-label": "Cancel new record", disabled: draft.busy, onClick: onCancel }, "Cancel")),
-    (draft.error || draft.status) && h("p", { role: draft.error ? "alert" : "status", className: draft.error ? "ws-field-error" : "ws-muted" }, draft.error || draft.status));
+    (draft.error || draft.status) && h("p", { id: messageId, role: draft.error ? "alert" : "status", className: draft.error ? "ws-field-error" : "ws-muted" }, draft.error || draft.status));
 }
 
 export function Database({ item, state, command, onOpen, onError, locked, confirm, propertyBuffer, registerPropertyFlush }) {
@@ -251,6 +282,7 @@ export function Database({ item, state, command, onOpen, onError, locked, confir
   const focusCreation = () => { setActiveRecordId(null); setCreationFocused(true); };
   const [rowDraft, setRowDraft] = useState({ open: false, title: "", error: "", status: "", busy: false });
   const creationGuards = useRef(new Map());
+  const viewFocusActive = useRef(false), viewRecovery = useRef(null);
   const registerCreationFlush = useCallback((id, fn) => {
     creationGuards.current.set(id, fn);
     const unregister = registerPropertyFlush?.(id, fn);
@@ -258,7 +290,15 @@ export function Database({ item, state, command, onOpen, onError, locked, confir
   }, [registerPropertyFlush]);
   const changeView = async next => {
     try { for (const flush of creationGuards.current.values()) await flush(); setView(next); }
-    catch (error) { if (error instanceof UnsavedEditError) error.focus(); onError?.(error); }
+    catch (error) {
+      if (error instanceof UnsavedEditError) {
+        // A pointer selection can keep its native FocusScope through the exit
+        // animation. Let that scope release before opening the retained draft.
+        if (viewFocusActive.current) viewRecovery.current = error;
+        else error.focus();
+      }
+      onError?.(error);
+    }
   };
   const rowGate = useRef(false), alive = useRef(true), section = useRef(null), latest = useRef(null);
   latest.current = { command, locked, item, rowDraft };
@@ -319,7 +359,13 @@ export function Database({ item, state, command, onOpen, onError, locked, confir
     h("style", null, databaseGridStyles),
     h("div", { className: "ws-database-tools" },
       h(SearchField, { value: filter, "aria-label": "Filter records", placeholder: "Filter records…", containerClassName: "ws-db-filter opacity-100", onChange: setFilter, onClear: () => setFilter("") }),
-      h(Choice, { label: "View", showLabel: false, value: view, disabled: rowDraft.open, options: [["table", "Table"], ["board", "Board"]], onChange: changeView }),
+      h(Choice, { label: "View", showLabel: false, value: view, disabled: rowDraft.open, options: [["table", "Table"], ["board", "Board"]], onChange: changeView,
+        onOpenChange: next => { if (next) viewFocusActive.current = true; },
+        onCloseAutoFocus: event => {
+          viewFocusActive.current = false;
+          const recovery = viewRecovery.current; viewRecovery.current = null;
+          if (recovery) { event.preventDefault(); recovery.focus(); }
+        } }),
       h(ContextPopover, { open: sortOpen, onOpenChange: setSortOpen, className: "ws-db-sort-popover", align: "end", returnFocusOnEscape: true,
         trigger: h(Action, { variant: "ghost", "aria-label": sort ? `Sort: ${sortLabel}, ${direction === "asc" ? "ascending" : "descending"}` : "Sort" }, h(Codicon, { name: sort ? direction === "asc" ? "arrow-up" : "arrow-down" : "sort-precedence", "aria-hidden": true }), h("span", { className: "ws-db-sort-label" }, sort ? sortLabel : "Sort")) },
         h(Choice, { label: "Sort", value: sort, options: [["", "No sorting"], ["title", "Record title"], ...columns.map(c => [c.id, c.name])], onChange: setSort }),
@@ -332,7 +378,7 @@ export function Database({ item, state, command, onOpen, onError, locked, confir
         h(ContextTip, { label: activeRecord.title }, h(Action, { variant: "link", onClick: () => onOpen(activeRecord.id) }, h("span", { className: "ws-db-record-label" }, activeRecord.title))))),
     view === "board" ? h("div", { className: "ws-db-board-view" },
       h("div", { className: "ws-db-board-tools" }, groupColumn && h(Choice, { label: "Group board by", value: groupColumn.id, disabled: rowDraft.open, options: selectColumns.map(c => [c.id, c.name]), onChange: setGroup }),
-        h("span", null, "Properties"), h(PropertyCreator, { item, state, command, locked: schemaLocked, registerFlush: registerCreationFlush })),
+        h(PropertyCreator, { item, state, command, locked: schemaLocked, registerFlush: registerCreationFlush })),
       !groupColumn ? h("p", { className: "ws-db-empty" }, "Add a single-select property to group records on a board.") :
         h("div", { className: "ws-board", role: "region", "aria-label": "Database board, scroll for more groups", tabIndex: 0 },
           [...boardGroups(rows, groupColumn)].map(([value, groupRows]) => h("section", { className: "ws-board-group", key: JSON.stringify(value), role: "region", "aria-label": `Board group: ${groupName(value)}` },

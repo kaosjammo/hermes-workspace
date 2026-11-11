@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from dashboard.plugin_api import create_router
 
 owner = Path(os.environ['UI_TEST_OWNER']).resolve()
-if not owner.is_relative_to(ROOT / '.local' / 'frontend'):
+if not owner.is_relative_to((ROOT / '.local' / 'frontend').resolve()):
     raise RuntimeError('Fixture owner must be UI-lane local synthetic state')
 app = FastAPI()
 app.include_router(create_router(lambda: owner, authorize=lambda: None))

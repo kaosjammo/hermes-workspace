@@ -2,6 +2,16 @@ import { useId, useLayoutEffect, useRef, useState } from "react";
 import { h, Action, ActionMenu } from "./ui.jsx";
 import { locateAnchor, elementScale } from "./editor.mjs";
 
+/** Display ordinals are derived before filtering, never persisted as identity.
+ * Keep a supplied ordinal when a consumer receives an already filtered view. */
+export function numberComments(comments) {
+  return comments.map((comment, index) => ({
+    ...comment,
+    passageNumber: Number.isSafeInteger(comment.passageNumber) && comment.passageNumber > 0
+      ? comment.passageNumber : index + 1,
+  }));
+}
+
 /** Translate textContent offsets to live ranges without changing editor nodes. */
 export function anchorRange(root, anchor) {
   const location = locateAnchor(root.textContent, anchor);
@@ -46,7 +56,7 @@ export function CommentHighlights({
     [openGroup, setOpenGroup] = useState(null);
   const selectedDiscussion = useRef(false);
   const signature = JSON.stringify(
-    comments.map((c) => [c.id, c.anchor, c.resolved]),
+    comments.map((c) => [c.id, c.anchor, c.resolved, c.passageNumber, c.text]),
   );
   useLayoutEffect(() => {
     const root = editorRef.current;
@@ -65,11 +75,11 @@ export function CommentHighlights({
       const base = root.parentElement.getBoundingClientRect();
       const layoutRoot = root.closest(".ws-layout") ?? root.parentElement;
       const layout = layoutRoot.getBoundingClientRect(), scale = elementScale(layoutRoot);
-      current = comments
+      current = numberComments(comments)
         .filter((c) => c.anchor)
-        .map((c, index) => ({
+        .map((c) => ({
           comment: c,
-          number: index + 1,
+          number: c.passageNumber,
           range: anchorRange(root, c.anchor),
         }))
         .filter((c) => c.range);

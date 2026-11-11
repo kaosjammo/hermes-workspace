@@ -1,0 +1,30 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
+const out=process.env.ISSUE4_OUT, root=process.cwd();
+if(!out||!process.env.TMPDIR?.startsWith(out))throw Error('Task-owned ISSUE4_OUT/TMPDIR required');
+const host=process.env.ISSUE4_HOST;
+if(!host)throw Error('Read-only ISSUE4_HOST desktop source required');
+const require=createRequire(root+'/.local/toolchain/package.json'),hostRequire=createRequire(host+'/package.json');
+const sdk=out+'/build/native-controls.jsx';
+const exports={button:['Button'],input:['Input'],textarea:['Textarea'],checkbox:['Checkbox'],select:['Select','SelectTrigger','SelectValue','SelectContent','SelectItem'],popover:['Popover','PopoverTrigger','PopoverContent'],codicon:['Codicon'],'dropdown-menu':['DropdownMenu','DropdownMenuTrigger','DropdownMenuContent','DropdownMenuItem'],dialog:['Dialog','DialogContent','DialogHeader','DialogTitle','DialogDescription','DialogFooter'],tooltip:['Tip'],'search-field':['SearchField']};
+await fs.writeFile(sdk,Object.entries(exports).map(([file,names])=>`export { ${names.join(', ')} } from ${JSON.stringify(host+'/src/components/ui/'+file+'.tsx')};`).join('\n')+'\n'+`export { nousTheme as fixtureTheme } from ${JSON.stringify(host+'/src/themes/presets.ts')};\n`);
+const result=await require('esbuild').build({absWorkingDir:root,entryPoints:['tests/ui/issue-4-browser.jsx'],bundle:true,format:'esm',platform:'browser',target:'es2022',jsx:'automatic',outfile:out+'/build/app.js',alias:{'@hermes/plugin-sdk':sdk,'@':host+'/src',react:path.dirname(require.resolve('react/package.json')),'react-dom':path.dirname(require.resolve('react-dom/package.json'))},nodePaths:[host+'/node_modules',root+'/.local/toolchain/node_modules'],metafile:true,loader:{'.woff2':'file','.ttf':'file'},define:{'process.env.NODE_ENV':'"development"'}});
+const candidates=new Set();
+for(const file of Object.keys(result.metafile.inputs)) {
+  if(!/\.[cm]?[jt]sx?$/.test(file))continue;
+  const text=await fs.readFile(path.resolve(root,file),'utf8');
+  for(const m of text.matchAll(/["'`]([^"'`\n]+)["'`]/g))for(const c of m[1].split(/\s+/))candidates.add(c);
+}
+const {compile}=hostRequire('@tailwindcss/node');
+let source=await fs.readFile(host+'/src/styles.css','utf8');
+const compiler=await compile(source,{base:host+'/src',onDependency:()=>{}});
+let css=compiler.build([...candidates]);
+css=css.replaceAll(/url\([^)]*codicon\.ttf[^)]*\)/g,'url(/codicon.ttf)');
+await fs.writeFile(out+'/build/host.css',css);
+await fs.copyFile(hostRequire.resolve('@vscode/codicons/dist/codicon.ttf'),out+'/build/codicon.ttf');
+await fs.cp(host+'/src/fonts',out+'/build/fonts',{recursive:true});
+await fs.writeFile(out+'/build/index.html',`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Issue 4 synthetic fixture</title><link rel="stylesheet" href="/host.css"><link rel="stylesheet" href="/app.css"><style>body{margin:0;background:var(--ui-bg-editor);color:var(--ui-text-primary);font:13px system-ui}.fixture-tools{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:12px;border-bottom:1px solid var(--ui-stroke-secondary)}.fixture-tools span{font-size:11px;color:var(--ui-text-secondary)}.fixture-tools select{max-width:200px}.ws-root{height:calc(100vh - 70px);padding:16px}.ws-work{width:100%;padding:12px!important}h1{font-size:18px;margin:0 0 16px;font-weight:600}</style></head><body><div id="app"></div><script type="module" src="/app.js"></script></body></html>`);
+await fs.writeFile(out+'/build/build.json',JSON.stringify({scope:'Real host component exports and compiled host styles; synthetic transport adapter and dataset shell, no native host app/agent execution.',root,host,inputs:result.metafile.inputs,bundleSha256:createHash('sha256').update(await fs.readFile(out+'/build/app.js')).digest('hex')},null,2));
+console.log('Built issue-4 real-control fixture');require('esbuild').stop();

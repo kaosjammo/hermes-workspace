@@ -2,8 +2,12 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { Checkbox, Textarea, Popover, PopoverTrigger, PopoverContent, Tip } from "@hermes/plugin-sdk";
 import { h, Action, Choice, Codicon, UnsavedEditError, FormDialog, isSubmitEnter } from "./ui.jsx";
 import { CommentBubbles } from "./comment-bubbles.jsx";
+import { numberComments, anchorRange } from "./comment-highlights.jsx";
 import { ThreadPicker } from "./thread-picker.jsx";
 import { commentStyles } from "./comment-styles.mjs";
+import { CommentActions } from "./comment-actions.jsx";
+import { AuthorHeader } from "./identity.jsx";
+import { authorName } from "./identity.mjs";
 import { itemLabel } from "./item-labels.mjs";
 import { locateAnchor, visibleComments, commentAnchor } from "./editor.mjs";
 function Comment({
@@ -22,10 +26,13 @@ function Comment({
   onResolutionFinished = () => {},
   onRevertSection = () => {},
   showContext = true,
+  originalAnchor = comment.anchor,
   onDelete = () => {},
+  onReplyPending = () => true,
 }) {
   const [reply, setReply] = useState(retainedReply),
     [busy, setBusy] = useState(false), [replyOpen, setReplyOpen] = useState(Boolean(retainedReply));
+  const replying = useRef(false);
   const location = locateAnchor(text, comment.anchor);
   return h(
     "article",
@@ -43,63 +50,37 @@ function Comment({
       h(
         "strong",
         null,
-        passageNumber ? `You · Comment ${passageNumber}` : "You",
+        h(AuthorHeader, {entry:comment}),
+        passageNumber ? ` · Comment ${passageNumber}` : "",
       ),
       h(
         "span",
         { className: "ws-muted" },
-        comment.resolved ? "Resolved" : "Open discussion",
+        comment.resolved ? "Resolved" : "Unresolved",
       ),
     ),
-    h(
-      "label",
-      { className: "ws-check" },
-      h(Checkbox, {
-        className: "ws-checkbox",
-        "aria-label": `Resolve: ${comment.text}`,
-        checked: comment.resolved,
-        disabled: locked || busy,
-        onCheckedChange: (value) => {
-          const card = document.getElementById(`ws-discussion-${comment.id}`);
-          const control = document.activeElement;
-          const ownedFocus = card?.contains(control);
-          setBusy(true);
-          void command("resolve_comment", {
-            id: comment.id,
-            resolved: value === true,
-          })
-            .catch(onError)
-            .finally(() => {
-              setBusy(false);
-              if (ownedFocus) onResolutionFinished({ id: comment.id, card, control });
-            });
-        },
-      }),
-      comment.resolved ? "Resolved — uncheck to reopen" : "Resolve comment",
-    ),
-    h(Action, { variant: "text", style: { color: "var(--ui-text-secondary)" },
-      disabled: locked || busy, onClick: event => onDelete(comment, event.currentTarget) }, "Delete comment"),
     comment.anchor
       ? h(
           "div",
           { className: "ws-anchor" },
-          location.status === "attached"
-            ? `“${comment.anchor.quote}”`
-            : `Detached selection: “${comment.anchor.quote}”`,
           location.status === "attached" &&
             h(
               Action,
               {
-                variant: "text", style: { color: "var(--ui-text-secondary)" },
+                className: "ws-comment-passage", variant: "text", style: { color: "var(--ui-text-secondary)" },
+                "aria-label": `Show passage for comment ${passageNumber}`,
                 onClick: () => onPassage(comment.id, comment.anchor),
               },
-              "Show passage",
+              `Show passage ${passageNumber}`,
             ),
           location.status === "detached" &&
             h(
-              "p",
+              "div",
               null,
-              "The original text is missing or ambiguous. This comment has not been attached elsewhere.",
+              h("p", { role: "status" }, "The original text is missing or ambiguous. This comment has not been attached elsewhere."),
+              originalAnchor?.quote && h("details", { className: "ws-anchor-recovery" },
+                h("summary", null, "Show original excerpt"),
+                h("blockquote", null, originalAnchor.quote)),
             ),
         )
       : h("span", { className: "ws-muted" }, state.items.find(item => item.id === comment.item_id)?.kind === "database" ? "Whole database" : "Whole page"),
@@ -121,14 +102,13 @@ function Comment({
           ),
         ),
       ),
-    comment.section_change && h("div", { className: "ws-section-change" },
-      comment.section_change.status === "available" ? h(Action, { disabled: locked || busy, onClick: event => onRevertSection(comment, event.currentTarget) }, "Revert section") :
-      h("p", { className: "ws-muted", role: "status" }, comment.section_change.status === "reverted" ? "This section was reverted." : `Section revert unavailable. ${comment.section_change.reason ?? "The original passage cannot be mapped safely."}`)),
     comment.replies.map((reply) =>
       h(
         "div",
-        { className: "ws-reply", key: reply.id },
-        h("strong", null, reply.author === "agent" ? "Hermes" : "You"),
+        { className: "ws-reply", key: reply.id,
+          // Saved origin is display authority; names and literal content are not.
+          "data-origin": reply.author === "user" ? "human" : reply.author === "agent" ? "agent" : "unknown" },
+        h(AuthorHeader, {entry:reply}),
         h("p", null, reply.text),
       ),
     ),
@@ -141,7 +121,9 @@ function Comment({
         {
           onSubmit: async (e) => {
             e.preventDefault();
-            if (locked || busy || !reply.trim()) return;
+            if (locked || busy || replying.current || !reply.trim()) return;
+            if (!onReplyPending(true)) return;
+            replying.current = true;
             setBusy(true);
             try {
               await command("reply_comment", { id: comment.id, text: reply });
@@ -150,6 +132,8 @@ function Comment({
             } catch (error) {
               onError(error);
             } finally {
+              replying.current = false;
+              onReplyPending(false);
               setBusy(false);
             }
           },
@@ -198,6 +182,8 @@ export function Comments({
   onRevertSection = () => {},
 }) {
   const retained = useRef(draftBuffer?.read()?.draft ?? {});
+  const surfaces = useRef(null), opened = useRef(new Set()), pointerStart = useRef(null);
+  if (activeComment) opened.current.add(activeComment);
   const composerId = useId();
   const resolvedControl = useRef(null);
   const resolvedAction = useRef(null), composeFromOptions = useRef(false);
@@ -205,16 +191,34 @@ export function Comments({
   const [deleting, setDeleting] = useState(null);
   const deletedIds = useRef(new Set());
   const mutationInFlight = useRef(false), composing = useRef(false);
+  const actionInFlight = useRef(new Set());
+  const [pendingActions, setPendingActions] = useState(new Set());
+  const commentAction = async (comment, work) => {
+    if (locked || busy || mutationInFlight.current || actionInFlight.current.has(comment.id)) return;
+    actionInFlight.current.add(comment.id);
+    setPendingActions(new Set(actionInFlight.current));
+    try { await work(); }
+    catch (error) { onError(error); }
+    finally {
+      actionInFlight.current.delete(comment.id);
+      setPendingActions(new Set(actionInFlight.current));
+    }
+  };
   const revealFrame = useRef(null);
   const saveViewport = useRef(null);
   useEffect(() => () => { window.cancelAnimationFrame?.(revealFrame.current); saveViewport.current?.stop(); }, []);
-  const retainSaveViewport = () => {
+  const retainSaveViewport = (pane = composer.current?.closest(".ws-work"), range = null) => {
     saveViewport.current?.stop();
-    const pane = composer.current?.closest(".ws-work");
     if (!pane) return;
     const view = pane.ownerDocument.defaultView, doc = pane.ownerDocument;
-    const saved = { pane, top: pane.scrollTop, left: pane.scrollLeft, frame: null };
-    saved.restore = () => { if (saveViewport.current === saved && pane.isConnected) { pane.scrollTop = saved.top; pane.scrollLeft = saved.left; } };
+    const bounds = range?.getBoundingClientRect?.();
+    const saved = { pane, top: pane.scrollTop, left: pane.scrollLeft, range, rangeTop: bounds?.height ? bounds.top : null, frame: null };
+    saved.restore = () => {
+      if (saveViewport.current !== saved || !pane.isConnected) return;
+      pane.scrollTop = saved.top; pane.scrollLeft = saved.left;
+      const next = saved.range?.startContainer.isConnected && saved.range.getBoundingClientRect?.();
+      if (saved.rangeTop !== null && next?.height) pane.scrollTop += next.top-saved.rangeTop;
+    };
     saved.stop = () => {
       view.cancelAnimationFrame(saved.frame);
       for (const type of ["pointerdown", "wheel", "touchstart", "keydown"]) doc.removeEventListener(type,saved.stop,true);
@@ -313,7 +317,9 @@ export function Comments({
   // repeated add/delete cycles must not grow a per-page tombstone cache.
   const currentCommentIds = new Set(state.comments.map(c => c.id));
   for (const id of deletedIds.current) if (!currentCommentIds.has(id)) deletedIds.current.delete(id);
-  const all = state.comments.filter((c) => c.item_id === item.id && !deletedIds.current.has(c.id)).map(c => ({ ...c, anchor: commentAnchor(c) }));
+  for (const id of opened.current) if (!currentCommentIds.has(id)) opened.current.delete(id);
+  const all = numberComments(state.comments.filter((c) => c.item_id === item.id && !deletedIds.current.has(c.id)))
+    .map(c => ({ ...c, originalAnchor: c.anchor, anchor: commentAnchor(c) }));
   const [pageComposerOpen, setPageComposerOpen] = useState(Boolean(discussion.current.text || discussion.current.targets.length));
   useEffect(() => {
     const reply = all.find(c => discussion.current.replies[c.id]);
@@ -326,7 +332,7 @@ export function Comments({
     const { id, card, control } = resolutionFocus;
     if (document.activeElement !== document.body && !card?.contains(document.activeElement)) return;
     const visible = visibleComments(all, showResolved), remaining = new Set(visible.map(c => c.id));
-    const current = document.getElementById(`ws-discussion-${id}`);
+    const current = remaining.has(id) && (document.getElementById(`ws-discussion-${id}`) ?? document.getElementById(`ws-bubble-${id}`));
     if (current) {
       (control?.isConnected && !control.disabled ? control : current).focus();
       return;
@@ -428,29 +434,128 @@ export function Comments({
   );
   const visible = visibleComments(all, showResolved);
   const attached = new Set(geometry.map(p => p.id));
+  useEffect(() => {
+    if (!activeComment) return;
+    const doc = surfaces.current?.ownerDocument;
+    if (!doc) return;
+    let pointer = false, tabFocus = false, tabFrame = null;
+    const popup = '[role="dialog"],[role="menu"],[role="listbox"],[data-slot="popover-content"],[data-slot="dropdown-menu-content"]';
+    const protectedTarget = target => target?.closest?.('.ws-bubble') === doc.getElementById(`ws-bubble-${activeComment}`)?.closest('.ws-bubble') ||
+      target?.closest?.('.ws-passage-controls') || target?.closest?.(popup) || doc.querySelector(popup);
+    const passageHit = event => {
+      const editor = event.target?.closest?.('.ws-editor');
+      if (!editor || event.target.closest('a,input') || !doc.getSelection()?.isCollapsed) return false;
+      return geometry.some(position => {
+        const range = anchorRange(editor, position.anchor);
+        return [...(range?.getClientRects?.() ?? [])].some(r =>
+          event.clientX >= r.left && event.clientX <= r.right && event.clientY >= r.top && event.clientY <= r.bottom);
+      });
+    };
+    const collapse = target => {
+      // A run lock forbids mutations, not changing discussion visibility.
+      // Retain the actual in-flight/consent lifecycles before collapsing.
+      if (deleting || busy || mutationInFlight.current || actionInFlight.current.size || protectedTarget(target)) return;
+      const pane = doc.getElementById(`ws-bubble-${activeComment}`)?.closest('.ws-work');
+      const selection = doc.getSelection(), range = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+      retainSaveViewport(pane, pane?.contains(range?.startContainer) ? range : null);
+      setActiveComment(null);
+    };
+    const down = () => { pointer = true; tabFocus = false; };
+    const click = event => {
+      pointer = false;
+      if (!event.defaultPrevented && !event.target?.closest?.('.ws-bubble') && !passageHit(event)) collapse(event.target);
+    };
+    const key = event => {
+      tabFocus = event.key === 'Tab' && !event.isComposing;
+      if (tabFocus) {
+        pointer = false;
+        doc.defaultView.cancelAnimationFrame(tabFrame);
+        tabFrame = doc.defaultView.requestAnimationFrame(() => { tabFocus = false; });
+      }
+    };
+    const focus = event => {
+      const keyboard = tabFocus; tabFocus = false;
+      // Passage navigation and section-reading recovery move focus internally.
+      // Only a user's Tab transition is outside keyboard intent.
+      if (!pointer && keyboard) collapse(event.target);
+    };
+    const cancelPointer = () => { pointer = false; };
+    // Wait for a pointer gesture to finish before collapsing. Native focus,
+    // selections and portaled dialog/popover interactions keep their lifecycle.
+    doc.addEventListener('pointerdown', down, true);
+    doc.addEventListener('pointercancel', cancelPointer, true);
+    doc.addEventListener('click', click);
+    doc.addEventListener('focusin', focus);
+    doc.addEventListener('keydown', key, true);
+    return () => {
+      doc.removeEventListener('pointerdown', down, true);
+      doc.removeEventListener('pointercancel', cancelPointer, true);
+      doc.removeEventListener('click', click);
+      doc.removeEventListener('focusin', focus);
+      doc.removeEventListener('keydown', key, true);
+      doc.defaultView.cancelAnimationFrame(tabFrame);
+    };
+  }, [activeComment, geometry, deleting, busy, setActiveComment]);
   const select = id => {
     setActiveComment(id);
     (window.requestAnimationFrame ?? (fn => setTimeout(fn,0)))(() => document.getElementById(`ws-discussion-${id}`)?.focus({ preventScroll: true }));
   };
   const bubble = (comment, grouped = false) => {
-    const number = comment.anchor ? visible.filter(c => c.anchor).findIndex(c => c.id === comment.id)+1 : null;
+    const number = comment.passageNumber;
     const selected = activeComment === comment.id;
     const detached = comment.anchor && !attached.has(comment.id);
+    const context = `Comment ${number}${comment.anchor ? detached ? " · Detached" : "" : item.kind === "database" ? " · Whole database" : " · Whole page"}`;
     return h("section", { key: comment.id, className: `ws-bubble${selected ? " ws-bubble-selected" : ""}${hoveredComment === comment.id ? " ws-bubble-emphasis" : ""}`,
+      onPointerDown: event => { pointerStart.current = [event.clientX, event.clientY]; },
+      onClick: event => {
+        if (event.target.closest('button,input,textarea,select,a,summary,[role="button"],[role="checkbox"],[contenteditable="true"]')) return;
+        if (pointerStart.current && Math.hypot(event.clientX-pointerStart.current[0], event.clientY-pointerStart.current[1]) > 4) return;
+        const selection = event.currentTarget.ownerDocument.getSelection();
+        if (!selection?.isCollapsed && selection?.rangeCount && selection.getRangeAt(0).intersectsNode(event.currentTarget)) return;
+        select(comment.id);
+      },
+      onKeyDown: event => {
+        if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || event.nativeEvent?.isComposing ||
+            event.target.closest('[role="dialog"],[role="menu"],[data-slot="popover-content"]') || actionInFlight.current.size) return;
+        event.preventDefault(); event.stopPropagation();
+        retainSaveViewport(event.currentTarget.closest('.ws-work'));
+        setActiveComment(null);
+        document.getElementById(`ws-bubble-${comment.id}`)?.focus({ preventScroll: true });
+      },
       onPointerEnter: () => setHoveredComment(comment.id), onPointerLeave: () => setHoveredComment(null),
       onFocusCapture: () => setHoveredComment(comment.id), onBlurCapture: event => { if (!event.currentTarget.contains(event.relatedTarget)) setHoveredComment(null); } },
+      h("div", { className: "ws-comment-heading" },
       h(Action, { id: `ws-bubble-${comment.id}`, className: "ws-bubble-summary", variant: "ghost", "aria-expanded": selected,
-        "aria-label": `${number ? `Comment ${number}` : item.kind === "database" ? "Whole database" : "Whole page"}: ${comment.text} · ${selected ? "Collapse thread" : "Open thread"}`,
+        "aria-label": `${context}: ${comment.text} · ${authorName(comment)} · ${selected ? "Collapse comment" : "Expand comment"}`,
         "aria-controls": selected ? `ws-discussion-${comment.id}` : undefined,
         onClick: () => selected ? setActiveComment(null) : select(comment.id) },
-        !grouped && h("span", { className: "ws-bubble-context" }, number ? `${detached ? "Detached · " : ""}Comment ${number}` : item.kind === "database" ? "Whole database" : "Whole page",
-          ` · You${comment.resolved ? " · Resolved" : ""}`),
+        h("span", { className: "ws-bubble-author" }, h(AuthorHeader, {entry:comment}),
+          h("span", {className:"ws-bubble-context"}, `${!grouped ? context : `Comment ${number}`}${comment.resolved ? " · Resolved" : ""}`)),
         !selected && h("span", { className: "ws-bubble-preview" }, comment.text),
-        h("span", { className: "ws-bubble-context" }, `${comment.replies.length} ${comment.replies.length === 1 ? "reply" : "replies"} · ${selected ? "Collapse thread" : "Open thread"}${discussion.current.replies[comment.id] ? " · Draft reply" : ""}`)),
-      selected && h(Comment, { comment, text, command, locked, onError, state, retainedReply: discussion.current.replies[comment.id] ?? "", retainReply,
-        passageNumber: number, active: true, onActivate: setActiveComment, onPassage, onResolutionFinished: setResolutionFocus,
+        h("span", { className: "ws-bubble-context" }, `${comment.replies.length} ${comment.replies.length === 1 ? "reply" : "replies"}`)),
+      h(CommentActions, { comment, locked: locked || busy, pending: pendingActions.has(comment.id),
+        onResolve: resolved => {
+          const card = document.getElementById(`ws-discussion-${comment.id}`) ?? document.getElementById(`ws-bubble-${comment.id}`)?.closest("section");
+          const control = document.activeElement, ownedFocus = card?.contains(control);
+          return commentAction(comment, async () => {
+            try { await command("resolve_comment", { id: comment.id, resolved }); }
+            finally { if (ownedFocus) setResolutionFocus({ id: comment.id, card, control }); }
+          });
+        },
+        onDelete: opener => { if (!locked && !busy && !actionInFlight.current.has(comment.id)) setDeleting({ comment, opener }); },
+        onRevert: opener => commentAction(comment, () => onRevertSection(comment, opener)),
+      })),
+      opened.current.has(comment.id) && h("div", { className: "ws-comment-body", hidden: !selected },
+      h(Comment, { comment, text, command, locked: locked || pendingActions.has(comment.id), onError, state, retainedReply: discussion.current.replies[comment.id] ?? "", retainReply,
+        onReplyPending: value => {
+          if (value && actionInFlight.current.has(comment.id)) return false;
+          if (value) actionInFlight.current.add(comment.id); else actionInFlight.current.delete(comment.id);
+          setPendingActions(new Set(actionInFlight.current));
+          return true;
+        },
+        passageNumber: number, originalAnchor: comment.originalAnchor, active: true, onActivate: setActiveComment, onPassage, onResolutionFinished: setResolutionFocus,
         onDelete: (comment, opener) => setDeleting({ comment, opener }),
-        onRevertSection, showContext: false }));
+        onRevertSection, showContext: false })));
   };
   const linkedThread = h("details", { className: "ws-linked-thread" },
     h("summary", null, "Linked Hermes thread"),
@@ -539,7 +644,7 @@ export function Comments({
         h(Action, { variant: "text", style: { color: "var(--ui-text-secondary)" }, disabled: locked || busy,
           "aria-label": item.kind === "database" ? "Add database comment" : "Add whole-page comment",
           onClick: () => { composeFromOptions.current = true; setOptionsOpen(false); composeWholePage(); } }, item.kind === "database" ? "Comment on database" : "Comment on whole page"))),
-    hasDraft && h("p", { className: "ws-muted ws-discussion-draft", role: "status" }, "Unsubmitted feedback is retained for this Workspace."),
+    hasDraft && h("p", { className: "ws-comment-action-state", role: "status" }, "Unsubmitted feedback is retained for this Workspace."),
     linkedThread);
   const footer = h("div", null,
     visible.some(c => !c.anchor) && h("h2", null, item.kind === "database" ? "Database feedback" : "Page feedback"),
@@ -550,7 +655,7 @@ export function Comments({
     !anchor && (pageComposerOpen ? composerElement : all.length > 0 && h(Action, { ref: wholeScopeAction, disabled: locked || busy, onClick: composeWholePage }, item.kind === "database" ? "Comment on database" : "Comment on whole page")),
     !all.length && h("p", { className: "ws-muted" }, item.kind === "database" ? "No comments yet." : "Select a passage to add a comment beside it."),
 );
-  return h("div", { className: "ws-comment-surfaces" },
+  return h("div", { ref: surfaces, className: "ws-comment-surfaces" },
     h("style", null, commentStyles),
     deleting && h(FormDialog, {
       title: "Delete comment?", confirm: "Delete comment", destructive: true,
@@ -563,7 +668,7 @@ export function Comments({
         else { setActiveComment(null); (resolvedControl.current ?? wholeScopeAction.current)?.focus(); }
       },
       onSubmit: async () => {
-        if (locked || busy || mutationInFlight.current) throw new Error("Wait for the current operation before deleting this comment.");
+        if (locked || busy || mutationInFlight.current || actionInFlight.current.size) throw new Error("Wait for the current operation before deleting this comment.");
         mutationInFlight.current = true; setBusy(true);
         try {
           await command("delete_comment", { id: deleting.comment.id });

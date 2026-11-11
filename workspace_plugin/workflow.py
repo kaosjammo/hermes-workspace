@@ -145,7 +145,9 @@ class Workflow:
             # matched to current data after the Store writer wait.
             epoch = self.native.runtime_epoch()
             scope_review = (lambda:self._review(conn,review_id,principal_id)['review']) if review_id is not None else None
-            run = self.store.begin_run(item_id, owner, explicit_item_ids,scope_review=scope_review)
+            from .identity import executor
+            run = self.store.begin_run(item_id, owner, explicit_item_ids,scope_review=scope_review,
+                                       executor_identity=executor(self.profile_home))
             try:
                 if review_id is not None:
                     record = self._review(conn,review_id,principal_id)

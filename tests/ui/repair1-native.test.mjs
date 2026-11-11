@@ -7,7 +7,10 @@ const require = createRequire(
 const { JSDOM } = require("jsdom");
 const dom = new JSDOM('<div id="app"></div>', {
   url: "https://workspace.test",
+  pretendToBeVisual: true,
 });
+globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
+globalThis.cancelAnimationFrame = dom.window.cancelAnimationFrame.bind(dom.window);
 for (const key of [
   "window",
   "document",
@@ -51,14 +54,16 @@ const props = {
   },
   attachments: [],
 };
-const choose = async (label, value) => {
+const choose = async (label, text) => {
   const group = [...document.querySelectorAll("label")].find((n) =>
     n.querySelector(`[role="combobox"][aria-label="${label}"]`),
   );
   const select = group?.querySelector("select");
   assert.ok(select, `actual Radix hidden select: ${label}`);
+  const option = [...select.options].find(option => option.textContent.trim() === text);
+  assert.ok(option, `actual Radix option: ${label}: ${text}`);
   await act(async () => {
-    select.value = value;
+    select.value = option.value;
     select.dispatchEvent(new Event("change", { bubbles: true }));
   });
 };
@@ -94,14 +99,14 @@ test("actual native Select tracks block selection and allows heading quote code 
   const editor = document.querySelector("[contenteditable]");
   await act(async () => caret(editor.firstElementChild));
   for (const value of ["h1", "blockquote", "pre"]) {
-    await choose("Block style", value);
+    await choose("Block style", { h1: "Heading 1", blockquote: "Quote", pre: "Code block" }[value]);
     assert.equal(
       document
         .querySelector('button[aria-label="Block style"]')
         .textContent.trim(),
       { h1: "Heading 1", blockquote: "Quote", pre: "Code block" }[value],
     );
-    await choose("Block style", "p");
+    await choose("Block style", "Text");
     assert.equal(editor.firstElementChild.tagName, "P");
   }
   await act(async () => caret(editor.lastElementChild));
@@ -164,7 +169,7 @@ test("actual native select and Input encode nullable clearing as null while text
       ),
     ),
   );
-  await choose("Status", "__none");
+  await choose("Status", "No value");
   for (const label of ["Due", "Text"]) {
     const node = document.querySelector(`input[aria-label="${label}"]`);
     await act(async () => {
@@ -185,7 +190,7 @@ test("actual native select and Input encode nullable clearing as null while text
   ]);
   await act(async () => root.render(null));
 });
-test("actual native board Unassigned sends null without clearing unrelated properties", async () => {
+test("actual native board No value sends null without clearing unrelated properties", async () => {
   const db = {
     id: "db",
     kind: "database",
@@ -226,8 +231,8 @@ test("actual native board Unassigned sends null without clearing unrelated prope
       ),
     ),
   );
-  await choose("View", "board");
-  await choose("Move Record", "__none");
+  await choose("View", "Board");
+  await choose("Move Record", "No value");
   assert.deepEqual(writes.at(-1).payload.patch.properties, {
     s: null,
     t: "keep",

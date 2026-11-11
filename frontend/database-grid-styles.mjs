@@ -19,18 +19,26 @@ export const databaseGridStyles = `
 .ws-db-column-name > .codicon { color: var(--ui-text-secondary); flex-shrink: 0; }
 .ws-db-record-name > button:first-child { flex: 1 1 0%; max-width: 100%; white-space: normal; min-width: 0; justify-content: start; height: auto; padding-inline: 0; font-size: 13px; text-align: left; overflow-wrap: anywhere; }
 .ws-db-row-actions { flex: 0 0 auto; color: var(--ui-text-secondary); }
-.ws-database .ws-table .ws-db-property-header,.ws-database .ws-table .ws-db-property-spacer { width: 40px; min-width: 40px; max-width: 40px; padding: 4px; }
-.ws-db-add-property { color: var(--ui-text-secondary); }
+.ws-database .ws-table .ws-db-property-header,.ws-database .ws-table .ws-db-property-spacer { width: 128px; min-width: 128px; max-width: 128px; padding: 4px; }
+.ws-db-add-property { color: var(--ui-text-primary); white-space: nowrap; font-size: 12px; font-weight: 500; gap: 6px; }
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger) { min-height: 30px; height: 30px; border-color: transparent; background: transparent; box-shadow: none; font-size: 13px; padding-inline: 5px; }
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger):hover { background: var(--ui-bg-tertiary); }
 .ws-database .ws-property :is(input:not([type=checkbox]),.ws-choice-trigger):focus-visible { border-color: var(--ui-accent); }
+.ws-db-text-cell { position: relative; min-width: 0; }
+/* Match the compact editor rule's specificity; reserve the cue and its native focus ring. */
+.ws-database .ws-property .ws-db-text-cell > input { padding-inline-end: 32px; text-overflow: ellipsis; }
+.ws-database .ws-db-text-cell > input:focus { text-overflow: clip; }
+.ws-db-text-read { position: absolute; inset-inline-end: 1px; top: 50%; translate: 0 -50%; color: var(--ui-text-secondary); }
+.ws-db-text-read-hint { font-size: 12px; }
+.ws-db-full-text { display: block; max-inline-size: 28rem; white-space: normal; overflow-wrap: anywhere; }
 .ws-database .ws-property-status { font-size: 12px; padding-block: 5px; }
 .ws-database .ws-formula-value output { display: block; padding: 5px; color: var(--ui-text-primary); }
 .ws-database .ws-table .ws-db-create-row > td { padding: 0; max-width: none; }
-.ws-db-new-record { width: 100%; justify-content: flex-start; min-height: 36px; color: var(--ui-text-secondary); font-weight: 400; }
+.ws-db-new-record { width: 100%; justify-content: flex-start; min-height: 36px; color: var(--ui-text-primary); font-weight: 500; }
 .ws-table .ws-db-new-record { position: sticky; left: 0; width: 100cqw; }
 .ws-db-record-draft { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; max-width: 100%; }
-.ws-table .ws-db-record-draft { width: 100cqw; box-sizing: border-box; }
+.ws-table .ws-db-record-draft { position: sticky; left: 0; width: 100cqw; box-sizing: border-box; }
+.ws-db-draft-label { color: var(--ui-text-primary); font-size: 12px; font-weight: 500; }
 .ws-db-record-draft > input { flex: 1 1 180px; width: auto; max-width: 420px; }
 .ws-db-record-draft > p { flex-basis: 100%; margin: 0; font-size: 12px; }
 .ws-db-form-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }

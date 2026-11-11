@@ -381,8 +381,9 @@ await act(async()=>root.render(h(RichEditor,{item:{id:'source',content:''},works
 await act(async()=>[...document.querySelectorAll('button')].find(n=>n.textContent==='Format text').click());
 await act(async()=>[...document.querySelectorAll('button')].find(n=>n.textContent==='Workspace link').click());
 const picker=document.querySelector('select[aria-label="Workspace item"]');
-if(![...picker.options].some(option=>option.value===process.argv[2]&&option.textContent.includes('Tasks')))throw Error('Named Workspace item missing');
-await act(async()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype,'value').set.call(picker,process.argv[2]);picker.dispatchEvent(new Event('change',{bubbles:true}));});
+const targetOption=[...picker.options].find(option=>option.textContent.includes('Tasks'));
+if(!targetOption)throw Error('Named Workspace item missing');
+await act(async()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype,'value').set.call(picker,targetOption.value);picker.dispatchEvent(new Event('change',{bubbles:true}));});
 for(const [label,value] of [['Link text','Tasks']]) {
  const node=document.querySelector(`input[aria-label="${label}"]`);
  await act(async()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));node.dispatchEvent(new Event('change',{bubbles:true}));});
