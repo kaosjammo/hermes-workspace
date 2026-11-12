@@ -1,4 +1,5 @@
 """F012 production no-effect geometry, persistence and refusal regressions."""
+from host_auth import host_auth
 import copy
 import hashlib
 import json
@@ -61,7 +62,7 @@ class Review03(unittest.TestCase):
         from dashboard.plugin_api import create_router
         for case in self.cases:
             with self.subTest(case=case['name']):
-                home=Path(case['home']);app=FastAPI();app.include_router(create_router(lambda:home),prefix='/api')
+                home=Path(case['home']);app=FastAPI();app.include_router(create_router(lambda:home,authorize=host_auth),prefix='/api')
                 with TestClient(with_hosted_admission(app,True))as client:
                     public=client.get('/api/state').json();c=next(c for c in public['comments']if c['id']==case['comment_id'])
                     self.assertEqual(c['section_change']['highlight_status'],'available')

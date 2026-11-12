@@ -1,4 +1,5 @@
 """Issue-owned synthetic admission + production API/Store. No provider/live data."""
+from host_auth import host_auth
 import asyncio
 import json
 import os
@@ -60,7 +61,7 @@ async def transport(request:Request,call_next):
             if mode=='fail':mode='normal';return JSONResponse({'detail':'Synthetic revert transport failure; data unchanged.'},503)
             if mode=='slow':await asyncio.sleep(.7)
     return await call_next(request)
-app.include_router(create_router(lambda:home),prefix='/api')
+app.include_router(create_router(lambda:home,authorize=host_auth),prefix='/api')
 @app.post('/fixture/mode/{value}')
 def set_mode(value:str):
     global mode

@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 // Full production Workspace, synthetic DOM/SDK/transport. Browser is separate.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,7 +13,7 @@ globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.win
 globalThis.cancelAnimationFrame = dom.window.cancelAnimationFrame.bind(dom.window);
 globalThis.getSelection = () => dom.window.getSelection();
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const { Workspace, createElement: h, createRoot, act } = await import('../../.local/frontend/ui-runtime.mjs');
+const { Workspace, createElement: h, createRoot, act } = await import(frontendRuntime('ui-runtime.mjs'));
 const root = createRoot(document.querySelector('#app'));
 const tick = (ms=0) => act(() => new Promise(r=>setTimeout(r,ms)));
 const b = name => [...document.querySelectorAll('.ws-folder-navigation button')].find(n=>(n.getAttribute('aria-label')??n.textContent)===name);

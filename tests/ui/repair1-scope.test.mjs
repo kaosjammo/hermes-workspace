@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test, after, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -28,7 +29,7 @@ const {
   createRoot,
   act,
   switchProfile,
-} = await import("../../.local/frontend/ui-runtime.mjs");
+} = await import(frontendRuntime('ui-runtime.mjs'));
 const root = createRoot(document.querySelector("#app"));
 const tick = () => act(() => new Promise((r) => setTimeout(r, 0)));
 const button = (text) =>
@@ -148,6 +149,12 @@ test("inert comment target refs require fresh unchecked per-run approval; defaul
           prompt: "Process comments",
           submission_id: lastRun.id,
         };
+      }
+      if (path === "/workflow/submitted") {
+        assert.equal(opts.body.run_id,lastRun.id);
+        assert.equal(typeof opts.body.admission_id,'string');
+        assert.ok(opts.body.admission_id.length>0);
+        return {run:structuredClone(lastRun)};
       }
       if (path === "/workflow/consume") {
         assert.equal(opts.method, "POST");

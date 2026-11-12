@@ -1,6 +1,7 @@
+import { PopoverTrigger, Popover, PopoverContent } from "./owned-popups.jsx";
 import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Popover, PopoverTrigger, PopoverContent } from "@hermes/plugin-sdk";
+
 import { editorStyles } from "./editor-styles.mjs";
 import {
   EditorHistory,

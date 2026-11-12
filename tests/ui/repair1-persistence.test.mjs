@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test, after, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -41,7 +42,7 @@ const {
   createElement: h,
   createRoot,
   act,
-} = await import("../../.local/frontend/repair-1/native-runtime.mjs");
+} = await import(frontendRuntime('repair-1/native-runtime.mjs'));
 const root = createRoot(document.querySelector("#app"));
 const tick = () => act(() => new Promise((r) => setTimeout(r, 0)));
 const choose = async (label, text) => {

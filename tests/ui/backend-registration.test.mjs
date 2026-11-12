@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -6,7 +7,7 @@ const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<div></div>', { url: 'https://workspace.test' });
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
-const { plugin, host, advanceEpoch } = await import(process.env.WORKSPACE_REGISTRATION_RUNTIME ?? '../../.local/frontend/ui-runtime.mjs');
+const { plugin, host, advanceEpoch } = await import(process.env.WORKSPACE_REGISTRATION_RUNTIME ?? frontendRuntime());
 
 async function withBackend(request, check) {
   const original = { request: host.requestProfile, decisions: host.pluginDecisions };

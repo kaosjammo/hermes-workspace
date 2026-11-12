@@ -6,6 +6,6 @@ export {
   SelectValue,
   SelectContent,
   SelectItem,
-} from "../../.local/host/.build/webapp-workspace/apps/desktop/src/components/ui/select.tsx";
-export { Input } from "../../.local/host/.build/webapp-workspace/apps/desktop/src/components/ui/input.tsx";
-export { Checkbox } from "../../.local/host/.build/webapp-workspace/apps/desktop/src/components/ui/checkbox.tsx";
+} from "@workspace-test-native/components/ui/select.tsx";
+export { Input } from "@workspace-test-native/components/ui/input.tsx";
+export { Checkbox } from "@workspace-test-native/components/ui/checkbox.tsx";

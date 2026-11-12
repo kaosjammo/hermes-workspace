@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -7,7 +8,7 @@ const dom = new JSDOM('<div id="app"></div>');
 for (const key of ["window", "document", "HTMLElement", "Node", "Event", "MouseEvent", "MutationObserver"])
   globalThis[key] = dom.window[key];
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const { createElement: h, createRoot, act, useDocumentWidth } = await import("../../.local/frontend/ui-runtime.mjs");
+const { createElement: h, createRoot, act, useDocumentWidth } = await import(frontendRuntime('ui-runtime.mjs'));
 const values = new Map();
 const storage = { get: (k, fallback) => values.has(k) ? values.get(k) : fallback, set: (k, v) => values.set(k, v) };
 let root = createRoot(document.querySelector("#app"));

@@ -1,4 +1,5 @@
 """F009/F010 real production Store and SQLite regressions; external state only."""
+from host_auth import host_auth
 import copy
 import json
 import unittest
@@ -122,7 +123,7 @@ class Review02(unittest.TestCase):
             if mode is None:valid['versions'][-1]['section_revert_receipt'].pop('cleanup_mode')
             target=Store(self.home/('archive-'+str(mode)));target.restore_snapshot(valid)
             self.assertEqual(target.backup_snapshot()['versions'][-1]['_removed_responses'],cleaned['versions'][-1]['_removed_responses'])
-        app=FastAPI();app.include_router(create_router(lambda:self.home),prefix='/api')
+        app=FastAPI();app.include_router(create_router(lambda:self.home,authorize=host_auth),prefix='/api')
         with TestClient(with_hosted_admission(app,True))as client:
             state=client.get('/api/state').json()
             for index,mode in enumerate(['discussion_deleted',None]):

@@ -49,6 +49,7 @@ import html
 from html.parser import HTMLParser
 import io
 import json
+import os
 from pathlib import Path, PurePosixPath
 import re
 import stat
@@ -880,8 +881,17 @@ def _docx_export(item):
 def _pdf_in_worker(operation,payload):
     # Explicit process bounds contain decompression/layout before the parent commits data.
     code='from workspace_plugin.interchange import _pdf_child; _pdf_child()'
+    root = str(Path(__file__).resolve().parent.parent)
+    # Conversion imports this exact package, not caller-supplied Python paths.
+    # Preserve platform/temp/font-home behaviour without forwarding provider,
+    # Hermes, proxy or arbitrary Python execution configuration to the worker.
+    env = {'PATH': os.defpath, 'PYTHONPATH': root, 'PYTHONDONTWRITEBYTECODE': '1',
+           'LANG': 'C.UTF-8'}
+    for key in ('HOME', 'USERPROFILE', 'SYSTEMROOT', 'WINDIR', 'TMPDIR', 'TMP', 'TEMP'):
+        if key in os.environ:
+            env[key] = os.environ[key]
     try:
-        result=subprocess.run([sys.executable,'-c',code,operation],input=payload,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=20,check=False,cwd=str(Path(__file__).resolve().parent.parent))
+        result=subprocess.run([sys.executable,'-c',code,operation],input=payload,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=20,check=False,cwd=root,env=env)
     except subprocess.TimeoutExpired as exc: raise InterchangeError('PDF conversion exceeded 20 second limit') from exc
     if result.returncode:
         message=result.stderr.decode('utf-8',errors='replace')[-1000:]

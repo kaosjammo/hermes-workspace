@@ -62,10 +62,9 @@ class Review01Tests(unittest.TestCase):
         names=['Engineer 👩‍💻','Native '+('東京🌿 '*70).strip()]
         captured=[]
         for name in names:
-            (home/'profile.yaml').write_text(json.dumps({'ui_meta':{'hermes-bots':{'title':name}}},ensure_ascii=False))
             with patch.dict(os.environ,{'HERMES_HOME':str(base),'HERMES_PROFILE_NAME':'wrong-launch'}):
                 token=set_hermes_home_override(home)
-                try:identity=executor(home)
+                try:identity=executor(home, name)
                 finally:reset_hermes_home_override(token)
             self.assertIsNotNone(identity,'F003 known executor must not disappear for valid native display text')
             self.assertEqual(identity['name'],name);validate(identity,'agent')
@@ -89,10 +88,9 @@ class Review01Tests(unittest.TestCase):
     def test_agent_unsafe_or_extreme_display_keeps_canonical_attribution_human_policy_unchanged(self):
         base=self.root/'host';home=base/'profiles'/'alpha';home.mkdir(parents=True)
         for name in ('x'*10000,'Directional\u202ename','\x00'):
-            (home/'profile.yaml').write_text(json.dumps({'ui_meta':{'hermes-bots':{'title':name}}},ensure_ascii=False))
             with patch.dict(os.environ,{'HERMES_HOME':str(base)}):
                 token=set_hermes_home_override(home)
-                try:identity=executor(home)
+                try:identity=executor(home, name)
                 finally:reset_hermes_home_override(token)
             self.assertIsNotNone(identity);validate(identity,'agent')
             self.assertEqual(identity['profile'],'alpha');self.assertTrue(identity['avatar_eligible']);self.assertLess(len(identity['name']),100)

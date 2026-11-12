@@ -7,13 +7,13 @@ import {createRequire} from 'node:module';
 import {MessageChannel as NativeChannel} from 'node:worker_threads';
 const require=createRequire(path.resolve('.local/toolchain/package.json'));
 const output=await fs.mkdtemp(path.join(process.env.HWS_QUALIFICATION_HOME??process.env.TMPDIR??path.resolve('.local/frontend'),'issue9-user-ux-'));
-await require('esbuild').build({stdin:{contents:'export {Comments} from "./frontend/comments.jsx";export {createElement as h,useState,act} from "react";export {createRoot} from "react-dom/client";',resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',outfile:output+'/surface.mjs',alias:{'@hermes/plugin-sdk':path.resolve('tests/ui/sdk-fixture.jsx'),react:path.dirname(require.resolve('react/package.json')),'react-dom':path.dirname(require.resolve('react-dom/package.json'))},define:{'process.env.NODE_ENV':'"development"'}});
+await require('esbuild').build({stdin:{contents:'export {Comments} from "./frontend/comments.jsx";export {Dialog,Popover,PopoverContent,PopoverTrigger,hasWorkspacePopup} from "./frontend/owned-popups.jsx";export {createElement as h,useState,act} from "react";export {createRoot} from "react-dom/client";',resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',outfile:output+'/surface.mjs',alias:{'@hermes/plugin-sdk':path.resolve('tests/ui/sdk-fixture.jsx'),react:path.dirname(require.resolve('react/package.json')),'react-dom':path.dirname(require.resolve('react-dom/package.json'))},define:{'process.env.NODE_ENV':'"development"'}});
 const {JSDOM}=require('jsdom'),dom=new JSDOM('<button id="outside">Outside</button><main class="ws-work"><div id="app"></div></main>',{url:'https://workspace.synthetic.test',pretendToBeVisual:true});
 for(const key of ['window','document','HTMLElement','Node','Event','MouseEvent','KeyboardEvent'])globalThis[key]=dom.window[key];
 globalThis.requestAnimationFrame=window.requestAnimationFrame.bind(window);globalThis.cancelAnimationFrame=window.cancelAnimationFrame.bind(window);globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 const originalChannel=globalThis.MessageChannel,channels=[];
 globalThis.MessageChannel=class extends NativeChannel{constructor(){super();channels.push(this)}};
-const {Comments,h,useState,act,createRoot}=await import(output+'/surface.mjs');
+const {Comments,Dialog,Popover,PopoverContent,PopoverTrigger,hasWorkspacePopup,h,useState,act,createRoot}=await import(output+'/surface.mjs');
 const root=createRoot(document.getElementById('app')),page={id:'page',kind:'page',title:'Garden'};
 const human={id:'human',author:'user',text:'Human reply: I intentionally wrote this literal prefix.',author_identity:{kind:'human',id:'1'.repeat(64),name:'Hermes'}};
 const agent={id:'agent',author:'agent',text:'Actual agent outcome.',author_identity:{kind:'agent',name:'user'}};
@@ -89,9 +89,37 @@ for(const operation of ['reply_comment','resolve_comment','revert'])test(`F018 a
  await act(async()=>{release();await hold.promise});await tick();assert.equal(calls.length,1);assert.deepEqual(errors,[]);
  await click(document.getElementById('outside'));await tick();assert.equal(active,null,'completed operation releases visibility guard');
 });
-test('F018 consent popup and programmatic focus remain protected while idle locked visibility can collapse',async()=>{
+test('maintainer: unrelated app dialog never suppresses Workspace outside collapse',async()=>{
  await retainedReset(true);await act(()=>document.getElementById('outside').focus());await tick();assert.equal(active,'a');
  const popup=document.createElement('div');popup.setAttribute('role','dialog');document.body.append(popup);
- await click(document.getElementById('outside'));await tick();assert.equal(active,'a');popup.remove();
+ await click(document.getElementById('outside'));await tick();assert.equal(active,null,'unrelated app dialog must not own Workspace discussion state');popup.remove();
  await click(document.getElementById('outside'));await tick();assert.equal(active,null);assert.deepEqual(calls,[]);assert.deepEqual(errors,[]);
+});
+
+test('Workspace nested controlled and uncontrolled SDK popup state protects drafts and cleans up',async()=>{
+ await retainedReset(false);
+ const node=document.createElement('div');document.body.append(node);const popupRoot=createRoot(node);
+ try {
+  await act(()=>popupRoot.render(h(Dialog,{open:true},h(Popover,{defaultOpen:true},h(PopoverContent,null,'Owned nested content')))));
+  assert.equal(hasWorkspacePopup(),true);
+  await click(document.getElementById('outside'));assert.equal(active,'a');
+  await act(()=>popupRoot.render(h(Dialog,{open:true})));
+  assert.equal(hasWorkspacePopup(),true,'closing a nested popup keeps the parent protection');
+  await act(()=>popupRoot.render(h(Dialog,{open:false})));
+  assert.equal(hasWorkspacePopup(),false,'closing/unmounting nested roots releases every token');
+  const changes=[];
+  await act(()=>popupRoot.render(h(Popover,{onOpenChange:value=>changes.push(value)},h(PopoverTrigger,null,h('button',{id:'owned-trigger'},'Owned')),h(PopoverContent,null,'Content'))));
+  await click(document.getElementById('owned-trigger'));assert.equal(hasWorkspacePopup(),true);
+  await click(document.getElementById('outside'));assert.equal(active,'a');
+  await click(document.getElementById('owned-trigger'));assert.equal(hasWorkspacePopup(),false);assert.deepEqual(changes,[true,false]);
+  await click(document.getElementById('outside'));await tick();assert.equal(active,null);
+  await click(summary('a'));await tick();assert.equal(card('a').querySelector('textarea').value,'Retained unsent active-run draft 庭');
+  assert.deepEqual(calls,[]);assert.deepEqual(errors,[]);
+ } finally {await act(()=>popupRoot.unmount());node.remove()}
+ assert.equal(hasWorkspacePopup(),false);
+});
+for (const role of ['menu','listbox','popover-content','dropdown-menu-content']) test(`unrelated app ${role} target never protects Workspace`,async()=>{
+ await retainedReset(false);const unrelated=document.createElement('button');
+ unrelated.setAttribute(role.includes('content')?'data-slot':'role',role);document.body.append(unrelated);
+ try{await click(unrelated);await tick();assert.equal(active,null);assert.deepEqual(calls,[])}finally{unrelated.remove()}
 });

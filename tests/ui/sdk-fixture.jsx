@@ -120,10 +120,18 @@ export const Checkbox = ({ checked, onCheckedChange, ...props }) =>
 const pass = ({ children }) => React.createElement("div", null, children);
 export function Select({ children, value, onValueChange, disabled }) {
   const options = [];
-  let label, accessibility = {};
+  let accessibility = {};
   const walk = (nodes) =>
-    React.Children.forEach(nodes, (node) => {
+    React.Children.forEach(nodes, (child) => {
+      let node = child;
       if (!React.isValidElement(node)) return;
+      // The production ownership layer composes SDK parts through pure
+      // forwardRef wrappers. Resolve that composition before identifying the
+      // fixture part; do not borrow aria props from arbitrary descendants.
+      while (node.type?.$$typeof === Symbol.for("react.forward_ref")) {
+        node = node.type.render(node.props, node.props.ref ?? null);
+        if (!React.isValidElement(node)) return;
+      }
       if (node.type === SelectItem)
         options.push(
           React.createElement(
@@ -133,8 +141,7 @@ export function Select({ children, value, onValueChange, disabled }) {
           ),
         );
       else {
-        if (node.type === SelectTrigger && node.props["aria-label"]) {
-          label = node.props["aria-label"];
+        if (node.type === SelectTrigger) {
           accessibility = Object.fromEntries(Object.entries(node.props).filter(([key]) => key.startsWith("aria-")));
         }
         walk(node.props.children);
@@ -144,7 +151,6 @@ export function Select({ children, value, onValueChange, disabled }) {
   return React.createElement(
     "select",
     {
-      "aria-label": label,
       ...accessibility,
       value,
       disabled,
@@ -153,7 +159,7 @@ export function Select({ children, value, onValueChange, disabled }) {
     options,
   );
 }
-export const SelectTrigger = pass,
+export const SelectTrigger = ({ children }) => React.createElement("div", null, children),
   SelectValue = () => null,
   SelectContent = pass,
   SelectItem = ({ children }) => React.createElement("span", null, children);
@@ -204,9 +210,9 @@ export const Codicon = () => null;
 const PopoverContext = React.createContext({ open: false, onOpenChange: () => {} });
 export const Popover = ({ open, onOpenChange, children }) =>
   React.createElement(PopoverContext.Provider, { value: { open, onOpenChange } }, children);
-export const PopoverTrigger = ({ children }) => {
+export const PopoverTrigger = ({ children, asChild, ...props }) => {
   const { open, onOpenChange } = React.useContext(PopoverContext);
-  return React.cloneElement(children, { onClick: event => {
+  return React.cloneElement(children, { ...props, onClick: event => {
     children.props.onClick?.(event);
     if (!event.defaultPrevented) onOpenChange?.(!open);
   } });

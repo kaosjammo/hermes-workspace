@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -10,7 +11,7 @@ for (const name of ["window", "document", "HTMLElement", "Node", "Event", "Mouse
   globalThis[name] = dom.window[name];
 globalThis.getSelection = () => dom.window.getSelection();
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const { PageTitle, RichEditor, RecordProperties, Comments, isSubmitEnter, createElement: h, createRoot, act } = await import("../../.local/frontend/ui-runtime.mjs");
+const { PageTitle, RichEditor, RecordProperties, Comments, isSubmitEnter, createElement: h, createRoot, act } = await import(frontendRuntime('ui-runtime.mjs'));
 const root = createRoot(document.querySelector("#app"));
 const tick = () => act(() => new Promise(resolve => setTimeout(resolve, 0)));
 const storage = () => {

@@ -1,5 +1,6 @@
 """Production Store UI02 paths with explicitly simulated agent writes."""
 import copy
+from runtime_paths import fixture_root, node_command
 from pathlib import Path
 import tempfile
 import unittest
@@ -8,7 +9,7 @@ from workspace_plugin.store import Store, StoreError, _plain
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURES = ROOT / '.local' / 'section-store-tests'
+FIXTURES = fixture_root('section-store-tests')
 FIXTURES.mkdir(parents=True,exist_ok=True)
 
 

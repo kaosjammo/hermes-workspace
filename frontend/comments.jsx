@@ -1,6 +1,7 @@
+import { PopoverTrigger, hasWorkspacePopup, isWorkspacePopupTarget, isWorkspacePopupTrigger, Popover, PopoverContent, Dialog, DialogContent } from "./owned-popups.jsx";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { Checkbox, Textarea, Popover, PopoverTrigger, PopoverContent, Tip, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@hermes/plugin-sdk";
+import { Checkbox, Textarea, Tip, DialogHeader, DialogTitle, DialogDescription } from "@hermes/plugin-sdk";
 import { h, Action, Choice, Codicon, UnsavedEditError, FormDialog, isSubmitEnter } from "./ui.jsx";
 import { CommentBubbles } from "./comment-bubbles.jsx";
 import { numberComments, anchorRanges } from "./comment-highlights.jsx";
@@ -445,9 +446,8 @@ export function Comments({
     const doc = surfaces.current?.ownerDocument;
     if (!doc) return;
     let pointer = false, tabFocus = false, tabFrame = null;
-    const popup = '[role="dialog"],[role="menu"],[role="listbox"],[data-slot="popover-content"],[data-slot="dropdown-menu-content"]';
     const protectedTarget = target => target?.closest?.('.ws-bubble') === doc.getElementById(`ws-bubble-${activeComment}`)?.closest('.ws-bubble') ||
-      target?.closest?.('.ws-passage-controls') || target?.closest?.(popup) || doc.querySelector(popup);
+      target?.closest?.('.ws-passage-controls') || isWorkspacePopupTarget(target) || isWorkspacePopupTrigger(target) || hasWorkspacePopup();
     const passageHit = event => {
       const editor = event.target?.closest?.('.ws-editor');
       if (!editor || event.target.closest('a,input') || !doc.getSelection()?.isCollapsed) return false;
@@ -471,8 +471,10 @@ export function Comments({
       pointer = false;
       // Expanding removes the preview text before this native listener runs.
       // The original event path still owns that click even if its target is gone.
-      const inComment = event.composedPath().some(node => node?.classList?.contains('ws-bubble'));
-      if (!event.defaultPrevented && !inComment && !passageHit(event)) collapse(event.target);
+      const path = event.composedPath();
+      const inComment = path.some(node => node?.classList?.contains('ws-bubble'));
+      const inPopup = path.some(node => node?.hasAttribute?.('data-workspace-popup') || node?.hasAttribute?.('data-workspace-popup-trigger'));
+      if (!event.defaultPrevented && !inComment && !inPopup && !passageHit(event)) collapse(event.target);
     };
     const key = event => {
       tabFocus = event.key === 'Tab' && !event.isComposing;
@@ -525,7 +527,7 @@ export function Comments({
       },
       onKeyDown: event => {
         if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || event.nativeEvent?.isComposing ||
-            event.target.closest('[role="dialog"],[role="menu"],[data-slot="popover-content"]') || actionInFlight.current.size) return;
+            isWorkspacePopupTarget(event.target) || hasWorkspacePopup() || actionInFlight.current.size) return;
         event.preventDefault(); event.stopPropagation();
         retainSaveViewport(event.currentTarget.closest('.ws-work'));
         setActiveComment(null);

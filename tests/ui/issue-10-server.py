@@ -3,6 +3,7 @@
 Only generated task-owned profile metadata/images. Fixture instrumentation for
 failures and captured historic authors is explicit; no real user/provider state.
 """
+from host_auth import host_auth
 import base64
 import contextvars
 import json
@@ -73,7 +74,7 @@ async def synthetic_scope(request,call_next):
         return await call_next(request)
     finally:reset_hermes_home_override(home_token);selected.reset(token)
 
-app.include_router(create_router(lambda:base/'profiles'/selected.get()),prefix='/api')
+app.include_router(create_router(lambda:base/'profiles'/selected.get(),authorize=host_auth),prefix='/api')
 @app.post('/fixture/image-mode/{mode}')
 def mode(mode:str):
     global image_mode

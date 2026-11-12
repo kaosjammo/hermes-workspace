@@ -1,4 +1,6 @@
 """Production router/Store with synthetic host admission and homes, no provider."""
+from host_auth import host_auth
+from runtime_paths import fixture_root
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -11,9 +13,9 @@ from dashboard.plugin_api import create_router
 
 class IdentityApiTests(unittest.TestCase):
     def setUp(self):
-        self.tmp=TemporaryDirectory(dir=Path(os.environ['HWS_QUALIFICATION_HOME'])/'fixtures')
+        self.tmp=TemporaryDirectory(dir=fixture_root('fixtures'))
         self.home=Path(self.tmp.name)/'owner-a'
-        app=FastAPI();app.include_router(create_router(lambda:self.home))
+        app=FastAPI();app.include_router(create_router(lambda:self.home,authorize=host_auth))
         self.client=TestClient(with_hosted_admission(app,True))
         self.denied=TestClient(with_hosted_admission(app,False))
 

@@ -257,8 +257,8 @@ class SharedTests(unittest.TestCase):
         self.private.remember_executor(page['id'], binding, expected_revision=before['revision'], validate=lambda b: b)
         self.assertEqual(Store(self.private.profile_home).snapshot()['items'][0]['executor'], binding)
         flow = Workflow(self.private.profile_home, store=self.private, native=NativeSessions(self.private.profile_home))
-        with self.assertRaisesRegex(ValueError, 'qualified native source'):
-            flow.prepare(page['id'], binding['thread_id'])
+        with self.assertRaisesRegex(ValueError, '^Saved cross-owner executor binding is not qualified$'):
+            flow.prepare(page['id'], binding['thread_id'], principal_id='synthetic-owner')
         destination = Store(self.root / 'restore-private')
         destination.restore_snapshot(self.private.backup_snapshot())
         self.assertNotIn('executor', destination.snapshot()['items'][0])

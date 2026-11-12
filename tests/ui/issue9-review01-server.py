@@ -1,4 +1,5 @@
 """Repair-only synthetic preparations; real Store, router and SQLite reopen."""
+from host_auth import host_auth
 import runpy
 import os
 from pathlib import Path
@@ -40,7 +41,7 @@ import_home=out/'imported-browser-host'
 imported=Store(import_home)
 if not imported.snapshot()['items']:
     prepare(imported,'Imported');imported.restore_snapshot(imported.backup_snapshot())
-app.include_router(create_router(lambda:import_home),prefix='/imported-api')
+app.include_router(create_router(lambda:import_home,authorize=host_auth),prefix='/imported-api')
 @app.get('/fixture/reopen')
 def reopen():return Store(fixture['home']).backup_snapshot()
 @app.get('/fixture/imported-raw')

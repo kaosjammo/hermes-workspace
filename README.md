@@ -4,7 +4,9 @@
 
 Workspace keeps the material you are working on beside your Hermes conversations. Write a brief, organise a chapter outline, or track a project's records in a typed database. Select a passage, leave feedback, and explicitly ask Hermes to address the unresolved comments without handing it unrestricted access to the rest of your workspace.
 
-> **Development preview.** This submission includes the complete installed package, not an earlier subset of its features. The capabilities below describe the implementation. They are not a certificate of native Electron acceptance, successful live-provider editing or catalogue approval. See [Compatibility and qualification](#compatibility-and-qualification).
+> **Local, unpublished repair candidate.** See [maintainer repair status and qualification boundaries](docs/LOCAL-MAINTAINER-REPAIR.md). Source/catalog pins and version are unchanged; this working copy is uncommitted.
+
+> **Development preview.** This local candidate retains the full Workspace feature set. The capabilities below describe the implementation. They are not a certificate of native Electron acceptance, successful live-provider editing or catalogue approval. See [Compatibility and qualification](#compatibility-and-qualification).
 
 ## Write in place
 
@@ -77,19 +79,19 @@ Set a Workspace username for your comments and replies, or reset it to `user`. A
 2. Review the current item and any additional editable items. Additional items start unselected and require approval for this run. A database grant includes its records.
 3. Workspace creates or reuses the item's native Hermes conversation. You can also select an eligible conversation from the recent live/stored list or open the linked conversation.
 4. Hermes receives the captured document and comment context through the configured Hermes runtime and model provider.
-5. After confirmed native completion, Workspace validates the final structured proposal before saving edits and separate outcomes for the captured comments.
+5. Hermes saves validated edits and separate comment outcomes through the scoped Workspace tool. Public native completion hooks determine the final run result; missing or failed completion remains explicit.
 
 Every unresolved current-item comment is included, even if it already has replies. Resolved comments are excluded. Mentions, links, sibling folders and model-written instructions do not widen edit authority.
 
 For local changes, the protocol supports exact, revision-bound replacements. Missing, ambiguous, overlapping or stale targets are rejected without a silent whole-document overwrite fallback. Whole-document replacement remains available for genuinely page-wide work. Structured updates can also change authorised titles, record properties and database schemas. Replies-only outcomes and explanations of partial or impossible work are supported.
 
-Ordinary **Address comments** uses the validated final proposal, not streaming calls to `workspace_apply`. The package retains that separately guarded tool interface for admitted native work. No provider credentials or model settings are managed by Workspace.
+**Address comments** uses `workspace_apply` with a plugin-owned one-use call ticket minted by the public originating-turn hook. The handler independently checks captured scope and revocation. A bounded final structured proposal is also supported after positively correlated completion. No provider credentials or model settings are managed by Workspace.
 
 ### Stop, Recover, Restore and Revert are different
 
 | Control | Meaning |
 |---|---|
-| **Stop** | Revoke Workspace write authority first, then request cancellation of the exact native admission when available. This does not by itself prove the provider stopped. |
+| **Stop** | Durably revoke local saves, finish the local run and unlock its items, then request cancellation of the exact native admission when available. Accepted partial work and pre-run Restore remain. Native cancellation can remain unknown. |
 | **Recover document** | Explicitly release local editing when native continuity is uncertain. The native result can remain unknown. |
 | **Restore a saved version** | Restore whole-item content and applicable typed schema history. This can replace later edits. |
 | **Revert changes** | Revert an eligible saved section, preserving unrelated content. Later manual edits require fresh confirmation. A checkpoint retains the pre-revert page and the specifically associated agent responses removed from the live discussion. |
@@ -120,7 +122,7 @@ The canonical backup includes items and hierarchy, properties and relations, com
 - SQLite transactions, revision checks and captured connection/profile/dataset identities protect application writes from stale operations. Local storage is not encryption or isolation from other tools running as the same OS user.
 - There is no separate Workspace account service, cloud converter, plugin telemetry service or plugin-managed credential store.
 - Explicit native agent work may send authorised document and comment context to your configured model provider. Local storage does not mean offline inference. Hermes owns tool policy and approvals.
-- Native integration also accesses the selected profile's canonical Hermes `state.db` through `SessionDB`, plus admission, transcript and runtime metadata. Constructing `SessionDB` is not promised to be a read-only SQLite connection. Finalisation depends on private, same-process native owner interfaces; this remains a compatibility and catalogue-review concern.
+- Native thread reads use public `SessionDB.get_session` and `get_compression_lineage` with a read-only connection. Workspace authority, one-use call consumption, effects and receipts share a plugin-owned SQLite transaction. Workspace Stop durably revokes before requesting exact-admission native cancellation. Edits accepted before revocation can remain as accurately reported partial work, with pre-run Restore; physical-click-time native Stop linearisation is not claimed.
 
 ### Local shared workspaces and independent executors
 
@@ -136,7 +138,7 @@ This is a development preview submitted for catalogue review. Current submission
 
 Source tests cover editor structure, comments, navigation, typed data, converters, backup/restore and native-authority boundaries. Some native lifecycle tests deliberately use synthetic terminal records. Their presence is not proof that those tests passed on this submission, and synthetic completion is not a successful live-provider run.
 
-The independent documentation audit was static. Subsequent release preparation reproduced the installed Desktop bundle in two independent builds and ran separate checks; see [current release status](docs/RELEASE-STATUS.md). Same-candidate provider-positive saved editing, active-provider Stop, full restart/compaction/approval lifecycle behaviour, native visual acceptance and macOS/Windows execution require separate evidence. Older catalogue-check totals and earlier demo media are not acceptance receipts for this candidate.
+The independent documentation audit was static. The local repair candidate builds its Desktop bundle normally from maintained source, with repeated build identity and source/package/dist parity recorded in [maintainer repair status](docs/LOCAL-MAINTAINER-REPAIR.md). Published-snapshot receipts remain historical in [release status](docs/RELEASE-STATUS.md). Same-candidate provider-positive saved editing, active-provider Stop, full restart/compaction/approval lifecycle behaviour, native visual acceptance and macOS/Windows execution require separate evidence. Older catalogue-check totals and earlier demo media are not acceptance receipts for this candidate.
 
 ## Build from source
 
@@ -155,16 +157,16 @@ The build writes `desktop/plugin.js` and performs the configured browser-module 
 python3 scripts/package.py --output .local/dist
 ```
 
-The package includes the Desktop bundle, authenticated API, Python backend, declared tool/hooks and dependency declarations. Use an isolated environment for dependency preparation and catalogue validation, not a live installation. The submitted Desktop bundle is preserved byte-for-byte from production. Esbuild embeds dependency-relative labels; reproducing that exact hash also requires the recorded relative dependency layout. Ordinary builds can differ in those generated labels without a frontend code change.
+The package includes the Desktop bundle, authenticated API, Python backend, declared tool/hooks and dependency declarations. Use an isolated environment for dependency preparation and catalogue validation, not a live installation. The historical submitted bundle remains available at source pin `3eeb9986101a3d75c4f9cddc26bb5a3e31bcb9f5`. This unpublished candidate rebuilds the whole Desktop bundle normally from maintained frontend source, including the approved paragraph behaviour. Dependency symlinks retain checkout-relative module labels, and repeated builds must match. No installed or published snapshot was replaced.
 
 
 ## Review and distribution
 
-The catalogue entry targets `dist/workspace`, the generated 22-file runtime package. The same pinned repository retains the complete editable source, test corpus and documentation at its root. No documents, profile settings, databases, credentials or native conversation histories are included.
+The catalogue entry targets `dist/workspace`, the generated runtime package. The same pinned repository retains the complete editable source, test corpus and documentation at its root. No documents, profile settings, databases, credentials or native conversation histories are included.
 
 See the [complete production feature audit](docs/PRODUCTION-FEATURES.md), [original detailed register](docs/FEATURE-REGISTER.md), [current release status](docs/RELEASE-STATUS.md) and [third-party notices](THIRD-PARTY-NOTICES.md). The bundled React DOM code carries its complete MIT notice there; Hermes supplies the React singleton and plugin SDK. Workspace's own reuse licence is not selected, and this submission makes no open-source permission claim.
 
-The local PDF conversion child inherits the host process environment. Its timeout and POSIX limits are resource bounds, not a sandbox or network-isolation guarantee. SDK-selector cautions and undocumented native-host dependencies require maintainer review. Passing automated checks is not catalogue admission.
+The local PDF conversion child receives an explicit minimal environment: package import path, standard executable path, locale and supported home/temp/platform paths. Provider credentials, proxies and arbitrary Python startup settings are not forwarded. Timeout and POSIX limits are resource bounds, not a sandbox or network-isolation guarantee. Passing automated checks is not catalogue admission.
 
 ![Earlier synthetic database demonstration](docs/screenshots/database-demo.png)
 
@@ -173,4 +175,4 @@ This earlier-build capture uses fictional records, illustrates the interface onl
 
 ### Tested paragraph feedback behaviour (0.1.2)
 
-Addressed feedback highlights its replacement paragraph, including merged or overlapping passages. Separate discussions keep independent identities and replies. Display recovery never enables an unproven independent revert. The included Desktop bundle is the exact author-tested installed artifact; native/provider acceptance remains distinct from automated validation.
+Addressed feedback highlights its replacement paragraph, including merged or overlapping passages. Separate discussions keep independent identities and replies. Display recovery never enables an unproven independent revert. The local candidate bundle is a normal source build; the submitted production artifact remains the historical baseline. Native/provider acceptance remains distinct from automated validation.

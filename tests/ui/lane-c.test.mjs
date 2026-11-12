@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -28,7 +29,7 @@ const {
   createElement: h,
   createRoot,
   act,
-} = await import("../../.local/frontend/ui-runtime.mjs");
+} = await import(frontendRuntime('ui-runtime.mjs'));
 const root = createRoot(document.querySelector("#app"));
 test("normal weight is a narrow semantic reset rather than CSS passthrough", () => {
   const safe = sanitizeHTML(

@@ -1,3 +1,5 @@
+> The records below describe the published 0.1.2 snapshot. The uncommitted local successor is described in [Local maintainer repair](LOCAL-MAINTAINER-REPAIR.md); it has not been published or installed. Its fresh command/build/package receipts are local and do not replace these historical results.
+
 # Workspace 0.1.2: author-tested production snapshot
 
 Source tracking: [issue 13](https://github.com/kaosjammo/hermes-workspace/issues/13). This is a new catalogue review candidate, not the withdrawn 0.1.1 submission.

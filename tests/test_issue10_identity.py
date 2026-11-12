@@ -132,19 +132,17 @@ class IdentityTests(unittest.TestCase):
             service.execute(alice,ident,'set_username',{'name':'forged','expected_revision':before['revision']},membership_revision=2,expected_scope=scope)
         self.assertEqual(shared.backup_snapshot(),before)
 
-    def test_agent_capture_uses_actual_public_home_metadata_and_persists_author_time(self):
+    def test_agent_capture_uses_public_route_title_and_persists_author_time(self):
         from hermes_constants import set_hermes_home_override, reset_hermes_home_override
         base=self.home/'host'; profile=base/'profiles'/'alpha'; profile.mkdir(parents=True)
-        (profile/'profile.yaml').write_text(json.dumps({'display_name':'Display alpha','ui_meta':{'hermes-bots':{'title':'Aster Ω'}}}))
         with patch.dict(os.environ,{'HERMES_HOME':str(base),'HERMES_PROFILE_NAME':'wrong-launch-profile'}):
             token=set_hermes_home_override(profile)
-            try: captured=executor(profile)
+            try: captured=executor(profile, 'Aster Ω')
             finally: reset_hermes_home_override(token)
         self.assertEqual(captured['profile'],'alpha')
         self.assertEqual(captured['name'],'Aster Ω')
         page,comment=self.page_comment()
         run=self.store.begin_run(page['id'],'native',executor_identity=captured)
-        (profile/'profile.yaml').write_text(json.dumps({'display_name':'Later selected model is irrelevant'}))
         self.store.apply_run(run['id'],[],[{'comment_id':comment['id'],'text':'Captured alpha outcome'}])
         self.store.finish_run(run['id'],'completed')
         later={**captured,'name':'Birch 東京','id':'b'*64,'profile':'beta','source_id':'c'*64}

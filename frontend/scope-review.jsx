@@ -1,10 +1,9 @@
+import { Dialog, DialogContent } from "./owned-popups.jsx";
 import { useRef, useState } from "react";
 import {
   Checkbox,
   SearchField,
   Button,
-  Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,

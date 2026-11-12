@@ -1,8 +1,8 @@
+import { PopoverTrigger, Dialog, DialogContent, Popover, PopoverContent } from "./owned-popups.jsx";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { host } from '@hermes/plugin-sdk';
+import { host } from "@hermes/plugin-sdk";
 import { h, Action, Input, errorMessage, isSubmitEnter } from './ui.jsx';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
-  Popover, PopoverTrigger, PopoverContent } from '@hermes/plugin-sdk';
+import { DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@hermes/plugin-sdk";
 import { authorName, createIdentityBridge } from './identity.mjs';
 const IdentityContext = createContext(null);
 

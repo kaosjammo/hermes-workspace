@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { commentAnchor, locateAnchor } from "../../frontend/editor.mjs";
@@ -6,7 +7,7 @@ const require = createRequire(
   new URL("../../.local/toolchain/package.json", import.meta.url),
 );
 const { JSDOM } = require("jsdom");
-const { anchorRange } = await import("../../.local/frontend/ui-runtime.mjs");
+const { anchorRange } = await import(frontendRuntime('ui-runtime.mjs'));
 function root(html) {
   const { window } = new JSDOM("<article>" + html + "</article>");
   return window.document.querySelector("article");

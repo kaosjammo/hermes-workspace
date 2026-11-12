@@ -3,6 +3,7 @@
 All writable fixtures require an external issue-owned scratch directory. These
 direct Store runs do not establish native completion/provider acceptance.
 """
+from host_auth import host_auth
 import copy
 import json
 import os
@@ -218,7 +219,7 @@ class RevertResponses(unittest.TestCase):
         from hermes_cli.plugin_host_http_auth import with_hosted_admission
         from dashboard.plugin_api import create_router, _module
         run=self.run_begin();self.apply(run,'<p>North stream.</p><p>South orchard.</p>');self.store.finish_run(run['id'],'completed')
-        app=FastAPI();app.include_router(create_router(lambda:self.home),prefix='/api')
+        app=FastAPI();app.include_router(create_router(lambda:self.home,authorize=host_auth),prefix='/api')
         with TestClient(with_hosted_admission(app,True)) as client,TestClient(with_hosted_admission(app,False)) as denied:
             before=client.get('/api/state').json();p=self.preview()
             payload={**{k:p[k] for k in ('version_id','generation_id','change_id','content_hash','manual_revision','dataset_epoch')},'confirmed':True,'expected_revision':before['revision']}
@@ -262,34 +263,38 @@ class RevertResponses(unittest.TestCase):
         self.assertEqual(service._store(pid).snapshot()['comments'][0]['replies'],[])
 
     def test_real_workflow_claim_completion_stop_and_all_unresolved_outcomes(self):
-        # Reuse the real native admission fixture, never a bypass of its guards.
-        from test_workflow import WorkflowTests
-        from hermes_state_runtime import claim_session_input,settle_session_input
-        fixture=WorkflowTests('test_all_unresolved_persistent_binding_scope_and_restore')
+        # Production public hooks/tool boundary; no private native admission rows.
+        from test_public_calls import PublicCallTests
+        fixture = PublicCallTests('test_direct_handler_refuses_without_ticket_and_public_pre_hook_enables_one_atomic_save')
         fixture.setUp()
         try:
-            anchored=fixture.store.execute('add_comment',{'item_id':fixture.page['id'],'text':'Anchored separate outcome','anchor':{'quote':'Before','prefix':'','suffix':''}})
-            prepared=fixture.prepare();row=fixture.admit(prepared,claim=False)
-            replies=[{'comment_id':cid,'text':'Own admitted synthetic outcome'}for cid in prepared['run']['comment_ids']]
-            edits=[{'item_id':fixture.page['id'],'patch':{'content':'<p>After</p>'}}]
-            before=fixture.store.backup_snapshot()
-            with self.assertRaises(ValueError):fixture.apply(prepared,row,edits=edits,replies=replies)
-            self.assertEqual(before,fixture.store.backup_snapshot())
-            row=claim_session_input(fixture.db,epoch=fixture.epoch,session_id='native-one')
-            fixture.apply(prepared,row,edits=edits,replies=replies)
-            settle_session_input(fixture.db,epoch=fixture.epoch,admission_id=row['admission_id'],generation=row['generation'],outcome='completed')
-            self.assertEqual(fixture.flow.status(prepared['run']['id'])['run']['status'],'completed')
-            self.assertIn(fixture.answered['id'],prepared['run']['comment_ids']);self.assertNotIn(fixture.resolved['id'],prepared['run']['comment_ids'])
-            saved=fixture.store.snapshot();c=next(c for c in saved['comments']if c['id']==anchored['id']);ref=c['section_change']
-            p=fixture.store.execute('preview_section_revert',{k:ref[k]for k in ('version_id','generation_id','change_id')})
-            fixture.store.execute('revert_section',{**{k:p[k]for k in ('version_id','generation_id','change_id','content_hash','manual_revision','dataset_epoch')},'confirmed':True})
-            current=Store(fixture.home).snapshot()
-            self.assertEqual(next(c for c in current['comments']if c['id']==anchored['id'])['replies'],[])
-            self.assertEqual([c for c in current['comments']if c['id']!=anchored['id']],[c for c in saved['comments']if c['id']!=anchored['id']])
-            again=fixture.prepare();row=fixture.admit(again);fixture.flow.stop(again['run']['id']);before=fixture.store.backup_snapshot()
-            with self.assertRaises(ValueError):fixture.apply(again,row,edits=edits,replies=replies)
-            self.assertEqual(before,fixture.store.backup_snapshot())
-        finally:fixture.tearDown()
+            anchored = fixture.store.execute('add_comment', {'item_id':fixture.page['id'], 'text':'Anchored separate outcome',
+                'anchor':{'quote':'Before.', 'prefix':'', 'suffix':''}})
+            fixture.prepare()
+            args = {'run_id':fixture.run['id'], 'edits':[{'item_id':fixture.page['id'], 'patch':{'content':'<p>After.</p>'}}],
+                    'replies':[{'comment_id':cid, 'text':'Own admitted synthetic outcome'} for cid in fixture.run['comment_ids']]}
+            before = fixture.store.backup_snapshot()
+            with self.assertRaises(ValueError): fixture.apply(args)
+            self.assertEqual(before, fixture.store.backup_snapshot())
+            fixture.flow.pre(**fixture.origin, user_message=fixture.prompt)
+            fixture.apply(fixture.ticket(args))
+            fixture.flow.post(**fixture.origin, user_message=fixture.prompt, assistant_response='Saved all independent outcomes.')
+            self.assertEqual(fixture.end()['run']['status'], 'completed')
+            self.assertIn(fixture.comments[1]['id'], fixture.run['comment_ids'])
+            self.assertNotIn(fixture.resolved['id'], fixture.run['comment_ids'])
+            saved = fixture.store.snapshot()
+            change = next(c for c in saved['comments'] if c['id']==anchored['id'])['section_change']
+            preview = fixture.store.execute('preview_section_revert', {k:change[k] for k in ('version_id','generation_id','change_id')})
+            fixture.store.execute('revert_section', {**{k:preview[k] for k in ('version_id','generation_id','change_id','content_hash','manual_revision','dataset_epoch')}, 'confirmed':True})
+            current = Store(fixture.home).snapshot()
+            self.assertEqual(next(c for c in current['comments'] if c['id']==anchored['id'])['replies'], [])
+            self.assertEqual([c for c in current['comments'] if c['id']!=anchored['id']], [c for c in saved['comments'] if c['id']!=anchored['id']])
+            fixture.bind(); pending = fixture.ticket()
+            fixture.flow.stop(fixture.run['id']); before = fixture.store.backup_snapshot()
+            with self.assertRaises(ValueError): fixture.apply(pending)
+            self.assertEqual(before, fixture.store.backup_snapshot())
+        finally:
+            fixture.tearDown()
 
 
 if __name__=='__main__':unittest.main()

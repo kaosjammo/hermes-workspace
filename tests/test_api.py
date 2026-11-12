@@ -1,4 +1,5 @@
 """Production router behaviour; all homes are generated synthetic fixtures."""
+from runtime_paths import fixture_root as runtime_root
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import base64
@@ -12,7 +13,7 @@ from unittest.mock import patch
 
 import httpx
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.testclient import TestClient
 
 from dashboard.plugin_api import create_router
@@ -22,13 +23,14 @@ class NativeRouteBoundaryTests(unittest.TestCase):
     """Actual hosted HTTP guard/Store; downstream recorder isolates route identity.
 
     Outer admission is synthetic, using the real core IPC admission wrapper.
+    The plugin actor derives from the admitted server home, never a native private helper.
     This tests the server bridge, not native effects/provider acceptance.
     """
     def setUp(self):
         import dashboard.plugin_api as api
         from hermes_cli.plugin_host_http_auth import with_hosted_admission
         self.api = api
-        fixture_root = Path(__file__).resolve().parents[1] / '.local/api-native'
+        fixture_root = runtime_root('api-native')
         fixture_root.mkdir(parents=True, exist_ok=True)
         self.temp = TemporaryDirectory(dir=fixture_root)
         self.selected_home = Path(self.temp.name) / 'owner-a'
@@ -39,7 +41,7 @@ class NativeRouteBoundaryTests(unittest.TestCase):
             def __init__(self, home, store):
                 self.home = Path(home)
 
-            def prepare(self, item_id, session_id, explicit_item_ids, *, principal_id=None):
+            def prepare(self, item_id, session_id, explicit_item_ids, *, principal_id=None, display_title=None):
                 calls.append(('prepare', self.home, principal_id, item_id, session_id, explicit_item_ids))
                 return {'run': {'id': 'recorded'}, 'prompt': 'fixture', 'submission_id': 'recorded'}
 
@@ -54,7 +56,11 @@ class NativeRouteBoundaryTests(unittest.TestCase):
         self.workflow_patch = patch.object(api._module('workflow'), 'Workflow', Recorder)
         self.workflow_patch.start()
         app = FastAPI()
-        app.include_router(create_router(lambda: self.selected_home), prefix='/api/plugins/workspace')
+        # Simulate the host's OUTER gate. Admission context alone is not auth
+        # middleware; the plugin must no longer call this private helper itself.
+        from host_auth import host_auth
+        app.include_router(create_router(lambda: self.selected_home),
+                           prefix='/api/plugins/workspace', dependencies=[Depends(host_auth)])
         self.admitted = TestClient(with_hosted_admission(app, True))
         self.unadmitted = TestClient(with_hosted_admission(app, False))
 
@@ -65,19 +71,19 @@ class NativeRouteBoundaryTests(unittest.TestCase):
         self.temp.cleanup()
 
     def test_native_prepare_consume_inject_only_authenticated_owner_and_captured_home(self):
-        from gateway.owner_identity import host_owner_subject
+        from workspace_plugin.identity import human_id
         state = self.admitted.get('/api/plugins/workspace/state').json()
         scope = state['scope_id']
         prepared = self.admitted.post('/api/plugins/workspace/workflow/prepare', json={
             'item_id': 'page-fixture', 'session_id': 'native-fixture',
             'explicit_item_ids': ['related-fixture'], 'expected_scope': scope})
         self.assertEqual(prepared.status_code, 200, prepared.text)
-        self.assertEqual(self.calls[-1], ('prepare', self.selected_home, host_owner_subject(),
+        self.assertEqual(self.calls[-1], ('prepare', self.selected_home, human_id(self.selected_home),
                          'page-fixture', 'native-fixture', ['related-fixture']))
         consumed = self.admitted.post('/api/plugins/workspace/workflow/consume', json={
             'run_id': 'recorded', 'expected_scope': scope})
         self.assertEqual(consumed.status_code, 200, consumed.text)
-        self.assertEqual(self.calls[-1], ('consume', self.selected_home, host_owner_subject(), 'recorded'))
+        self.assertEqual(self.calls[-1], ('consume', self.selected_home, human_id(self.selected_home), 'recorded'))
         self.assertEqual(self.admitted.get('/api/plugins/workspace/state').json(), state)
         self.selected_home = Path(self.temp.name) / 'owner-b'
         before = len(self.calls)
@@ -107,12 +113,12 @@ class NativeRouteBoundaryTests(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
     def test_review_scope_principal_is_framework_owned_and_new_raw_grants_refuse(self):
-        from gateway.owner_identity import host_owner_subject
+        from workspace_plugin.identity import human_id
         scope=self.admitted.get('/api/plugins/workspace/state').json()['scope_id']
         body={'item_id':'current','selected_item_ids':['related'],'expected_revision':0,'expected_scope':scope}
         response=self.admitted.post('/api/plugins/workspace/workflow/review-scope',json=body)
         self.assertEqual(response.status_code,200,response.text)
-        self.assertEqual(self.calls[-1],('review-scope',self.selected_home,host_owner_subject(),'current',['related'],0))
+        self.assertEqual(self.calls[-1],('review-scope',self.selected_home,human_id(self.selected_home),'current',['related'],0))
         count=len(self.calls)
         for field in ('principal_id','profile_home','reviewed_item_ids'):
             rejected=self.admitted.post('/api/plugins/workspace/workflow/review-scope',json={**body,field:'forged'})
@@ -124,7 +130,7 @@ class NativeRouteBoundaryTests(unittest.TestCase):
 
 class ApiTests(unittest.TestCase):
     def setUp(self):
-        fixture_root = (Path(__file__).resolve().parents[1] / '.local/api').resolve()
+        fixture_root = runtime_root('api').resolve()
         fixture_root.mkdir(parents=True, exist_ok=True)
         self.temp = TemporaryDirectory(dir=fixture_root)
         self.home = Path(self.temp.name) / 'owner-a'

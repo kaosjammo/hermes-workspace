@@ -1106,6 +1106,8 @@ function Document({
     old.length === next.length && old.every((p,i) => p.id === next[i].id && p.block === next[i].block && p.slotBlock === next[i].slotBlock && p.lineGroup === next[i].lineGroup && JSON.stringify(p.anchor) === JSON.stringify(next[i].anchor) &&
       Math.abs(p.top-next[i].top)<0.5 && Math.abs(p.blockBottom-next[i].blockBottom)<0.5) ? old : next), []);
   const [pending, setPending] = useState(false);
+  const submissionSequence = useRef(0);
+  const [controlPending, setControlPending] = useState(false), controlOperation = useRef(false);
   const [sectionBusy, setSectionBusy] = useState(false), [sectionFrozen, setSectionFrozen] = useState(false), [sectionReview, setSectionReview] = useState(null);
   const sectionOperation = useRef(null);
   const pendingFiles = useRef(async () => {});
@@ -1289,14 +1291,18 @@ function Document({
       throw new Error(
         "Comments or target items changed. Close and review this run again.",
       );
+    const sequence = ++submissionSequence.current;
     setPending(true);
     try {
       await workflow.addressComments(item.id, explicitItemIds, review && {
         scope_id: review.scope_id, revision: review.revision,
+      }, async () => {
+        await refresh();
+        if (client.current() && submissionSequence.current === sequence) setPending(false);
       });
     } finally {
       if (client.current()) {
-        setPending(false);
+        if (submissionSequence.current === sequence) setPending(false);
         await refresh();
       }
     }
@@ -1308,13 +1314,16 @@ function Document({
     if (review.targets.length) setScopeReview(review);
     else await submitRun([]);
   };
-  const stop = async () => {
-    setPending(true);
+  const runControl = async action => {
+    if (controlOperation.current) return;
+    controlOperation.current = true;
+    setControlPending(true);
     try {
-      await workflow.stop(currentRun);
+      await action();
     } finally {
+      controlOperation.current = false;
       if (client.current()) {
-        setPending(false);
+        setControlPending(false);
         await refresh();
       }
     }
@@ -1472,12 +1481,12 @@ function Document({
                   "Editing is disabled while this run is prepared."),
           ),
           currentRun &&
-            h(Action, { disabled: pending, onClick: () => act(stop) }, "Stop"),
+            h(Action, { disabled: controlPending, onClick: () => act(() => runControl(() => workflow.stop(currentRun))) }, "Stop"),
           currentRun &&
             h(
               Action,
               {
-                disabled: pending,
+                disabled: controlPending,
                 onClick: () =>
                   confirm({
                     title: "Recover document?",
@@ -1485,13 +1494,7 @@ function Document({
                       "The native thread may continue. This revokes its Workspace edit authority and unlocks this document. Saved partial changes and the pre-run version remain available for Restore. The native outcome remains unknown; this does not confirm the thread stopped.",
                     label: "Revoke Workspace edits",
                     skipFlush: true,
-                    action: async () => {
-                      try {
-                        await workflow.recover(currentRun);
-                      } finally {
-                        if (client.current()) await refresh();
-                      }
-                    },
+                    action: () => runControl(() => workflow.recover(currentRun)),
                   }),
               },
               "Recover document",

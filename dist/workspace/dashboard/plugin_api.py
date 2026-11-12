@@ -46,23 +46,6 @@ def _home() -> Path:
     return Path(get_hermes_home())
 
 
-def _authorize(request: Request) -> None:
-    # The framework preserves admission in hosted mode without forwarding secrets.
-    from hermes_cli.web_deps import late
-    late('_require_token')(request)
-
-
-def _authenticated_workspace_principal(request: Request) -> str:
-    """Derive the single native host owner after actual framework admission.
-
-    Identity is implementation-only. Neither JSON nor an echoed identity header
-    can supply a SessionActor subject. Selected-home scope stays request-bound.
-    """
-    _authorize(request)
-    from gateway.owner_identity import host_owner_subject
-    return host_owner_subject()
-
-
 async def _body(request: Request, limit: int = 48 * 1024 * 1024) -> dict:
     chunks = []
     total = 0
@@ -113,9 +96,14 @@ def _download(name: str, media_type: str, data: bytes) -> dict:
 
 
 def create_router(owner_home: Callable[[], Path] = _home,
-                  authorize: Callable = _authorize, *, shared_root: Path | None = None) -> APIRouter:
-    """Construct routes; an injected resolver is only for isolated fixture tests."""
-    routes = APIRouter(dependencies=[Depends(authorize)])
+                  authorize: Callable | None = None, *, shared_root: Path | None = None) -> APIRouter:
+    """Host mounts /api/plugins/workspace behind its authentication middleware.
+
+    A bare router is not an authenticated standalone server. Tests embedding it
+    outside Hermes must supply their own outer gate. Keep the optional dependency
+    for isolated fixtures; production never re-enters private host token helpers.
+    """
+    routes = APIRouter(dependencies=[Depends(authorize)] if authorize is not None else [])
     # Completion readback only: bounded, process-local receipts contain no backup
     # bytes. Missing receipts after restart mean unknown, never permission to retry.
     restore_receipts = OrderedDict()
@@ -429,7 +417,10 @@ def create_router(owner_home: Callable[[], Path] = _home,
             return workflow.bind_thread(body['item_id'], body['thread_id'])
         if action == 'prepare':
             return workflow.prepare(body['item_id'], body['session_id'], body.get('explicit_item_ids', []),
-                                    principal_id=principal_id, **({'review_id':body['review_id']} if 'review_id' in body else {}))
+                                    principal_id=principal_id, display_title=body.get('display_title'),
+                                    **({'review_id':body['review_id']} if 'review_id' in body else {}))
+        if action == 'submitted':
+            return workflow.record_submission(body['run_id'], body['admission_id'])
         if action == 'consume':
             return workflow.consume(body['run_id'], principal_id=principal_id)
         if action == 'status':
@@ -440,19 +431,21 @@ def create_router(owner_home: Callable[[], Path] = _home,
 
     @routes.post('/workflow/{action}')
     async def workflow(request: Request, action: str):
-        if action not in ('bind', 'review-scope', 'prepare', 'consume', 'status', 'stop', 'recover'):
+        if action not in ('bind', 'review-scope', 'prepare', 'consume', 'submitted', 'status', 'stop', 'recover'):
             raise HTTPException(404, 'Unknown Workspace workflow action.')
         body = await _body(request, 65536)
         home, store = selected()
         _scope(store, body)
         principal_id = None
-        if action in ('review-scope', 'prepare', 'consume'):
+        if action in ('review-scope', 'prepare', 'consume', 'submitted'):
             allowed = ({'item_id','selected_item_ids','expected_revision','expected_scope'} if action=='review-scope' else
-                       {'item_id', 'session_id', 'explicit_item_ids', 'expected_scope', 'review_id'}
-                       if action == 'prepare' else {'run_id', 'expected_scope'})
+                       {'item_id', 'session_id', 'explicit_item_ids', 'expected_scope', 'review_id', 'display_title'}
+                       if action == 'prepare' else {'run_id', 'admission_id', 'expected_scope'} if action == 'submitted' else {'run_id', 'expected_scope'})
             if set(body) - allowed:
                 raise HTTPException(400, 'Unexpected Workspace workflow fields. Native identity is server-owned.')
-            principal_id = _authenticated_workspace_principal(request)
+            # Host already admitted this route. Scope the plugin's review actor
+            # to the server-selected home, not a client/native principal claim.
+            principal_id = _module('identity').human_id(home)
         try:
             return await asyncio.to_thread(workflow_call, home, store, action, body, principal_id)
         except KeyError as exc:

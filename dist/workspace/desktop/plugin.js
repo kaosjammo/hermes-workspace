@@ -36,9 +36,9 @@ var require_react = __commonJS({
   }
 });
 
-// ../../../toolchain/node_modules/react-dom/cjs/react-dom.development.js
+// .local/toolchain/node_modules/react-dom/cjs/react-dom.development.js
 var require_react_dom_development = __commonJS({
-  "../../../toolchain/node_modules/react-dom/cjs/react-dom.development.js"(exports) {
+  ".local/toolchain/node_modules/react-dom/cjs/react-dom.development.js"(exports) {
     "use strict";
     /**
      * @license React
@@ -300,9 +300,9 @@ var require_react_dom_development = __commonJS({
   }
 });
 
-// ../../../toolchain/node_modules/react-dom/index.js
+// .local/toolchain/node_modules/react-dom/index.js
 var require_react_dom = __commonJS({
-  "../../../toolchain/node_modules/react-dom/index.js"(exports, module) {
+  ".local/toolchain/node_modules/react-dom/index.js"(exports, module) {
     "use strict";
     if (false) {
       checkDCE();
@@ -314,7 +314,7 @@ var require_react_dom = __commonJS({
 });
 
 // frontend/index.jsx
-import { createElement as h2 } from "react";
+import { createElement as h3 } from "react";
 import { ROUTES_AREA, SIDEBAR_NAV_AREA, host as host4, gatewayActivationEpoch as gatewayActivationEpoch3 } from "@hermes/plugin-sdk";
 
 // frontend/workspace.jsx
@@ -322,10 +322,10 @@ import {
   useCallback as useCallback4,
   useEffect as useEffect8,
   useId as useId7,
-  useLayoutEffect as useLayoutEffect9,
+  useLayoutEffect as useLayoutEffect10,
   useMemo as useMemo4,
-  useRef as useRef15,
-  useState as useState16,
+  useRef as useRef16,
+  useState as useState17,
   useSyncExternalStore,
   memo
 } from "react";
@@ -466,8 +466,55 @@ import {
   GlyphSpinner as GlyphSpinner2
 } from "@hermes/plugin-sdk";
 
+// frontend/owned-popups.jsx
+import { createElement as h, forwardRef, useLayoutEffect, useRef, useState } from "react";
+import * as sdk from "@hermes/plugin-sdk";
+var openPopups = /* @__PURE__ */ new Set();
+var hasWorkspacePopup = () => openPopups.size > 0;
+var isWorkspacePopupTarget = (target) => Boolean(target?.closest?.("[data-workspace-popup]"));
+var isWorkspacePopupTrigger = (target) => Boolean(target?.closest?.("[data-workspace-popup-trigger]"));
+function ownedRoot(Native) {
+  return function WorkspacePopup({ open, defaultOpen = false, onOpenChange, ...props }) {
+    const [localOpen, setLocalOpen] = useState(defaultOpen);
+    const token = useRef({});
+    const shown = open ?? localOpen;
+    useLayoutEffect(() => {
+      const owned = token.current;
+      if (shown) openPopups.add(owned);
+      return () => {
+        openPopups.delete(owned);
+      };
+    }, [shown]);
+    return h(Native, { ...props, open: shown, onOpenChange: (next) => {
+      if (open === void 0) setLocalOpen(next);
+      onOpenChange?.(next);
+    } });
+  };
+}
+function ownedContent(Native) {
+  return forwardRef(function WorkspacePopupContent(props, ref) {
+    return h(Native, { ...props, ref, "data-workspace-popup": "" });
+  });
+}
+var Dialog2 = ownedRoot(sdk.Dialog);
+var Popover2 = ownedRoot(sdk.Popover);
+var DropdownMenu2 = ownedRoot(sdk.DropdownMenu);
+var Select2 = ownedRoot(sdk.Select);
+var DialogContent2 = ownedContent(sdk.DialogContent);
+var PopoverContent2 = ownedContent(sdk.PopoverContent);
+var DropdownMenuContent2 = ownedContent(sdk.DropdownMenuContent);
+var SelectContent2 = ownedContent(sdk.SelectContent);
+function ownedTrigger(Native) {
+  return forwardRef(function WorkspacePopupTrigger(props, ref) {
+    return h(Native, { ...props, ref, "data-workspace-popup-trigger": "" });
+  });
+}
+var PopoverTrigger2 = ownedTrigger(sdk.PopoverTrigger);
+var SelectTrigger2 = ownedTrigger(sdk.SelectTrigger);
+var DropdownMenuTrigger2 = ownedTrigger(sdk.DropdownMenuTrigger);
+
 // frontend/ui.jsx
-import { createElement as h, cloneElement, Children, useState, useRef, useLayoutEffect } from "react";
+import { createElement as h2, cloneElement, Children, useState as useState2, useRef as useRef2, useLayoutEffect as useLayoutEffect2 } from "react";
 import * as nativeSdk from "@hermes/plugin-sdk";
 
 // frontend/editor.mjs
@@ -548,9 +595,12 @@ function commentAnchor(comment) {
   const change = comment.section_change;
   if (!change) return comment.anchor;
   if (change.anchor && (change.highlight_status === "available" || change.status === "available" && change.highlight_status !== "unavailable"))
-    return { ...change.anchor, paragraphs: true,
-      ...(change.anchors?.length > 1 ? { ranges: change.anchors } : {}) };
-  if (change.status === "reverted" && change.highlight_status === undefined) return comment.anchor;
+    return {
+      ...change.anchor,
+      paragraphs: true,
+      ...change.anchors?.length > 1 ? { ranges: change.anchors } : {}
+    };
+  if (change.status === "reverted" && change.highlight_status === void 0) return comment.anchor;
   return comment.anchor ? { ...comment.anchor, unavailable: true } : null;
 }
 function locateAnchor(text, anchor) {
@@ -696,24 +746,13 @@ import {
   Button,
   Input,
   Textarea,
-  Select,
-  SelectTrigger,
   SelectValue,
-  SelectContent,
   SelectItem,
-  Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
   DropdownMenuItem,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
   Tip,
   Codicon
 } from "@hermes/plugin-sdk";
@@ -794,7 +833,7 @@ function popupBounds(opener) {
   return { boundary, padding, scale, width: rect && (Math.min(view.innerWidth, rect.right) - Math.max(0, rect.left)) / scale - 16 };
 }
 function usePopupContainment(content, bounds) {
-  useLayoutEffect(() => {
+  useLayoutEffect2(() => {
     if (!content || !bounds.scale || bounds.scale === 1) return;
     const boundary = bounds.boundary ?? content.ownerDocument.documentElement;
     const view = content.ownerDocument.defaultView;
@@ -830,12 +869,12 @@ function usePopupContainment(content, bounds) {
   }, [content, bounds]);
 }
 function ContextTip({ label, children }) {
-  const [bounds, setBounds] = useState({ boundary: void 0, padding: 8 }), [content, setContent] = useState(null);
+  const [bounds, setBounds] = useState2({ boundary: void 0, padding: 8 }), [content, setContent] = useState2(null);
   usePopupContainment(content, bounds);
-  return h(
+  return h2(
     Tip,
     {
-      label: h("span", { style: { display: "block", whiteSpace: "normal", overflowWrap: "anywhere" } }, label),
+      label: h2("span", { style: { display: "block", whiteSpace: "normal", overflowWrap: "anywhere" } }, label),
       // Tip also uses collisionPadding to decide whether its trigger is hidden.
       // Its width is bounded explicitly; keep the native trigger clip inset.
       ref: setContent,
@@ -853,18 +892,18 @@ function ContextTip({ label, children }) {
   );
 }
 function ContextPopover({ open, onOpenChange, trigger, triggerTip, children, returnFocusOnEscape = false, ...contentProps }) {
-  const opener = useRef(null), [bounds, setBounds] = useState({ boundary: void 0, padding: 8 });
-  const [content, setContent] = useState(null);
+  const opener = useRef2(null), [bounds, setBounds] = useState2({ boundary: void 0, padding: 8 });
+  const [content, setContent] = useState2(null);
   usePopupContainment(content, bounds);
-  const nativeTrigger = h(PopoverTrigger, { asChild: true }, cloneElement(trigger, { ref: opener }));
-  return h(
-    Popover,
+  const nativeTrigger = h2(PopoverTrigger2, { asChild: true }, cloneElement(trigger, { ref: opener }));
+  return h2(
+    Popover2,
     { open, onOpenChange: (next) => {
       if (next) setBounds(popupBounds(opener.current));
       onOpenChange(next);
     } },
-    triggerTip ? h(Tip, { label: triggerTip }, nativeTrigger) : nativeTrigger,
-    h(PopoverContent, {
+    triggerTip ? h2(Tip, { label: triggerTip }, nativeTrigger) : nativeTrigger,
+    h2(PopoverContent2, {
       ref: setContent,
       collisionBoundary: bounds.boundary,
       collisionPadding: bounds.padding,
@@ -897,10 +936,10 @@ function ActionMenu({
   onOpenChange,
   onCloseAutoFocus
 }) {
-  const opener = useRef(null);
-  const openingPointer = useRef(null);
-  const [menuBounds, setMenuBounds] = useState({ boundary: void 0, padding: 8 });
-  const [content, setContent] = useState(null);
+  const opener = useRef2(null);
+  const openingPointer = useRef2(null);
+  const [menuBounds, setMenuBounds] = useState2({ boundary: void 0, padding: 8 });
+  const [content, setContent] = useState2(null);
   usePopupContainment(content, menuBounds);
   const changeOpen = (value) => {
     if (!value) openingPointer.current = null;
@@ -909,13 +948,13 @@ function ActionMenu({
     }
     onOpenChange?.(value);
   };
-  return h(
-    DropdownMenu,
+  return h2(
+    DropdownMenu2,
     { open, onOpenChange: changeOpen },
-    h(
-      DropdownMenuTrigger,
+    h2(
+      DropdownMenuTrigger2,
       { asChild: true },
-      h(
+      h2(
         Action,
         {
           ref: opener,
@@ -929,11 +968,11 @@ function ActionMenu({
           "aria-label": label
         },
         triggerLabel,
-        showChevron && h(Codicon, { name: "chevron-down" })
+        showChevron && h2(Codicon, { name: "chevron-down" })
       )
     ),
-    h(
-      DropdownMenuContent,
+    h2(
+      DropdownMenuContent2,
       {
         ref: setContent,
         align,
@@ -947,7 +986,7 @@ function ActionMenu({
         }
       },
       Children.toArray(children).map(
-        (child) => child && h(
+        (child) => child && h2(
           DropdownMenuItem,
           {
             key: child.key,
@@ -986,9 +1025,9 @@ function Choice({
   onCloseAutoFocus,
   displayValue
 }) {
-  const opener = useRef(null);
-  const [bounds, setBounds] = useState({ boundary: void 0, padding: 8 });
-  const [content, setContent] = useState(null);
+  const opener = useRef2(null);
+  const [bounds, setBounds] = useState2({ boundary: void 0, padding: 8 });
+  const [content, setContent] = useState2(null);
   const selectedOption = options.find((option) => Array.isArray(option) && String(option[0]) === String(value));
   const selectedPath = selectedOption?.[2]?.path;
   usePopupContainment(content, bounds);
@@ -996,12 +1035,12 @@ function Choice({
     if (value2) setBounds(popupBounds(opener.current));
     onOpenChange?.(value2);
   };
-  return h(
+  return h2(
     "label",
     { className: "ws-choice" },
-    showLabel && h("span", { className: "ws-label" }, label),
-    h(
-      Select,
+    showLabel && h2("span", { className: "ws-label" }, label),
+    h2(
+      Select2,
       {
         value: (() => {
           const index = options.findIndex((option) => String(Array.isArray(option) ? option[0] : option) === String(value));
@@ -1016,9 +1055,9 @@ function Choice({
         disabled,
         onOpenChange: changeOpen
       },
-      h(SelectTrigger, { ref: opener, "aria-label": label, className: "ws-choice-trigger", title: selectedPath, ...triggerProps }, h(SelectValue, { className: "ws-choice-value" }, displayValue ?? selectedPath)),
-      h(
-        SelectContent,
+      h2(SelectTrigger2, { ref: opener, "aria-label": label, className: "ws-choice-trigger", title: selectedPath, ...triggerProps }, h2(SelectValue, { className: "ws-choice-value" }, displayValue ?? selectedPath)),
+      h2(
+        SelectContent2,
         {
           ref: setContent,
           onCloseAutoFocus,
@@ -1032,7 +1071,7 @@ function Choice({
         },
         options.map((option, index) => {
           const [id, text, hierarchy] = Array.isArray(option) ? option : [option, option];
-          return h(
+          return h2(
             SelectItem,
             {
               key: `choice:${index}`,
@@ -1055,7 +1094,7 @@ function Choice({
   );
 }
 function Action({ children, onClick, ...props }) {
-  return h(
+  return h2(
     Button,
     {
       variant: "secondary",
@@ -1068,22 +1107,22 @@ function Action({ children, onClick, ...props }) {
   );
 }
 function Field({ label, ...props }) {
-  return h(
+  return h2(
     "label",
     { className: "ws-field" },
-    h("span", { className: "ws-label" }, label),
-    h(Input, { "aria-label": label, ...props })
+    h2("span", { className: "ws-label" }, label),
+    h2(Input, { "aria-label": label, ...props })
   );
 }
 function ContentDialog({ title, description, children, onClose, returnFocus, busy = false, skipReturnFocus = () => false }) {
-  const opener = useRef(returnFocus ?? document.activeElement);
-  return h(
-    Dialog,
+  const opener = useRef2(returnFocus ?? document.activeElement);
+  return h2(
+    Dialog2,
     { open: true, onOpenChange: (open) => {
       if (!open && !busy) onClose();
     } },
-    h(
-      DialogContent,
+    h2(
+      DialogContent2,
       {
         className: "ws-dialog",
         showCloseButton: !busy,
@@ -1092,14 +1131,14 @@ function ContentDialog({ title, description, children, onClose, returnFocus, bus
           if (!skipReturnFocus() && opener.current?.isConnected) opener.current.focus({ preventScroll: true });
         }
       },
-      h(
+      h2(
         DialogHeader,
         null,
-        h(DialogTitle, null, title),
-        description && h(DialogDescription, { className: "ws-dialog-description" }, description)
+        h2(DialogTitle, null, title),
+        description && h2(DialogDescription, { className: "ws-dialog-description" }, description)
       ),
       children,
-      h(DialogFooter, { className: "ws-dialog-footer" }, h(Action, { disabled: busy, onClick: onClose }, "Close"))
+      h2(DialogFooter, { className: "ws-dialog-footer" }, h2(Action, { disabled: busy, onClick: onClose }, "Close"))
     )
   );
 }
@@ -1120,18 +1159,18 @@ function FormDialog({
   recoveryAction,
   errorSummary
 }) {
-  const opener = useRef(returnFocus ?? document.activeElement);
-  const returnScope = useRef(opener.current?.closest('[aria-label="Database"]') ?? opener.current?.closest(".ws-work") ?? opener.current?.closest(".ws-root")?.querySelector(".ws-work"));
-  const confirmButton = useRef(null);
-  const submitted = useRef(false);
-  const [values, setValues] = useState(initial);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  return h(
-    Dialog,
+  const opener = useRef2(returnFocus ?? document.activeElement);
+  const returnScope = useRef2(opener.current?.closest('[aria-label="Database"]') ?? opener.current?.closest(".ws-work") ?? opener.current?.closest(".ws-root")?.querySelector(".ws-work"));
+  const confirmButton = useRef2(null);
+  const submitted = useRef2(false);
+  const [values, setValues] = useState2(initial);
+  const [error, setError] = useState2("");
+  const [busy, setBusy] = useState2(false);
+  return h2(
+    Dialog2,
     { open: true, onOpenChange: (v) => !v && !busy && onClose() },
-    h(
-      DialogContent,
+    h2(
+      DialogContent2,
       {
         className: "ws-dialog",
         showCloseButton: !busy,
@@ -1157,13 +1196,13 @@ function FormDialog({
           }
         }
       },
-      h(
+      h2(
         DialogHeader,
         null,
-        h(DialogTitle, null, title),
-        description && h(DialogDescription, { className: "ws-dialog-description" }, description)
+        h2(DialogTitle, null, title),
+        description && h2(DialogDescription, { className: "ws-dialog-description" }, description)
       ),
-      h(
+      h2(
         "form",
         {
           onSubmit: async (e) => {
@@ -1183,14 +1222,14 @@ function FormDialog({
           }
         },
         fields.filter((field) => !field.when || field.when(values)).map(
-          (field) => field.options ? h(Choice, {
+          (field) => field.options ? h2(Choice, {
             key: field.name,
             label: field.label,
             value: values[field.name] ?? "",
             options: field.options,
             disabled: busy,
             onChange: (value) => setValues((v) => ({ ...v, [field.name]: value }))
-          }) : h(Field, {
+          }) : h2(Field, {
             key: field.name,
             label: field.label,
             type: field.type ?? "text",
@@ -1201,21 +1240,21 @@ function FormDialog({
           })
         ),
         renderHelp?.(values),
-        error && h(
+        error && h2(
           "div",
           { role: "alert" },
-          h("p", null, errorSummary || error),
-          errorSummary && h(
+          h2("p", null, errorSummary || error),
+          errorSummary && h2(
             "details",
             null,
-            h("summary", null, "Technical details"),
-            h("pre", null, error)
+            h2("summary", null, "Technical details"),
+            h2("pre", null, error)
           )
         ),
-        h(
+        h2(
           DialogFooter,
           { className: "ws-dialog-footer" },
-          recoveryAction && h(Action, { disabled: busy, onClick: async () => {
+          recoveryAction && h2(Action, { disabled: busy, onClick: async () => {
             setBusy(true);
             setError("");
             try {
@@ -1226,8 +1265,8 @@ function FormDialog({
               setBusy(false);
             }
           } }, recoveryAction.label),
-          h(Action, { disabled: busy, onClick: onClose }, "Cancel"),
-          h(Button, { ref: confirmButton, type: "submit", "aria-label": confirm, disabled: submitDisabled, variant: destructive ? "destructive" : "default", loading: busy }, confirm)
+          h2(Action, { disabled: busy, onClick: onClose }, "Cancel"),
+          h2(Button, { ref: confirmButton, type: "submit", "aria-label": confirm, disabled: submitDisabled, variant: destructive ? "destructive" : "default", loading: busy }, confirm)
         )
       )
     )
@@ -1235,10 +1274,8 @@ function FormDialog({
 }
 
 // frontend/restore.jsx
-import { useRef as useRef2, useState as useState2 } from "react";
+import { useRef as useRef3, useState as useState3 } from "react";
 import {
-  Dialog as Dialog2,
-  DialogContent as DialogContent2,
   DialogHeader as DialogHeader2,
   DialogTitle as DialogTitle2,
   DialogDescription as DialogDescription2,
@@ -1253,9 +1290,9 @@ function RestoreDialog({
   onRefused,
   onUseCurrent
 }) {
-  const [receipt, setReceipt] = useState2({ status: "confirmation" });
-  const [busy, setBusy] = useState2(false), [error, setError] = useState2(""), [inspection, setInspection] = useState2(null);
-  const submitted = useRef2(false);
+  const [receipt, setReceipt] = useState3({ status: "confirmation" });
+  const [busy, setBusy] = useState3(false), [error, setError] = useState3(""), [inspection, setInspection] = useState3(null);
+  const submitted = useRef3(false);
   const check = async (submit = false) => {
     if (busy || submit && submitted.current) return;
     if (submit) submitted.current = true;
@@ -1284,7 +1321,7 @@ function RestoreDialog({
   };
   const status = receipt.status;
   const message = status === "confirmation" ? "This replaces the current Workspace, including documents, comments and attachments. Download a complete backup first. Native threads will be detached and no run will start." : status === "running" ? "The server is still processing this replacement. Its result has not been confirmed. Check status; do not submit it again." : status === "refused" ? "The server refused this replacement. Load the current Workspace before making changes." : "The replacement outcome is unknown. It may already have committed. A server restart or expired receipt can prevent confirmation. Do not repeat the replacement to recover a lost response. Check status or inspect the current Workspace.";
-  return h(
+  return h2(
     Dialog2,
     {
       open: true,
@@ -1292,41 +1329,41 @@ function RestoreDialog({
         if (!value && !busy && status === "confirmation") onClose();
       }
     },
-    h(
+    h2(
       DialogContent2,
       { className: "ws-dialog", showCloseButton: !busy && status === "confirmation" },
-      h(
+      h2(
         DialogHeader2,
         null,
-        h(
+        h2(
           DialogTitle2,
           null,
           status === "confirmation" ? "Replace Workspace from backup?" : "Workspace replacement status"
         ),
-        h(DialogDescription2, { className: "ws-dialog-description" }, message)
+        h2(DialogDescription2, { className: "ws-dialog-description" }, message)
       ),
-      busy && h(
+      busy && h2(
         "p",
         { role: "status" },
         status === "confirmation" ? "Replacing Workspace\u2026" : "Checking replacement\u2026"
       ),
-      receipt.detail && h("p", null, receipt.detail),
-      error && h("p", { className: "ws-error", role: "alert" }, error),
-      inspection && h(
+      receipt.detail && h2("p", null, receipt.detail),
+      error && h2("p", { className: "ws-error", role: "alert" }, error),
+      inspection && h2(
         "p",
         { role: "status" },
         `Current readback: ${inspection.items.length} items, ${inspection.comments.length} comments, ${inspection.attachments.length} attachments. This readback does not confirm the replacement outcome. Editing remains paused.`
       ),
-      h(
+      h2(
         DialogFooter2,
         { className: "ws-dialog-footer ws-recovery-actions" },
         status === "confirmation" ? [
-          h(
+          h2(
             Action,
             { key: "cancel", disabled: busy, onClick: onClose },
             "Cancel"
           ),
-          h(
+          h2(
             Action,
             {
               key: "restore",
@@ -1337,12 +1374,12 @@ function RestoreDialog({
             "Replace Workspace"
           )
         ] : [
-          h(
+          h2(
             Action,
             { key: "check", disabled: busy, onClick: () => void check() },
             "Check replacement status"
           ),
-          status === "unknown" && inspection && h(
+          status === "unknown" && inspection && h2(
             Action,
             {
               key: "use",
@@ -1351,7 +1388,7 @@ function RestoreDialog({
             },
             "Use current Workspace (outcome unknown)"
           ),
-          status === "refused" ? h(
+          status === "refused" ? h2(
             Action,
             {
               key: "load",
@@ -1359,7 +1396,7 @@ function RestoreDialog({
               onClick: () => onRefused(ticket)
             },
             "Load current Workspace"
-          ) : h(
+          ) : h2(
             Action,
             {
               key: "inspect",
@@ -1386,15 +1423,15 @@ function RestoreDialog({
 }
 
 // frontend/page-title.jsx
-import { useEffect, useLayoutEffect as useLayoutEffect2, useRef as useRef3, useState as useState3 } from "react";
+import { useEffect, useLayoutEffect as useLayoutEffect3, useRef as useRef4, useState as useState4 } from "react";
 function PageTitle({ item, locked: authorityLocked, interactionBlocked = false, buffer, registerFlush, onSave, onError, headingId }) {
   const locked = authorityLocked || interactionBlocked;
-  const input = useRef3(null), dirty = useRef3(null), saving = useRef3(Promise.resolve());
-  const pending = useRef3(0), token = useRef3(null), mounted = useRef3(true), editRevision = useRef3(0);
-  const [value, setValue] = useState3(item.title);
-  const [recovery, setRecovery] = useState3(() => buffer?.read() ?? null);
-  const [status, setStatus] = useState3("Saved"), [error, setError] = useState3("");
-  const recoveryRef = useRef3(recovery), latest = useRef3(null);
+  const input = useRef4(null), dirty = useRef4(null), saving = useRef4(Promise.resolve());
+  const pending = useRef4(0), token = useRef4(null), mounted = useRef4(true), editRevision = useRef4(0);
+  const [value, setValue] = useState4(item.title);
+  const [recovery, setRecovery] = useState4(() => buffer?.read() ?? null);
+  const [status, setStatus] = useState4("Saved"), [error, setError] = useState4("");
+  const recoveryRef = useRef4(recovery), latest = useRef4(null);
   recoveryRef.current = recovery;
   latest.current = { item, locked: authorityLocked, onSave, buffer };
   const retain = (text) => {
@@ -1464,8 +1501,8 @@ function PageTitle({ item, locked: authorityLocked, interactionBlocked = false, 
       input.current.style.height = `${input.current.scrollHeight}px`;
     }
   };
-  useLayoutEffect2(resize, [value]);
-  useLayoutEffect2(() => {
+  useLayoutEffect3(resize, [value]);
+  useLayoutEffect3(() => {
     const parent = input.current?.parentElement;
     if (!parent || !globalThis.ResizeObserver) return;
     let width = parent.clientWidth;
@@ -1478,15 +1515,15 @@ function PageTitle({ item, locked: authorityLocked, interactionBlocked = false, 
     observer.observe(parent);
     return () => observer.disconnect();
   }, []);
-  return h(
+  return h2(
     "div",
     { className: "ws-title-wrap" },
-    h("h1", { id: headingId, className: "ws-title-reader" }, value.trim() || item.title),
-    recovery && h(
+    h2("h1", { id: headingId, className: "ws-title-reader" }, value.trim() || item.title),
+    recovery && h2(
       "div",
       { className: "ws-title-recovery ws-banner", role: "status" },
-      h("p", null, "A title draft is retained for this exact Workspace. Recovering applies and saves it: ", h("strong", null, recovery.title)),
-      h(Action, { disabled: locked, onClick: () => {
+      h2("p", null, "A title draft is retained for this exact Workspace. Recovering applies and saves it: ", h2("strong", null, recovery.title)),
+      h2(Action, { disabled: locked, onClick: () => {
         const text = recovery.title;
         recoveryRef.current = null;
         setRecovery(null);
@@ -1495,7 +1532,7 @@ function PageTitle({ item, locked: authorityLocked, interactionBlocked = false, 
         void flush().catch(() => {
         });
       } }, "Recover title"),
-      h(Action, { disabled: locked, onClick: () => {
+      h2(Action, { disabled: locked, onClick: () => {
         buffer?.discard();
         recoveryRef.current = null;
         setRecovery(null);
@@ -1505,7 +1542,7 @@ function PageTitle({ item, locked: authorityLocked, interactionBlocked = false, 
         setStatus("Saved");
       } }, "Discard retained title")
     ),
-    h(Textarea, {
+    h2(Textarea, {
       ref: input,
       rows: 1,
       className: `ws-title${value.trim() ? "" : " ws-title-empty"}`,
@@ -1533,12 +1570,12 @@ function PageTitle({ item, locked: authorityLocked, interactionBlocked = false, 
         }
       }
     }),
-    !value.trim() && h("span", { id: `${headingId}-empty`, className: "ws-title-empty-cue" }, "Page title \u2014 enter a name"),
-    status !== "Saved" && h(
+    !value.trim() && h2("span", { id: `${headingId}-empty`, className: "ws-title-empty-cue" }, "Page title \u2014 enter a name"),
+    status !== "Saved" && h2(
       "div",
       { id: `${headingId}-status`, className: "ws-title-status", role: error ? "alert" : "status" },
-      h("span", null, error ? `Title not saved. ${error}` : status),
-      error && h(Action, { disabled: locked, onMouseDown: (event) => event.preventDefault(), onClick: (event) => {
+      h2("span", null, error ? `Title not saved. ${error}` : status),
+      error && h2(Action, { disabled: locked, onMouseDown: (event) => event.preventDefault(), onClick: (event) => {
         const opener = event.currentTarget;
         void flush().then(() => {
           if (document.activeElement === document.body || document.activeElement === opener) input.current?.focus();
@@ -1600,14 +1637,14 @@ var DraftRepository = class {
 };
 
 // frontend/navigation-resize.jsx
-import { useCallback, useLayoutEffect as useLayoutEffect3, useRef as useRef4, useState as useState4 } from "react";
+import { useCallback, useLayoutEffect as useLayoutEffect4, useRef as useRef5, useState as useState5 } from "react";
 var DEFAULT_WIDTH = 280;
 var MIN_WIDTH = 200;
 var MAX_WIDTH = 560;
 var bounded = (value, max = MAX_WIDTH) => Math.round(Math.max(MIN_WIDTH, Math.min(max, value)));
 function useNavigationResize(storage, owner) {
   const key = `navigation-width:v1:${JSON.stringify(JSON.parse(owner).slice(0, 2))}`;
-  const [preferred, setPreferred] = useState4(() => {
+  const [preferred, setPreferred] = useState5(() => {
     try {
       const value = storage?.get(key, DEFAULT_WIDTH);
       return typeof value === "number" && Number.isFinite(value) ? bounded(value) : DEFAULT_WIDTH;
@@ -1615,15 +1652,15 @@ function useNavigationResize(storage, owner) {
       return DEFAULT_WIDTH;
     }
   });
-  const [available, setAvailable] = useState4({ width: 0, height: 0 }), [error, setError] = useState4("");
-  const body = useRef4(null), drag = useRef4(null), current = useRef4(preferred);
-  const [bodyNode, setBodyNode] = useState4(null);
+  const [available, setAvailable] = useState5({ width: 0, height: 0 }), [error, setError] = useState5("");
+  const body = useRef5(null), drag = useRef5(null), current = useRef5(preferred);
+  const [bodyNode, setBodyNode] = useState5(null);
   const bindBody = useCallback((node) => {
     body.current = node;
     setBodyNode(node);
   }, []);
   current.current = preferred;
-  useLayoutEffect3(() => {
+  useLayoutEffect4(() => {
     if (!body.current) return;
     if (globalThis.ResizeObserver) {
       const observer = new ResizeObserver((entries) => {
@@ -1690,7 +1727,7 @@ function useNavigationResize(storage, owner) {
   };
 }
 function NavigationResizeHandle({ navigation, controls }) {
-  return h(
+  return h2(
     "div",
     {
       className: "ws-nav-resize",
@@ -1712,8 +1749,8 @@ function NavigationResizeHandle({ navigation, controls }) {
       onLostPointerCapture: (event) => navigation.end(event, true),
       onKeyDown: navigation.key
     },
-    h("span", { "aria-hidden": true, className: "ws-nav-grip" }),
-    h(
+    h2("span", { "aria-hidden": true, className: "ws-nav-grip" }),
+    h2(
       "span",
       { id: `${controls}-resize-help`, className: "ws-title-reader" },
       "Drag to resize navigation. Left and Right arrows adjust by 10 pixels, Shift by 40. Home sets the minimum and End the maximum."
@@ -1722,7 +1759,7 @@ function NavigationResizeHandle({ navigation, controls }) {
 }
 
 // frontend/document-width.mjs
-import { useMemo, useState as useState5 } from "react";
+import { useMemo, useState as useState6 } from "react";
 function documentWidthKey(owner, scope, itemId) {
   const [connection, profile] = JSON.parse(owner);
   return `document-width:v1:${JSON.stringify([connection, profile, scope, itemId])}`;
@@ -1736,7 +1773,7 @@ function useDocumentWidth(storage, owner, scope, itemId) {
       return false;
     }
   }, [storage, key]);
-  const [local, setLocal] = useState5({ key, wide: initial, error: "" });
+  const [local, setLocal] = useState6({ key, wide: initial, error: "" });
   const current = local.key === key ? local : { key, wide: initial, error: "" };
   return { wide: current.wide, error: current.error, toggle() {
     const next = !current.wide;
@@ -1752,7 +1789,7 @@ function useDocumentWidth(storage, owner, scope, itemId) {
 }
 
 // frontend/run-outcome.mjs
-import { useMemo as useMemo2, useState as useState6 } from "react";
+import { useMemo as useMemo2, useState as useState7 } from "react";
 function useRunOutcomeDismissal(storage, owner, scope, itemId, run) {
   const [connection, profile] = JSON.parse(owner);
   const key = `run-outcome:v1:${JSON.stringify([connection, profile, scope, itemId])}`;
@@ -1764,7 +1801,7 @@ function useRunOutcomeDismissal(storage, owner, scope, itemId, run) {
       return null;
     }
   }, [storage, key]);
-  const [local, setLocal] = useState6(null);
+  const [local, setLocal] = useState7(null);
   return {
     dismissed: fingerprint !== null && (local?.key === key ? local.value : stored) === fingerprint,
     dismiss() {
@@ -2088,13 +2125,13 @@ var WorkspaceClient = class {
 };
 
 // frontend/workspace-search.jsx
-import { useEffect as useEffect2, useId, useRef as useRef5, useState as useState7 } from "react";
+import { useEffect as useEffect2, useId, useRef as useRef6, useState as useState8 } from "react";
 import { SearchField, GlyphSpinner } from "@hermes/plugin-sdk";
 function WorkspaceSearch({ client, scope, revision, destination, onOpen, contexts }) {
-  const [query, setQuery] = useState7(""), [result, setResult] = useState7(null);
-  const [composing, setComposing] = useState7(false), [retry, setRetry] = useState7(0);
-  const [page, setPage] = useState7({ offset: 0, revision: null });
-  const generation = useRef5(0), input = useRef5(null), list = useRef5(null);
+  const [query, setQuery] = useState8(""), [result, setResult] = useState8(null);
+  const [composing, setComposing] = useState8(false), [retry, setRetry] = useState8(0);
+  const [page, setPage] = useState8({ offset: 0, revision: null });
+  const generation = useRef6(0), input = useRef6(null), list = useRef6(null);
   const statusId = useId();
   const text = query.trim();
   const change = (value) => {
@@ -2174,10 +2211,10 @@ function WorkspaceSearch({ client, scope, revision, destination, onOpen, context
     setPage({ offset, revision: revision2 });
     input.current?.focus();
   };
-  return h(
+  return h2(
     "div",
     { className: "ws-workspace-search", role: "search", "aria-label": "Workspace search" },
-    h(SearchField, {
+    h2(SearchField, {
       "aria-label": "Search Workspace",
       placeholder: "Search Workspace\u2026",
       containerClassName: "w-full opacity-100",
@@ -2187,7 +2224,7 @@ function WorkspaceSearch({ client, scope, revision, destination, onOpen, context
       onChange: change,
       onClear: () => change(""),
       loading: pending,
-      trailingAction: pending && query ? h(Action, { variant: "ghost", size: "icon-xs", "aria-label": "Clear search", onClick: () => change("") }, h(Codicon, { name: "close", size: "0.875rem" })) : void 0,
+      trailingAction: pending && query ? h2(Action, { variant: "ghost", size: "icon-xs", "aria-label": "Clear search", onClick: () => change("") }, h2(Codicon, { name: "close", size: "0.875rem" })) : void 0,
       onKeyDown: (event) => {
         if (event.isComposing || event.nativeEvent?.isComposing || event.keyCode === 229) return;
         if (event.key === "Escape" && query) {
@@ -2203,24 +2240,24 @@ function WorkspaceSearch({ client, scope, revision, destination, onOpen, context
         }
       }
     }),
-    h("p", { id: statusId, className: "ws-search-status", role: "status", "aria-live": "polite", "aria-atomic": true }, message),
-    current && h(
+    h2("p", { id: statusId, className: "ws-search-status", role: "status", "aria-live": "polite", "aria-atomic": true }, message),
+    current && h2(
       "section",
       { className: "ws-search-results", "aria-label": "Workspace search results", "aria-busy": pending },
-      current.phase === "pending" && h(GlyphSpinner, { ariaLabel: "Searching Workspace" }),
-      current.phase === "error" && h(
+      current.phase === "pending" && h2(GlyphSpinner, { ariaLabel: "Searching Workspace" }),
+      current.phase === "error" && h2(
         "div",
         null,
-        h("p", { role: "alert" }, current.error),
-        h(Action, { onClick: () => {
+        h2("p", { role: "alert" }, current.error),
+        h2(Action, { onClick: () => {
           setPage({ offset: 0, revision: null });
           setRetry((v) => v + 1);
         } }, "Retry search")
       ),
-      h("ul", { ref: list }, current.items.map((row) => h(
+      h2("ul", { ref: list }, current.items.map((row) => h2(
         "li",
         { key: row.id ?? row.item_id },
-        h(
+        h2(
           Action,
           {
             variant: "ghost",
@@ -2228,24 +2265,24 @@ function WorkspaceSearch({ client, scope, revision, destination, onOpen, context
             "aria-label": row.title ?? row.name ?? "Open result",
             "aria-describedby": `${statusId}-${row.id ?? row.item_id}-description`
           },
-          h(
+          h2(
             "span",
             { className: "ws-search-result-text" },
-            h("span", null, row.title ?? row.name ?? "Open result"),
-            h(
+            h2("span", null, row.title ?? row.name ?? "Open result"),
+            h2(
               "span",
               { id: `${statusId}-${row.id ?? row.item_id}-description` },
-              contexts?.get(row.id ?? row.item_id) && h("small", null, contexts.get(row.id ?? row.item_id).description),
-              (row.excerpt || row.snippet) && h("small", null, row.excerpt || row.snippet)
+              contexts?.get(row.id ?? row.item_id) && h2("small", null, contexts.get(row.id ?? row.item_id).description),
+              (row.excerpt || row.snippet) && h2("small", null, row.excerpt || row.snippet)
             )
           )
         )
       ))),
-      current.phase === "success" && h(
+      current.phase === "success" && h2(
         "div",
         { className: "ws-actions", "aria-label": "Search results pages" },
-        current.offset > 0 && h(Action, { onClick: () => turnPage(Math.max(0, current.offset - current.limit), current.revision) }, "Previous results"),
-        current.hasMore && h(Action, { onClick: () => turnPage(current.nextOffset, current.revision) }, "Next results")
+        current.offset > 0 && h2(Action, { onClick: () => turnPage(Math.max(0, current.offset - current.limit), current.revision) }, "Previous results"),
+        current.hasMore && h2(Action, { onClick: () => turnPage(current.nextOffset, current.revision) }, "Next results")
       )
     )
   );
@@ -3400,8 +3437,7 @@ ${workspaceNavigationStyles}
 
 // frontend/rich-editor.jsx
 var import_react_dom = __toESM(require_react_dom(), 1);
-import { useEffect as useEffect3, useLayoutEffect as useLayoutEffect5, useRef as useRef7, useState as useState9 } from "react";
-import { Popover as Popover2, PopoverTrigger as PopoverTrigger2, PopoverContent as PopoverContent2 } from "@hermes/plugin-sdk";
+import { useEffect as useEffect3, useLayoutEffect as useLayoutEffect6, useRef as useRef8, useState as useState10 } from "react";
 
 // frontend/editor-styles.mjs
 var editorStyles = `
@@ -3920,7 +3956,7 @@ var EditorHistory = class {
 };
 
 // frontend/comment-highlights.jsx
-import { useId as useId2, useLayoutEffect as useLayoutEffect4, useRef as useRef6, useState as useState8 } from "react";
+import { useId as useId2, useLayoutEffect as useLayoutEffect5, useRef as useRef7, useState as useState9 } from "react";
 function numberComments(comments) {
   return comments.map((comment, index) => ({
     ...comment,
@@ -3931,11 +3967,8 @@ function textRange(root, anchor) {
   const location = locateAnchor(root.textContent, anchor);
   if (location.status !== "attached") return null;
   const walker = root.ownerDocument.createTreeWalker(root, 4);
-  let node,
-    offset = 0,
-    start = null,
-    end = null;
-  while ((node = walker.nextNode())) {
+  let node, offset = 0, start = null, end = null;
+  while (node = walker.nextNode()) {
     const next = offset + node.length;
     if (!start && location.start >= offset && location.start < next)
       start = [node, location.start - offset];
@@ -3951,37 +3984,30 @@ function textRange(root, anchor) {
   range.setEnd(...end);
   return range;
 }
-
-/** Addressed feedback paints complete reading blocks. Stored quotes stay exact. */
 function anchorRanges(root, anchor) {
   if (locateAnchor(root.textContent, anchor).status !== "attached") return [];
-  const ranges = (anchor.ranges ?? [anchor]).map(value => textRange(root, value));
+  const ranges = (anchor.ranges ?? [anchor]).map((value) => textRange(root, value));
   if (!ranges.every(Boolean)) return [];
   if (!anchor.paragraphs) return ranges;
   const selector = "p,li,h1,h2,h3,h4,h5,h6,blockquote,pre,td,th";
-  const blocks = [...root.querySelectorAll(selector)].filter(block => !block.querySelector(selector));
-  const expanded = new Map(), loose = [];
+  const blocks = [...root.querySelectorAll(selector)].filter((block) => !block.querySelector(selector));
+  const expanded = /* @__PURE__ */ new Map(), loose = [];
   for (const range of ranges) {
     let found = false;
     for (const block of blocks) {
       const contents = root.ownerDocument.createRange();
       contents.selectNodeContents(block);
-      // Strict intersection avoids painting an adjacent paragraph at a shared
-      // endpoint. Compare text ranges, so inline marks never split a paragraph.
       if (!block.textContent || range.compareBoundaryPoints(range.END_TO_START, contents) >= 0 || range.compareBoundaryPoints(range.START_TO_END, contents) <= 0) continue;
       expanded.set(block, contents);
       found = true;
     }
     if (!found) loose.push(range);
   }
-  return [...expanded.values(), ...loose].sort((a,b) => a.compareBoundaryPoints(0,b));
+  return [...expanded.values(), ...loose].sort((a, b) => a.compareBoundaryPoints(0, b));
 }
-
-/** Navigation and inline discussion slots use the first highlighted paragraph. */
 function anchorRange(root, anchor) {
   return anchor?.paragraphs ? anchorRanges(root, anchor)[0] ?? null : textRange(root, anchor);
 }
-
 function CommentHighlights({
   editorRef,
   comments,
@@ -3994,15 +4020,15 @@ function CommentHighlights({
   onGeometry = () => {
   }
 }) {
-  const callbacks = useRef6({ onHover, onGeometry });
+  const callbacks = useRef7({ onHover, onGeometry });
   callbacks.current = { onHover, onGeometry };
   const token = "ws-passage-" + useId2().replace(/[^a-z0-9]/gi, "");
-  const [groups, setGroups] = useState8([]), [openGroup, setOpenGroup] = useState8(null);
-  const selectedDiscussion = useRef6(false);
+  const [groups, setGroups] = useState9([]), [openGroup, setOpenGroup] = useState9(null);
+  const selectedDiscussion = useRef7(false);
   const signature = JSON.stringify(
     comments.map((c) => [c.id, c.anchor, c.resolved, c.passageNumber, c.text])
   );
-  useLayoutEffect4(() => {
+  useLayoutEffect5(() => {
     const root = editorRef.current;
     if (!root) return;
     const view = root.ownerDocument.defaultView;
@@ -4164,10 +4190,10 @@ function CommentHighlights({
       root.classList.remove("ws-text-selection");
     };
   }, [signature, active, pendingAnchor, token, hovered]);
-  return h(
+  return h2(
     "div",
     { className: "ws-passage-controls" },
-    h(
+    h2(
       "style",
       null,
       `::highlight(${token}){background:color-mix(in srgb,var(--ui-accent) 19%,transparent);text-decoration:underline;text-decoration-color:var(--ui-accent)}::highlight(${token}-active),::highlight(${token}-hover),::highlight(${token}-draft){background:color-mix(in srgb,var(--ui-accent) 35%,transparent);text-decoration:underline double;text-decoration-color:var(--ui-accent);text-decoration-thickness:2px}::highlight(${token}-selection){background:var(--ui-selection-background);color:inherit}.ws-editor.ws-text-selection::selection,.ws-editor.ws-text-selection *::selection{background:transparent;color:inherit}`
@@ -4184,7 +4210,7 @@ function CommentHighlights({
         onBlur: () => callbacks.current.onHover(null)
       };
       if (group.markers.length === 1)
-        return h(
+        return h2(
           Action,
           {
             key: group.id,
@@ -4195,7 +4221,7 @@ function CommentHighlights({
           },
           String(marker.index)
         );
-      return h(
+      return h2(
         ActionMenu,
         {
           key: group.id,
@@ -4214,7 +4240,7 @@ function CommentHighlights({
           }
         },
         group.markers.map(
-          (m) => h(
+          (m) => h2(
             Action,
             {
               key: m.id,
@@ -4265,7 +4291,7 @@ function RichEditor({
   }
 }) {
   const locked = authorityLocked || interactionBlocked;
-  const root = useRef7(null), timer = useRef7(null), draft = useRef7(null), saving = useRef7(Promise.resolve()), latest = useRef7({ item, locked, onSave, onText, onError });
+  const root = useRef8(null), timer = useRef8(null), draft = useRef8(null), saving = useRef8(Promise.resolve()), latest = useRef8({ item, locked, onSave, onText, onError });
   latest.current = {
     item,
     locked: authorityLocked,
@@ -4274,21 +4300,21 @@ function RichEditor({
     onText,
     onError
   };
-  const mounted = useRef7(true), retained = useRef7(null);
-  const pendingSave = useRef7(0), editRevision = useRef7(0);
-  const uploading = useRef7(null), [imageBusy, setImageBusy] = useState9(false);
-  const history = useRef7(new EditorHistory());
-  const [recovery, setRecovery] = useState9(() => draftBuffer?.read() ?? null);
-  const [blockStyle, setBlockStyle] = useState9("p");
-  const [formats, setFormats] = useState9({});
-  const recoveryRef = useRef7(recovery);
+  const mounted = useRef8(true), retained = useRef8(null);
+  const pendingSave = useRef8(0), editRevision = useRef8(0);
+  const uploading = useRef8(null), [imageBusy, setImageBusy] = useState10(false);
+  const history = useRef8(new EditorHistory());
+  const [recovery, setRecovery] = useState10(() => draftBuffer?.read() ?? null);
+  const [blockStyle, setBlockStyle] = useState10("p");
+  const [formats, setFormats] = useState10({});
+  const recoveryRef = useRef8(recovery);
   recoveryRef.current = recovery;
-  const [status, setStatus] = useState9("Saved"), [saveError, setSaveError] = useState9(""), [dialog, setDialog] = useState9(null), [selection, setSelection] = useState9(null), [floating, setFloating] = useState9(null), [formatting, setFormatting] = useState9(false);
-  const suppressedSelection = useRef7(null);
-  const selectionToolbar = useRef7(null), stylePickerOpen = useRef7(false), dialogRef = useRef7(null);
+  const [status, setStatus] = useState10("Saved"), [saveError, setSaveError] = useState10(""), [dialog, setDialog] = useState10(null), [selection, setSelection] = useState10(null), [floating, setFloating] = useState10(null), [formatting, setFormatting] = useState10(false);
+  const suppressedSelection = useRef8(null);
+  const selectionToolbar = useRef8(null), stylePickerOpen = useRef8(false), dialogRef = useRef8(null);
   dialogRef.current = dialog;
-  const composing = useRef7(false);
-  const range = useRef7(null), image = useRef7(null);
+  const composing = useRef8(false);
+  const range = useRef8(null), image = useRef8(null);
   const decorate = () => {
     hydrateImages(root.current, attachments);
     hydrateChecklists(
@@ -4361,7 +4387,7 @@ function RichEditor({
       clearTimeout(timer.current);
     };
   }, []);
-  useLayoutEffect5(() => {
+  useLayoutEffect6(() => {
     if (!root.current) return;
     const clean = sanitizeHTML(item.content);
     if (draft.current === null && pendingSave.current === 0 && editorHTML(root.current) !== clean) {
@@ -4586,7 +4612,7 @@ function RichEditor({
       command("delete");
     }
   };
-  const tool = (label, cmd, icon) => h(
+  const tool = (label, cmd, icon) => h2(
     Action,
     {
       key: label,
@@ -4606,11 +4632,11 @@ function RichEditor({
       onMouseDown: (e) => e.preventDefault(),
       onClick: () => command(cmd)
     },
-    icon === "underline" ? h("span", {
+    icon === "underline" ? h2("span", {
       className: "ws-format-underline-glyph",
       "aria-hidden": true
-    }) : h(Codicon, { name: icon, "aria-hidden": true }),
-    h("span", { className: "ws-format-tool-label" }, label)
+    }) : h2(Codicon, { name: icon, "aria-hidden": true }),
+    h2("span", { className: "ws-format-tool-label" }, label)
   );
   const selectionScale = floating ? elementScale(root.current?.ownerDocument.documentElement) : 1;
   const selectionBoundary = root.current?.closest(".ws-work");
@@ -4633,10 +4659,10 @@ function RichEditor({
       bottom: bottom - bottom / selectionScale + 8
     };
   }
-  const formatControl = h(
+  const formatControl = h2(
     "div",
     { className: "ws-editor-heading" },
-    h(
+    h2(
       Action,
       {
         variant: "secondary",
@@ -4647,15 +4673,15 @@ function RichEditor({
         onMouseDown: (event) => event.preventDefault(),
         onClick: () => setFormatting((v) => !v)
       },
-      h(Codicon, { name: "text-size", "aria-hidden": true }),
+      h2(Codicon, { name: "text-size", "aria-hidden": true }),
       "Format text",
-      h(Codicon, {
+      h2(Codicon, {
         name: formatting ? "chevron-up" : "chevron-down",
         "aria-hidden": true
       })
     )
   );
-  const formatToolbar = h(
+  const formatToolbar = h2(
     "div",
     {
       id: `ws-format-${item.id}`,
@@ -4664,20 +4690,20 @@ function RichEditor({
       role: "toolbar",
       "aria-label": "Formatting"
     },
-    h(
+    h2(
       "fieldset",
       { disabled: locked || Boolean(recovery) },
-      h(
+      h2(
         "div",
         { className: "ws-format-row" },
-        h(
+        h2(
           "div",
           {
             className: "ws-format-group",
             role: "group",
             "aria-label": "Text style"
           },
-          h(Choice, {
+          h2(Choice, {
             label: "Block style",
             showLabel: false,
             onCloseAutoFocus: (event) => {
@@ -4697,7 +4723,7 @@ function RichEditor({
             onChange: (value) => command("formatBlock", value)
           })
         ),
-        h(
+        h2(
           "div",
           {
             className: "ws-format-group",
@@ -4710,7 +4736,7 @@ function RichEditor({
             ["Underline", "underline", "underline"]
           ].map(([label, cmd, icon]) => tool(label, cmd, icon))
         ),
-        h(
+        h2(
           "div",
           {
             className: "ws-format-group",
@@ -4719,7 +4745,7 @@ function RichEditor({
           },
           tool("Bullets", "insertUnorderedList", "list-unordered"),
           tool("Numbered list", "insertOrderedList", "list-ordered"),
-          h(
+          h2(
             Action,
             {
               variant: "ghost",
@@ -4731,11 +4757,11 @@ function RichEditor({
               onMouseDown: (e) => e.preventDefault(),
               onClick: () => insert('<p><input type="checkbox"> Task</p>')
             },
-            h(Codicon, { name: "checklist", "aria-hidden": true }),
-            h("span", { className: "ws-format-tool-label" }, "Checklist")
+            h2(Codicon, { name: "checklist", "aria-hidden": true }),
+            h2("span", { className: "ws-format-tool-label" }, "Checklist")
           )
         ),
-        h(
+        h2(
           "div",
           {
             className: "ws-format-group ws-format-history",
@@ -4746,70 +4772,70 @@ function RichEditor({
           tool("Redo", "redo", "redo")
         )
       ),
-      h(
+      h2(
         "div",
         {
           className: "ws-format-insert",
           role: "group",
           "aria-label": "Insert"
         },
-        h(
+        h2(
           Action,
           {
             variant: "ghost",
             disabled: locked,
             onClick: () => setDialog("link")
           },
-          h(Codicon, { name: "link", "aria-hidden": true }),
+          h2(Codicon, { name: "link", "aria-hidden": true }),
           "Link"
         ),
-        h(
+        h2(
           Action,
           {
             variant: "ghost",
             disabled: locked,
             onClick: () => setDialog("table")
           },
-          h(Codicon, { name: "table", "aria-hidden": true }),
+          h2(Codicon, { name: "table", "aria-hidden": true }),
           "Table"
         ),
-        h(
+        h2(
           Action,
           {
             variant: "ghost",
             disabled: locked || imageBusy,
             onClick: () => image.current.click()
           },
-          h(Codicon, { name: "file-media", "aria-hidden": true }),
+          h2(Codicon, { name: "file-media", "aria-hidden": true }),
           "Image"
         ),
-        h(
+        h2(
           Action,
           {
             variant: "ghost",
             disabled: locked,
             onClick: () => setDialog("database")
           },
-          h(Codicon, { name: "references", "aria-hidden": true }),
+          h2(Codicon, { name: "references", "aria-hidden": true }),
           "Workspace link"
         )
       )
     )
   );
-  return h(
+  return h2(
     "section",
     { className: "ws-rich-editor", "aria-label": "Visual editor" },
-    h("style", null, editorStyles),
-    recovery && h(
+    h2("style", null, editorStyles),
+    recovery && h2(
       "div",
       { className: "ws-banner", role: "status" },
-      h(
+      h2(
         "span",
         null,
         "Recoverable draft retained for this source. Recovering replaces the editor text and autosaves it. ",
         recovery.base_html !== item.content ? "The saved page has also changed; review before recovering." : ""
       ),
-      h(
+      h2(
         Action,
         {
           disabled: locked,
@@ -4837,7 +4863,7 @@ function RichEditor({
         },
         "Recover draft"
       ),
-      h(
+      h2(
         Action,
         {
           onClick: () => {
@@ -4850,10 +4876,10 @@ function RichEditor({
     ),
     formatTarget ? (0, import_react_dom.createPortal)(formatControl, formatTarget) : formatControl,
     toolbarTarget ? (0, import_react_dom.createPortal)(formatToolbar, toolbarTarget) : formatToolbar,
-    h(
+    h2(
       "div",
       { className: "ws-editor-canvas" },
-      h("div", {
+      h2("div", {
         ref: root,
         className: "ws-editor",
         role: "textbox",
@@ -4968,7 +4994,7 @@ function RichEditor({
           } else history.current.record(root.current);
         }
       }),
-      h(CommentHighlights, {
+      h2(CommentHighlights, {
         editorRef: root,
         comments,
         active: activeComment,
@@ -4979,7 +5005,7 @@ function RichEditor({
         onGeometry: onCommentGeometry
       })
     ),
-    selection && floating && !pendingAnchor && !locked && !recovery && !dialog && h(
+    selection && floating && !pendingAnchor && !locked && !recovery && !dialog && h2(
       Popover2,
       {
         open: true,
@@ -4988,17 +5014,17 @@ function RichEditor({
           if (!open) setSelection(null);
         }
       },
-      h(
+      h2(
         PopoverTrigger2,
         { asChild: true },
-        h("span", {
+        h2("span", {
           "aria-hidden": true,
           tabIndex: -1,
           className: "ws-selection-anchor",
           style: { position: "fixed", zoom: 1 / selectionScale, ...floating }
         })
       ),
-      h(
+      h2(
         PopoverContent2,
         {
           ref: selectionToolbar,
@@ -5025,7 +5051,7 @@ function RichEditor({
             restoreSelection();
           }
         },
-        h(Choice, {
+        h2(Choice, {
           label: "Text style",
           showLabel: false,
           value: ["p", "h1", "h2", "h3"].includes(blockStyle) ? blockStyle : "p",
@@ -5049,7 +5075,7 @@ function RichEditor({
           ["Italic", "italic", "I"],
           ["Underline", "underline", "U"]
         ].map(
-          ([label, cmd, glyph]) => h(
+          ([label, cmd, glyph]) => h2(
             Action,
             {
               key: cmd,
@@ -5061,14 +5087,14 @@ function RichEditor({
               onMouseDown: (event) => event.preventDefault(),
               onClick: () => command(cmd)
             },
-            h(
+            h2(
               "span",
               { className: `ws-format-${cmd}`, "aria-hidden": true },
               glyph
             )
           )
         ),
-        h(
+        h2(
           Action,
           {
             variant: "ghost",
@@ -5077,7 +5103,7 @@ function RichEditor({
           },
           "Link"
         ),
-        h(
+        h2(
           Action,
           {
             variant: "ghost",
@@ -5091,7 +5117,7 @@ function RichEditor({
         )
       )
     ),
-    h(
+    h2(
       "div",
       { className: "ws-save", role: "status", "aria-live": "polite" },
       locked ? "Read-only during this run" : {
@@ -5101,7 +5127,7 @@ function RichEditor({
         "Unsaved changes": "Unsaved content",
         "Unsaved recovered draft": "Unsaved recovered content"
       }[status] ?? status,
-      status === "Not saved" && h(
+      status === "Not saved" && h2(
         Action,
         {
           disabled: locked || Boolean(recovery),
@@ -5116,13 +5142,13 @@ function RichEditor({
         "Retry save"
       )
     ),
-    imageBusy && h(
+    imageBusy && h2(
       "p",
       { role: "status", className: "ws-muted" },
       "Adding image\u2026 Leaving this page waits for the image and its saved content."
     ),
-    saveError && h("p", { className: "ws-save-error", role: "alert" }, saveError),
-    h("input", {
+    saveError && h2("p", { className: "ws-save-error", role: "alert" }, saveError),
+    h2("input", {
       ref: image,
       type: "file",
       accept: "image/png,image/jpeg,image/gif,image/webp",
@@ -5169,7 +5195,7 @@ function RichEditor({
         void job.catch(onError);
       }
     }),
-    dialog && h(FormDialog, {
+    dialog && h2(FormDialog, {
       confirm: dialog === "table" ? "Insert table" : "Insert link",
       title: dialog === "table" ? "Insert table" : dialog === "database" ? "Link to Workspace item" : "Insert link",
       description: dialog === "database" ? "Choose a page, database, record or folder in this Workspace." : void 0,
@@ -5233,11 +5259,11 @@ function RichEditor({
 }
 
 // frontend/rich-preview.jsx
-import { Fragment, useLayoutEffect as useLayoutEffect6, useRef as useRef8 } from "react";
+import { Fragment, useLayoutEffect as useLayoutEffect7, useRef as useRef9 } from "react";
 function RichPreview({ label, html, text, attachments }) {
-  const root = useRef8(null);
+  const root = useRef9(null);
   const safe = sanitizeHTML(html ?? "");
-  useLayoutEffect6(() => {
+  useLayoutEffect7(() => {
     if (!root.current) return;
     hydrateImages(root.current, attachments);
     hydrateChecklists(root.current, true);
@@ -5245,11 +5271,11 @@ function RichPreview({ label, html, text, attachments }) {
       link.tabIndex = -1;
     });
   }, [safe, attachments]);
-  return h(
+  return h2(
     Fragment,
     null,
-    h("style", null, editorStyles),
-    h("div", {
+    h2("style", null, editorStyles),
+    h2("div", {
       ref: root,
       className: "ws-section-fragment",
       role: "region",
@@ -5262,7 +5288,7 @@ function RichPreview({ label, html, text, attachments }) {
 }
 
 // frontend/tables.jsx
-import { useCallback as useCallback2, useEffect as useEffect4, useId as useId3, useRef as useRef9, useState as useState10 } from "react";
+import { useCallback as useCallback2, useEffect as useEffect4, useId as useId3, useRef as useRef10, useState as useState11 } from "react";
 import { Checkbox, SearchField as SearchField2 } from "@hermes/plugin-sdk";
 
 // frontend/database-grid-styles.mjs
@@ -5415,15 +5441,15 @@ function propertyPatch(state, id, columnId, value) {
 // frontend/tables.jsx
 function Property({ column, value, onChange, state, disabled: authorityDisabled, interactionBlocked = false, buffer, registerFlush, formulaError, onSettled, compact = false }) {
   const disabled = authorityDisabled || interactionBlocked;
-  const initial = useRef9(buffer?.read() ?? null), recovery = useRef9(Boolean(initial.current));
+  const initial = useRef10(buffer?.read() ?? null), recovery = useRef10(Boolean(initial.current));
   const scalar = ["text", "number", "date"].includes(column.type);
   const display = (next) => scalar ? String(next ?? "") : next;
-  const [draft, setDraft] = useState10(() => initial.current ? initial.current.value : display(value));
-  const [status, setStatus] = useState10(initial.current ? "Property draft retained. Retry or discard it." : ""), [error, setError] = useState10("");
-  const [busy, setBusy] = useState10(false), container = useRef9(null), mounted = useRef9(true);
-  const returnFocus = useRef9(null);
-  const dirty = useRef9(null), revision = useRef9(0), saving = useRef9(Promise.resolve()), pending = useRef9(0);
-  const latest = useRef9(null);
+  const [draft, setDraft] = useState11(() => initial.current ? initial.current.value : display(value));
+  const [status, setStatus] = useState11(initial.current ? "Property draft retained. Retry or discard it." : ""), [error, setError] = useState11("");
+  const [busy, setBusy] = useState11(false), container = useRef10(null), mounted = useRef10(true);
+  const returnFocus = useRef10(null);
+  const dirty = useRef10(null), revision = useRef10(0), saving = useRef10(Promise.resolve()), pending = useRef10(0);
+  const latest = useRef10(null);
   latest.current = { onChange, disabled: authorityDisabled, buffer };
   const errorId = useId3(), focus = () => container.current?.querySelector("input,button,textarea")?.focus();
   useEffect4(() => {
@@ -5505,20 +5531,20 @@ function Property({ column, value, onChange, state, disabled: authorityDisabled,
       setError("");
     }
   }, [encoded, buffer]);
-  if (column.type === "formula") return h(
+  if (column.type === "formula") return h2(
     "div",
     { className: "ws-formula-value" },
-    h("output", { "aria-label": column.name, "aria-invalid": Boolean(formulaError), "aria-describedby": formulaError ? errorId : void 0 }, formulaError ? "Calculation failed" : String(value ?? "\u2014")),
-    formulaError && h("span", { id: errorId, className: "ws-field-error", role: "alert" }, errorMessage(formulaError))
+    h2("output", { "aria-label": column.name, "aria-invalid": Boolean(formulaError), "aria-describedby": formulaError ? errorId : void 0 }, formulaError ? "Calculation failed" : String(value ?? "\u2014")),
+    formulaError && h2("span", { id: errorId, className: "ws-field-error", role: "alert" }, errorMessage(formulaError))
   );
   const accessibility = { "aria-invalid": Boolean(error), "aria-describedby": status || error ? errorId : void 0 };
   let control;
-  if (column.type === "checkbox") control = h(Checkbox, { ...accessibility, className: "ws-checkbox", "aria-label": column.name, checked: Boolean(draft), disabled, onCheckedChange: (v) => change(v === true, true) });
+  if (column.type === "checkbox") control = h2(Checkbox, { ...accessibility, className: "ws-checkbox", "aria-label": column.name, checked: Boolean(draft), disabled, onCheckedChange: (v) => change(v === true, true) });
   else if (column.type === "select") {
     const options = column.options ?? [];
     let emptyLabel = "No value";
     while (options.includes(emptyLabel)) emptyLabel += " (clear)";
-    control = h(Choice, {
+    control = h2(Choice, {
       triggerProps: accessibility,
       label: column.name,
       showLabel: false,
@@ -5530,10 +5556,10 @@ function Property({ column, value, onChange, state, disabled: authorityDisabled,
   } else if (column.type === "relation") {
     const records = state.items.filter((i) => !i.deleted_at && i.kind === "record" && i.database_id === column.target_database_id);
     const selected = Array.isArray(draft) ? draft : [];
-    const choices = h("div", { ...accessibility, role: "group", "aria-label": column.name }, records.length ? records.map((record) => h(
+    const choices = h2("div", { ...accessibility, role: "group", "aria-label": column.name }, records.length ? records.map((record) => h2(
       "label",
       { key: record.id, className: "ws-check" },
-      h(Checkbox, {
+      h2(Checkbox, {
         ...accessibility,
         className: "ws-checkbox",
         "aria-label": `${column.name}: ${record.title}`,
@@ -5542,9 +5568,9 @@ function Property({ column, value, onChange, state, disabled: authorityDisabled,
         onCheckedChange: (checked) => change(checked ? [...selected, record.id] : selected.filter((id) => id !== record.id), true)
       }),
       record.title
-    )) : h("span", { className: "ws-muted" }, "No records in related database."));
-    control = compact ? h(RelationPicker, { accessibility, disabled, column, records, selected }, choices) : choices;
-  } else control = h(Input, {
+    )) : h2("span", { className: "ws-muted" }, "No records in related database."));
+    control = compact ? h2(RelationPicker, { accessibility, disabled, column, records, selected }, choices) : choices;
+  } else control = h2(Input, {
     "aria-label": column.name,
     "aria-invalid": Boolean(error),
     "aria-describedby": status || error ? errorId : void 0,
@@ -5560,11 +5586,11 @@ function Property({ column, value, onChange, state, disabled: authorityDisabled,
       if (isSubmitEnter2(event)) event.currentTarget.blur();
     }
   });
-  if (compact && column.type === "text") control = h(
+  if (compact && column.type === "text") control = h2(
     "div",
     { className: "ws-db-text-cell" },
     control,
-    draft && h(ContextTip, { label: h("span", { className: "ws-db-full-text" }, draft) }, h(
+    draft && h2(ContextTip, { label: h2("span", { className: "ws-db-full-text" }, draft) }, h2(
       Action,
       {
         variant: "ghost",
@@ -5573,21 +5599,21 @@ function Property({ column, value, onChange, state, disabled: authorityDisabled,
         "aria-label": `Read full ${column.name}`,
         onMouseDown: (event) => event.preventDefault()
       },
-      h(Codicon, { name: "info", className: "ws-db-text-read-hint", "aria-hidden": true })
+      h2(Codicon, { name: "info", className: "ws-db-text-read-hint", "aria-hidden": true })
     ))
   );
-  return h(
+  return h2(
     "div",
     { ref: container, className: "ws-property" },
     control,
-    (status || error) && h(
+    (status || error) && h2(
       "div",
       { id: errorId, className: "ws-property-status", role: error ? "alert" : "status" },
       error ? `Property not saved. ${error}` : status,
-      (error || recovery.current) && h(
+      (error || recovery.current) && h2(
         "div",
         { className: "ws-actions" },
-        h(Action, { disabled: disabled || busy, onMouseDown: (event) => event.preventDefault(), onClick: (event) => {
+        h2(Action, { disabled: disabled || busy, onMouseDown: (event) => event.preventDefault(), onClick: (event) => {
           returnFocus.current = event.currentTarget;
           if (recovery.current) {
             recovery.current = false;
@@ -5597,7 +5623,7 @@ function Property({ column, value, onChange, state, disabled: authorityDisabled,
           void flush().catch(() => {
           });
         } }, "Retry property save"),
-        h(Action, { disabled: disabled || busy, variant: "text", onMouseDown: (event) => event.preventDefault(), onClick: (event) => {
+        h2(Action, { disabled: disabled || busy, variant: "text", onMouseDown: (event) => event.preventDefault(), onClick: (event) => {
           returnFocus.current = event.currentTarget;
           revision.current++;
           dirty.current = null;
@@ -5614,13 +5640,13 @@ function Property({ column, value, onChange, state, disabled: authorityDisabled,
   );
 }
 function RelationPicker({ accessibility, disabled, column, records, selected, children }) {
-  const [open, setOpen] = useState10(false);
-  return h(ContextPopover, {
+  const [open, setOpen] = useState11(false);
+  return h2(ContextPopover, {
     open,
     onOpenChange: setOpen,
     className: "ws-db-relation-popover",
     align: "start",
-    trigger: h(
+    trigger: h2(
       Action,
       { ...accessibility, variant: "ghost", disabled, "aria-label": column.name, className: "ws-db-relation-trigger" },
       selected.length ? records.filter((r) => selected.includes(r.id)).map((r) => r.title).join(", ") : "Choose records\u2026"
@@ -5638,17 +5664,17 @@ function RecordProperties({
   registerPropertyFlush,
   interactionBlocked = false
 }) {
-  const [, advanceDrafts] = useState10(0);
+  const [, advanceDrafts] = useState11(0);
   const settled = useCallback2(() => advanceDrafts((version) => version + 1), []);
-  return h(
+  return h2(
     "div",
     { className: "ws-properties" },
     (database?.columns ?? []).map(
-      (column) => h(
+      (column) => h2(
         "div",
         { className: "ws-field", key: column.id },
-        h("span", { className: "ws-label" }, column.name),
-        h(Property, {
+        h2("span", { className: "ws-label" }, column.name),
+        h2(Property, {
           key: column.id,
           buffer: propertyBuffer?.(item.id, column.id),
           registerFlush: (fn) => registerPropertyFlush?.(`${item.id}:${column.id}`, fn),
@@ -5671,14 +5697,14 @@ function RecordProperties({
 var propertyIcons = { text: "symbol-string", number: "symbol-number", checkbox: "check", date: "calendar", select: "list-selection", relation: "link", formula: "symbol-operator" };
 var propertyTypes = [["text", "Text"], ["number", "Number"], ["checkbox", "Checkbox"], ["date", "Date"], ["select", "Single select"], ["relation", "Relation"], ["formula", "Formula"]];
 function PropertyCreator({ item, state, command, locked, registerFlush, newMenu }) {
-  const [open, setOpen] = useState10(false), [busy, setBusy] = useState10(false), [error, setError] = useState10(null);
-  const [mode, setMode] = useState10("menu");
-  const recordInput = useRef9(null);
+  const [open, setOpen] = useState11(false), [busy, setBusy] = useState11(false), [error, setError] = useState11(null);
+  const [mode, setMode] = useState11("menu");
+  const recordInput = useRef10(null);
   const empty = () => ({ name: "", type: "text", options: "", target: "", formula: "" });
-  const [values, setValues] = useState10(empty), gate = useRef9(false), alive = useRef9(true), composing = useRef9(false);
-  const input = useRef9(null), form = useRef9(null), errorId = useId3(), recoveryId = useId3();
-  const [recoveryNotice, setRecoveryNotice] = useState10("");
-  const recoveryFrame = useRef9(null), recovering = useRef9(false);
+  const [values, setValues] = useState11(empty), gate = useRef10(false), alive = useRef10(true), composing = useRef10(false);
+  const input = useRef10(null), form = useRef10(null), errorId = useId3(), recoveryId = useId3();
+  const [recoveryNotice, setRecoveryNotice] = useState11("");
+  const recoveryFrame = useRef10(null), recovering = useRef10(false);
   const cancelRecovery = () => {
     cancelAnimationFrame(recoveryFrame.current);
     recoveryFrame.current = null;
@@ -5701,7 +5727,7 @@ function PropertyCreator({ item, state, command, locked, registerFlush, newMenu 
       });
     });
   };
-  const latest = useRef9(null);
+  const latest = useRef10(null);
   latest.current = { item, state, command, locked, values, error, busy };
   useEffect4(() => {
     alive.current = true;
@@ -5749,7 +5775,7 @@ function PropertyCreator({ item, state, command, locked, registerFlush, newMenu 
     };
   }, [newMenu?.recovery]);
   const pending = gate.current || newMenu && mode === "record" && newMenu.busy;
-  return h(
+  return h2(
     ContextPopover,
     {
       open,
@@ -5762,7 +5788,7 @@ function PropertyCreator({ item, state, command, locked, registerFlush, newMenu 
       onCloseAutoFocus: (event) => {
         if (recovering.current) event.preventDefault();
       },
-      trigger: h(Action, { variant: newMenu ? "secondary" : "ghost", disabled: newMenu ? newMenu.locked : locked || busy, "aria-label": newMenu ? "New" : "Add property", className: newMenu ? "ws-db-new-menu" : "ws-db-add-property" }, h(Codicon, { name: "add", "aria-hidden": true }), newMenu ? "New" : "Add property", newMenu && h(Codicon, { name: "chevron-down", "aria-hidden": true })),
+      trigger: h2(Action, { variant: newMenu ? "secondary" : "ghost", disabled: newMenu ? newMenu.locked : locked || busy, "aria-label": newMenu ? "New" : "Add property", className: newMenu ? "ws-db-new-menu" : "ws-db-add-property" }, h2(Codicon, { name: "add", "aria-hidden": true }), newMenu ? "New" : "Add property", newMenu && h2(Codicon, { name: "chevron-down", "aria-hidden": true })),
       className: newMenu && mode === "menu" ? "ws-db-new-popover" : "ws-db-property-popover",
       align: "end",
       side: "bottom",
@@ -5776,18 +5802,18 @@ function PropertyCreator({ item, state, command, locked, registerFlush, newMenu 
         }
       }
     },
-    newMenu && mode === "menu" ? h(
+    newMenu && mode === "menu" ? h2(
       "div",
       { className: "ws-db-new-options", role: "group", "aria-label": "Create new" },
-      h(Action, { variant: "ghost", disabled: newMenu.locked, onClick: () => {
+      h2(Action, { variant: "ghost", disabled: newMenu.locked, onClick: () => {
         newMenu.onRecord();
         setMode("record");
-      } }, h(Codicon, { name: "file-text", "aria-hidden": true }), "New record"),
-      h(Action, { variant: "ghost", disabled: locked, onClick: () => setMode("property") }, h(Codicon, { name: "add", "aria-hidden": true }), "New property")
-    ) : newMenu && mode === "record" ? h(NewRecordCreator, { ...newMenu.recordProps, focusRef: recordInput, onCancel: () => {
+      } }, h2(Codicon, { name: "file-text", "aria-hidden": true }), "New record"),
+      h2(Action, { variant: "ghost", disabled: locked, onClick: () => setMode("property") }, h2(Codicon, { name: "add", "aria-hidden": true }), "New property")
+    ) : newMenu && mode === "record" ? h2(NewRecordCreator, { ...newMenu.recordProps, focusRef: recordInput, onCancel: () => {
       newMenu.recordProps.onCancel();
       setOpen(false);
-    } }) : h(
+    } }) : h2(
       "form",
       {
         ref: form,
@@ -5851,18 +5877,18 @@ function PropertyCreator({ item, state, command, locked, registerFlush, newMenu 
           }
         }
       },
-      h("h3", null, "New property"),
-      h(
+      h2("h3", null, "New property"),
+      h2(
         "div",
         { className: "ws-db-property-fields" },
-        recoveryNotice && h("p", { id: recoveryId, role: "alert", className: "ws-muted" }, recoveryNotice),
-        h(Field, { ref: input, label: "Property name", value: values.name, required: true, maxLength: 200, disabled: locked || busy, ...fieldProps("name"), onChange: change("name") }),
-        h(Choice, { label: "Property type", triggerProps: fieldProps("type"), value: values.type, options: propertyTypes, disabled: locked || busy, onChange: (value) => {
+        recoveryNotice && h2("p", { id: recoveryId, role: "alert", className: "ws-muted" }, recoveryNotice),
+        h2(Field, { ref: input, label: "Property name", value: values.name, required: true, maxLength: 200, disabled: locked || busy, ...fieldProps("name"), onChange: change("name") }),
+        h2(Choice, { label: "Property type", triggerProps: fieldProps("type"), value: values.type, options: propertyTypes, disabled: locked || busy, onChange: (value) => {
           setValues((old) => ({ ...old, type: value }));
           setError(null);
         } }),
-        values.type === "select" && h(Field, { label: "Select options (comma separated)", ...fieldProps("options"), value: values.options, disabled: locked || busy, placeholder: "To do, In progress, Done", onChange: change("options") }),
-        values.type === "relation" && h(Choice, {
+        values.type === "select" && h2(Field, { label: "Select options (comma separated)", ...fieldProps("options"), value: values.options, disabled: locked || busy, placeholder: "To do, In progress, Done", onChange: change("options") }),
+        values.type === "relation" && h2(Choice, {
           label: "Related database",
           triggerProps: fieldProps("target"),
           value: values.target,
@@ -5873,22 +5899,22 @@ function PropertyCreator({ item, state, command, locked, registerFlush, newMenu 
             setError(null);
           }
         }),
-        values.type === "formula" && h(Field, { label: "Formula expression", ...fieldProps("formula"), value: values.formula, disabled: locked || busy, onChange: change("formula") }),
-        values.type === "formula" && h("details", null, h("summary", null, "Formula syntax and column IDs"), h(FormulaHelp, { columns: item.columns ?? [] })),
-        error && h("p", { id: errorId, role: "alert", className: "ws-field-error" }, error.message),
-        locked && h("p", { className: "ws-muted", role: "status" }, "Properties are read-only while Hermes is working.")
+        values.type === "formula" && h2(Field, { label: "Formula expression", ...fieldProps("formula"), value: values.formula, disabled: locked || busy, onChange: change("formula") }),
+        values.type === "formula" && h2("details", null, h2("summary", null, "Formula syntax and column IDs"), h2(FormulaHelp, { columns: item.columns ?? [] })),
+        error && h2("p", { id: errorId, role: "alert", className: "ws-field-error" }, error.message),
+        locked && h2("p", { className: "ws-muted", role: "status" }, "Properties are read-only while Hermes is working.")
       ),
-      h(
+      h2(
         "div",
         { className: "ws-db-form-actions" },
-        h(Action, { disabled: busy, onClick: cancel }, "Cancel"),
-        h(Action, { type: "submit", disabled: locked || busy || !values.name.trim() }, busy ? "Adding\u2026" : "Add property")
+        h2(Action, { disabled: busy, onClick: cancel }, "Cancel"),
+        h2(Action, { type: "submit", disabled: locked || busy || !values.name.trim() }, busy ? "Adding\u2026" : "Add property")
       )
     )
   );
 }
 function NewRecordCreator({ draft, locked, onDraft, onCreate, onCancel, label = "New record", groupKey, onFocus, focusRef }) {
-  const form = useRef9(null), input = useRef9(null), composing = useRef9(false);
+  const form = useRef10(null), input = useRef10(null), composing = useRef10(false);
   const titleId = useId3(), messageId = useId3();
   useEffect4(() => {
     if (!focusRef) return;
@@ -5903,7 +5929,7 @@ function NewRecordCreator({ draft, locked, onDraft, onCreate, onCancel, label = 
       input.current?.focus({ preventScroll: true });
     }
   }, [draft.open, draft.busy]);
-  if (!draft.open) return h(Action, {
+  if (!draft.open) return h2(Action, {
     variant: "ghost",
     className: "ws-db-new-record",
     disabled: locked,
@@ -5912,8 +5938,8 @@ function NewRecordCreator({ draft, locked, onDraft, onCreate, onCancel, label = 
     onFocus,
     onPointerDown: onFocus,
     onClick: () => onDraft({ ...draft, open: true, error: "", status: "" })
-  }, h(Codicon, { name: "add", "aria-hidden": true }), "New record");
-  return h(
+  }, h2(Codicon, { name: "add", "aria-hidden": true }), "New record");
+  return h2(
     "form",
     {
       ref: form,
@@ -5941,8 +5967,8 @@ function NewRecordCreator({ draft, locked, onDraft, onCreate, onCancel, label = 
         if (!composing.current) void onCreate();
       }
     },
-    h("label", { className: "ws-db-draft-label", htmlFor: titleId }, "New record"),
-    h(Input, {
+    h2("label", { className: "ws-db-draft-label", htmlFor: titleId }, "New record"),
+    h2(Input, {
       ref: input,
       id: titleId,
       "aria-label": "New record title",
@@ -5955,28 +5981,28 @@ function NewRecordCreator({ draft, locked, onDraft, onCreate, onCancel, label = 
       "aria-invalid": Boolean(draft.error),
       onChange: (event) => onDraft({ ...draft, title: event.target.value, error: "", status: "" })
     }),
-    h(
+    h2(
       "div",
       { className: "ws-db-form-actions" },
-      h(Action, { type: "submit", disabled: locked || draft.busy || !draft.title.trim() }, draft.busy ? "Creating\u2026" : "Create record"),
-      h(Action, { "aria-label": "Cancel new record", disabled: draft.busy, onClick: onCancel }, "Cancel")
+      h2(Action, { type: "submit", disabled: locked || draft.busy || !draft.title.trim() }, draft.busy ? "Creating\u2026" : "Create record"),
+      h2(Action, { "aria-label": "Cancel new record", disabled: draft.busy, onClick: onCancel }, "Cancel")
     ),
-    (draft.error || draft.status) && h("p", { id: messageId, role: draft.error ? "alert" : "status", className: draft.error ? "ws-field-error" : "ws-muted" }, draft.error || draft.status)
+    (draft.error || draft.status) && h2("p", { id: messageId, role: draft.error ? "alert" : "status", className: draft.error ? "ws-field-error" : "ws-muted" }, draft.error || draft.status)
   );
 }
 function Database({ item, state, command, onOpen, onError, locked, confirm, propertyBuffer, registerPropertyFlush }) {
-  const [sort, setSort] = useState10(""), [direction, setDirection] = useState10("asc"), [filter, setFilter] = useState10(""), [view, setView] = useState10("table"), [group, setGroup] = useState10(""), [sortOpen, setSortOpen] = useState10(false);
-  const [activeRecordId, setActiveRecordId] = useState10(null);
-  const [creationFocused, setCreationFocused] = useState10(false);
-  const [toolbarRecord, setToolbarRecord] = useState10(false);
-  const recordRecovery = useRef9(null);
+  const [sort, setSort] = useState11(""), [direction, setDirection] = useState11("asc"), [filter, setFilter] = useState11(""), [view, setView] = useState11("table"), [group, setGroup] = useState11(""), [sortOpen, setSortOpen] = useState11(false);
+  const [activeRecordId, setActiveRecordId] = useState11(null);
+  const [creationFocused, setCreationFocused] = useState11(false);
+  const [toolbarRecord, setToolbarRecord] = useState11(false);
+  const recordRecovery = useRef10(null);
   const focusCreation = () => {
     setActiveRecordId(null);
     setCreationFocused(true);
   };
-  const [rowDraft, setRowDraft] = useState10({ open: false, title: "", error: "", status: "", busy: false });
-  const creationGuards = useRef9(/* @__PURE__ */ new Map());
-  const viewFocusActive = useRef9(false), viewRecovery = useRef9(null);
+  const [rowDraft, setRowDraft] = useState11({ open: false, title: "", error: "", status: "", busy: false });
+  const creationGuards = useRef10(/* @__PURE__ */ new Map());
+  const viewFocusActive = useRef10(false), viewRecovery = useRef10(null);
   const registerCreationFlush = useCallback2((id, fn) => {
     creationGuards.current.set(id, fn);
     const unregister = registerPropertyFlush?.(id, fn);
@@ -5997,7 +6023,7 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
       onError?.(error);
     }
   };
-  const rowGate = useRef9(false), alive = useRef9(true), section = useRef9(null), latest = useRef9(null);
+  const rowGate = useRef10(false), alive = useRef10(true), section = useRef10(null), latest = useRef10(null);
   latest.current = { command, locked, item, rowDraft };
   useEffect4(() => {
     alive.current = true;
@@ -6013,7 +6039,7 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
       else recordRecovery.current?.();
     });
   }), [registerCreationFlush, item.id]);
-  const [, advanceDrafts] = useState10(0), settled = useCallback2(() => advanceDrafts((v) => v + 1), []);
+  const [, advanceDrafts] = useState11(0), settled = useCallback2(() => advanceDrafts((v) => v + 1), []);
   const columns = item.columns ?? [], records = state.items.filter((i) => i.kind === "record" && !i.deleted_at && i.database_id === item.id);
   const rows = tableRows(records, columns, { sort, direction, filter }), selectColumns = columns.filter((c) => c.type === "select");
   const groupColumn = selectColumns.find((c) => c.id === group) ?? selectColumns[0];
@@ -6060,7 +6086,7 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
     }
   };
   const recordProps = { draft: rowDraft, locked, onFocus: focusCreation, onDraft: setRowDraft, onCreate: createRecord, onCancel: cancelRecord };
-  const creation = h(NewRecordCreator, { ...recordProps, draft: toolbarRecord ? { open: false } : rowDraft, locked: locked || toolbarRecord });
+  const creation = h2(NewRecordCreator, { ...recordProps, draft: toolbarRecord ? { open: false } : rowDraft, locked: locked || toolbarRecord });
   const groupName = (value) => {
     if (value !== null) return value;
     let label = "Unassigned";
@@ -6070,7 +6096,7 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
   const groupCreation = (value) => {
     const name = groupName(value);
     const key = JSON.stringify([groupColumn.id, value]), active = rowDraft.target?.key === key;
-    return h(NewRecordCreator, {
+    return h2(NewRecordCreator, {
       label: `New record in ${name}`,
       groupKey: key,
       onFocus: focusCreation,
@@ -6085,25 +6111,25 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
       onCancel: cancelRecord
     });
   };
-  const rowActions = (record) => h(
+  const rowActions = (record) => h2(
     ActionMenu,
     {
       label: `Record actions: ${record.title}`,
-      triggerLabel: h(Codicon, { name: "ellipsis", "aria-hidden": true }),
+      triggerLabel: h2(Codicon, { name: "ellipsis", "aria-hidden": true }),
       showChevron: false,
       disabled: locked || Boolean(activeRun(state, record.id)),
       triggerProps: { className: "ws-db-row-actions", size: "icon-xs" }
     },
-    h(Action, { onClick: (_event, opener) => confirm({ returnFocus: opener, title: `Move ${record.title} to Trash?`, description: "You can restore this record from Trash.", label: "Move to Trash", action: () => command("trash", { id: record.id }) }) }, "Move to Trash")
+    h2(Action, { onClick: (_event, opener) => confirm({ returnFocus: opener, title: `Move ${record.title} to Trash?`, description: "You can restore this record from Trash.", label: "Move to Trash", action: () => command("trash", { id: record.id }) }) }, "Move to Trash")
   );
-  return h(
+  return h2(
     "section",
     { ref: section, className: "ws-database", "aria-label": "Database" },
-    h("style", null, databaseGridStyles),
-    h(
+    h2("style", null, databaseGridStyles),
+    h2(
       "div",
       { className: "ws-db-create-toolbar" },
-      h(PropertyCreator, {
+      h2(PropertyCreator, {
         item,
         state,
         command,
@@ -6122,11 +6148,11 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
         }
       })
     ),
-    h(
+    h2(
       "div",
       { className: "ws-database-tools" },
-      h(SearchField2, { value: filter, "aria-label": "Filter records", placeholder: "Filter records\u2026", containerClassName: "ws-db-filter opacity-100", onChange: setFilter, onClear: () => setFilter("") }),
-      h(Choice, {
+      h2(SearchField2, { value: filter, "aria-label": "Filter records", placeholder: "Filter records\u2026", containerClassName: "ws-db-filter opacity-100", onChange: setFilter, onClear: () => setFilter("") }),
+      h2(Choice, {
         label: "View",
         showLabel: false,
         value: view,
@@ -6146,7 +6172,7 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
           }
         }
       }),
-      h(
+      h2(
         ContextPopover,
         {
           open: sortOpen,
@@ -6154,45 +6180,45 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
           className: "ws-db-sort-popover",
           align: "end",
           returnFocusOnEscape: true,
-          trigger: h(Action, { variant: "ghost", "aria-label": sort ? `Sort: ${sortLabel}, ${direction === "asc" ? "ascending" : "descending"}` : "Sort" }, h(Codicon, { name: sort ? direction === "asc" ? "arrow-up" : "arrow-down" : "sort-precedence", "aria-hidden": true }), h("span", { className: "ws-db-sort-label" }, sort ? sortLabel : "Sort"))
+          trigger: h2(Action, { variant: "ghost", "aria-label": sort ? `Sort: ${sortLabel}, ${direction === "asc" ? "ascending" : "descending"}` : "Sort" }, h2(Codicon, { name: sort ? direction === "asc" ? "arrow-up" : "arrow-down" : "sort-precedence", "aria-hidden": true }), h2("span", { className: "ws-db-sort-label" }, sort ? sortLabel : "Sort"))
         },
-        h(Choice, { label: "Sort", value: sort, options: [["", "No sorting"], ["title", "Record title"], ...columns.map((c) => [c.id, c.name])], onChange: setSort }),
-        h(Choice, { label: "Direction", value: direction, options: [["asc", "Ascending"], ["desc", "Descending"]], onChange: setDirection })
+        h2(Choice, { label: "Sort", value: sort, options: [["", "No sorting"], ["title", "Record title"], ...columns.map((c) => [c.id, c.name])], onChange: setSort }),
+        h2(Choice, { label: "Direction", value: direction, options: [["asc", "Ascending"], ["desc", "Descending"]], onChange: setDirection })
       )
     ),
-    h(
+    h2(
       "div",
       { className: "ws-db-status", role: "status" },
-      h("span", { className: "ws-db-count" }, filter ? `${rows.length} of ${records.length} records` : `${records.length} ${records.length === 1 ? "record" : "records"}`),
-      creationFocused && view === "table" && h("span", { className: "ws-db-record-context" }, "New record"),
-      activeRecord && !creationFocused && view === "table" && h(
+      h2("span", { className: "ws-db-count" }, filter ? `${rows.length} of ${records.length} records` : `${records.length} ${records.length === 1 ? "record" : "records"}`),
+      creationFocused && view === "table" && h2("span", { className: "ws-db-record-context" }, "New record"),
+      activeRecord && !creationFocused && view === "table" && h2(
         "span",
         { className: "ws-db-record-context" },
         "Record: ",
-        h(ContextTip, { label: activeRecord.title }, h(Action, { variant: "link", onClick: () => onOpen(activeRecord.id) }, h("span", { className: "ws-db-record-label" }, activeRecord.title)))
+        h2(ContextTip, { label: activeRecord.title }, h2(Action, { variant: "link", onClick: () => onOpen(activeRecord.id) }, h2("span", { className: "ws-db-record-label" }, activeRecord.title)))
       )
     ),
-    view === "board" ? h(
+    view === "board" ? h2(
       "div",
       { className: "ws-db-board-view" },
-      h(
+      h2(
         "div",
         { className: "ws-db-board-tools" },
-        groupColumn && h(Choice, { label: "Group board by", value: groupColumn.id, disabled: rowDraft.open, options: selectColumns.map((c) => [c.id, c.name]), onChange: setGroup }),
-        h(PropertyCreator, { item, state, command, locked: schemaLocked, registerFlush: registerCreationFlush })
+        groupColumn && h2(Choice, { label: "Group board by", value: groupColumn.id, disabled: rowDraft.open, options: selectColumns.map((c) => [c.id, c.name]), onChange: setGroup }),
+        h2(PropertyCreator, { item, state, command, locked: schemaLocked, registerFlush: registerCreationFlush })
       ),
-      !groupColumn ? h("p", { className: "ws-db-empty" }, "Add a single-select property to group records on a board.") : h(
+      !groupColumn ? h2("p", { className: "ws-db-empty" }, "Add a single-select property to group records on a board.") : h2(
         "div",
         { className: "ws-board", role: "region", "aria-label": "Database board, scroll for more groups", tabIndex: 0 },
-        [...boardGroups(rows, groupColumn)].map(([value, groupRows]) => h(
+        [...boardGroups(rows, groupColumn)].map(([value, groupRows]) => h2(
           "section",
           { className: "ws-board-group", key: JSON.stringify(value), role: "region", "aria-label": `Board group: ${groupName(value)}` },
-          h("h3", null, groupName(value), h("span", { className: "ws-db-count" }, String(groupRows.length))),
-          groupRows.map((record) => h(
+          h2("h3", null, groupName(value), h2("span", { className: "ws-db-count" }, String(groupRows.length))),
+          groupRows.map((record) => h2(
             "div",
             { key: record.id, className: "ws-board-record" },
-            h("div", { className: "ws-db-record-name" }, h(Action, { variant: "ghost", onClick: () => onOpen(record.id) }, record.title), rowActions(record)),
-            h(Property, {
+            h2("div", { className: "ws-db-record-name" }, h2(Action, { variant: "ghost", onClick: () => onOpen(record.id) }, record.title), rowActions(record)),
+            h2(Property, {
               column: { ...groupColumn, name: `Move ${record.title}` },
               value: record.properties?.[groupColumn.id],
               state,
@@ -6203,34 +6229,34 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
               onChange: (value2) => write(record, groupColumn, value2)
             })
           )),
-          h("div", { className: "ws-db-board-create" }, groupCreation(value))
+          h2("div", { className: "ws-db-board-create" }, groupCreation(value))
         ))
       ),
-      !groupColumn && h("div", { className: "ws-db-board-create" }, creation)
-    ) : h(
+      !groupColumn && h2("div", { className: "ws-db-board-create" }, creation)
+    ) : h2(
       "div",
       { className: "ws-table-wrap", role: "region", "aria-label": "Database table, scroll for more columns and records", tabIndex: 0 },
-      h(
+      h2(
         "table",
         { className: "ws-table" },
-        h("thead", null, h(
+        h2("thead", null, h2(
           "tr",
           null,
-          h("th", { scope: "col", "aria-sort": sort === "title" ? direction === "asc" ? "ascending" : "descending" : void 0 }, h("span", { className: "ws-db-column-name" }, h(Codicon, { name: "symbol-string", "aria-hidden": true }), "Record")),
-          columns.map((column) => h(
+          h2("th", { scope: "col", "aria-sort": sort === "title" ? direction === "asc" ? "ascending" : "descending" : void 0 }, h2("span", { className: "ws-db-column-name" }, h2(Codicon, { name: "symbol-string", "aria-hidden": true }), "Record")),
+          columns.map((column) => h2(
             "th",
             { key: column.id, scope: "col", "aria-sort": sort === column.id ? direction === "asc" ? "ascending" : "descending" : void 0 },
-            h(
+            h2(
               "div",
               { className: "ws-db-column-heading" },
-              h("span", { className: "ws-db-column-name", title: column.name }, h(Codicon, { name: propertyIcons[column.type], "aria-hidden": true }), column.name),
-              h(ActionMenu, {
+              h2("span", { className: "ws-db-column-name", title: column.name }, h2(Codicon, { name: propertyIcons[column.type], "aria-hidden": true }), column.name),
+              h2(ActionMenu, {
                 label: `Column actions: ${column.name}`,
-                triggerLabel: h(Codicon, { name: "ellipsis", "aria-hidden": true }),
+                triggerLabel: h2(Codicon, { name: "ellipsis", "aria-hidden": true }),
                 showChevron: false,
                 disabled: schemaLocked,
                 triggerProps: { size: "icon-xs" }
-              }, h(Action, { onClick: (_event, opener) => confirm({
+              }, h2(Action, { onClick: (_event, opener) => confirm({
                 returnFocus: opener,
                 title: `Remove ${column.name}?`,
                 description: "Values in this column will be removed from every record.",
@@ -6239,13 +6265,13 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
               }) }, "Remove column"))
             )
           )),
-          h("th", { key: "new-property", scope: "col", className: "ws-db-property-header" }, h(PropertyCreator, { item, state, command, locked: schemaLocked, registerFlush: registerCreationFlush }))
+          h2("th", { key: "new-property", scope: "col", className: "ws-db-property-header" }, h2(PropertyCreator, { item, state, command, locked: schemaLocked, registerFlush: registerCreationFlush }))
         )),
-        h(
+        h2(
           "tbody",
           null,
-          !rows.length && h("tr", { className: "ws-db-empty-row" }, h("td", { colSpan: columns.length + 2 }, filter ? "No records match this filter." : "No records yet. Add your first record below.")),
-          rows.map((record) => h(
+          !rows.length && h2("tr", { className: "ws-db-empty-row" }, h2("td", { colSpan: columns.length + 2 }, filter ? "No records match this filter." : "No records yet. Add your first record below.")),
+          rows.map((record) => h2(
             "tr",
             { key: record.id, className: activeRecordId === record.id ? "ws-db-active-row" : void 0, onFocusCapture: () => {
               setActiveRecordId(record.id);
@@ -6254,8 +6280,8 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
               setActiveRecordId(record.id);
               setCreationFocused(false);
             } },
-            h("th", { scope: "row" }, h("div", { className: "ws-db-record-name" }, h(Action, { variant: "ghost", onClick: () => onOpen(record.id) }, h(Codicon, { name: "file-text", "aria-hidden": true }), record.title), rowActions(record))),
-            columns.map((column) => h("td", { key: column.id }, h(Property, {
+            h2("th", { scope: "row" }, h2("div", { className: "ws-db-record-name" }, h2(Action, { variant: "ghost", onClick: () => onOpen(record.id) }, h2(Codicon, { name: "file-text", "aria-hidden": true }), record.title), rowActions(record))),
+            columns.map((column) => h2("td", { key: column.id }, h2(Property, {
               compact: true,
               key: `${record.id}:${column.id}`,
               buffer: propertyBuffer?.(record.id, column.id),
@@ -6268,40 +6294,38 @@ function Database({ item, state, command, onOpen, onError, locked, confirm, prop
               disabled: locked || Boolean(activeRun(state, record.id)),
               onChange: (value) => write(record, column, value)
             }))),
-            h("td", { className: "ws-db-property-spacer", "aria-hidden": true })
+            h2("td", { className: "ws-db-property-spacer", "aria-hidden": true })
           )),
-          h("tr", { className: "ws-db-create-row" }, h("td", { colSpan: columns.length + 2 }, creation))
+          h2("tr", { className: "ws-db-create-row" }, h2("td", { colSpan: columns.length + 2 }, creation))
         )
       )
     ),
-    h("details", { className: "ws-db-schema-help" }, h("summary", null, "Column IDs for formulas"), h(FormulaHelp, { columns }))
+    h2("details", { className: "ws-db-schema-help" }, h2("summary", null, "Column IDs for formulas"), h2(FormulaHelp, { columns }))
   );
 }
 function FormulaHelp({ columns }) {
   const numeric = columns.filter((c) => c.type === "number");
   const example = numeric.length > 1 ? `col(${JSON.stringify(numeric[0].name)}) * col(${JSON.stringify(numeric[1].name)})` : numeric.length ? `col(${JSON.stringify(numeric[0].name)}) * 2` : columns.length ? `len(col(${JSON.stringify(columns[0].name)}))` : "2 + 3";
-  return h(
+  return h2(
     "section",
     { className: "ws-formula-help", "aria-label": "Formula syntax" },
-    h(
+    h2(
       "p",
       null,
       'Use col("Column name") or a column ID from this database. For example: ',
-      h("code", null, example)
+      h2("code", null, example)
     ),
-    h("p", { className: "ws-muted" }, "Same-row arithmetic (+ \u2212 * / %), comparisons, and/or/not, conditional expressions, IF, abs, round, min, max, len, lower, upper, concat and coalesce. Formula errors appear on each record."),
-    columns.length > 0 && h("ul", null, columns.map((c) => h("li", { key: c.id }, `${c.name}: `, h("code", null, c.id))))
+    h2("p", { className: "ws-muted" }, "Same-row arithmetic (+ \u2212 * / %), comparisons, and/or/not, conditional expressions, IF, abs, round, min, max, len, lower, upper, concat and coalesce. Formula errors appear on each record."),
+    columns.length > 0 && h2("ul", null, columns.map((c) => h2("li", { key: c.id }, `${c.name}: `, h2("code", null, c.id))))
   );
 }
 
 // frontend/scope-review.jsx
-import { useRef as useRef10, useState as useState11 } from "react";
+import { useRef as useRef11, useState as useState12 } from "react";
 import {
   Checkbox as Checkbox2,
   SearchField as SearchField3,
   Button as Button2,
-  Dialog as Dialog3,
-  DialogContent as DialogContent3,
   DialogHeader as DialogHeader3,
   DialogTitle as DialogTitle3,
   DialogDescription as DialogDescription3,
@@ -6355,47 +6379,47 @@ function ScopeReviewDialog({
   onSubmit,
   onClose
 }) {
-  const [selected, setSelected] = useState11([]), [busy, setBusy] = useState11(false), [error, setError] = useState11("");
-  const inFlight = useRef10(false);
-  const [query, setQuery] = useState11(""), [limit, setLimit] = useState11(20);
+  const [selected, setSelected] = useState12([]), [busy, setBusy] = useState12(false), [error, setError] = useState12("");
+  const inFlight = useRef11(false);
+  const [query, setQuery] = useState12(""), [limit, setLimit] = useState12(20);
   const matches = review.targets.filter((target) => `${target.title} ${target.label} ${target.id}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
-  return h(
-    Dialog3,
+  return h2(
+    Dialog2,
     { open: true, onOpenChange: (open) => !open && !busy && onClose() },
-    h(
-      DialogContent3,
+    h2(
+      DialogContent2,
       { className: "ws-dialog ws-scope-review", bodyClassName: "ws-scope-review-body", showCloseButton: !busy },
-      h(
+      h2(
         DialogHeader3,
         null,
-        h(DialogTitle3, null, "Review edits for this run"),
-        h(
+        h2(DialogTitle3, null, "Review edits for this run"),
+        h2(
           DialogDescription3,
           { className: "ws-dialog-description" },
           "Related items start unchecked. Text and references never grant edits."
         )
       ),
-      h("p", { className: "ws-scope-current", title: currentTitle }, `Current page: ${currentTitle}`),
-      h(
+      h2("p", { className: "ws-scope-current", title: currentTitle }, `Current page: ${currentTitle}`),
+      h2(
         "details",
         { className: "ws-related-scope" },
-        h("summary", null, `Allow related-item edits (optional${selected.length ? `; ${selected.length} selected` : ""})`),
-        h(SearchField3, { "aria-label": "Find related items", value: query, placeholder: "Find a Workspace item\u2026", onChange: (value) => {
+        h2("summary", null, `Allow related-item edits (optional${selected.length ? `; ${selected.length} selected` : ""})`),
+        h2(SearchField3, { "aria-label": "Find related items", value: query, placeholder: "Find a Workspace item\u2026", onChange: (value) => {
           setQuery(value);
           setLimit(20);
         }, onClear: () => {
           setQuery("");
           setLimit(20);
         } }),
-        h("p", { role: "status" }, `${matches.length} matching items; ${selected.length} explicitly selected.`),
+        h2("p", { role: "status" }, `${matches.length} matching items; ${selected.length} explicitly selected.`),
         matches.slice(0, limit).map(
-          (target) => h(
+          (target) => h2(
             "section",
             { key: target.id, className: "ws-comment" },
-            h(
+            h2(
               "label",
               { className: "ws-check" },
-              h(Checkbox2, {
+              h2(Checkbox2, {
                 className: "ws-checkbox",
                 "aria-label": `Allow edits to ${target.label}`,
                 checked: selected.includes(target.id),
@@ -6404,31 +6428,31 @@ function ScopeReviewDialog({
                   (ids) => checked ? [...ids, target.id] : ids.filter((id) => id !== target.id)
                 )
               }),
-              h(
+              h2(
                 "span",
                 null,
                 `${target.label}${target.available ? "" : "; unavailable, not allowed"}`
               )
             ),
-            h("details", null, h("summary", null, "Technical identity"), h("p", null, `Workspace item ID: ${target.id}`)),
+            h2("details", null, h2("summary", null, "Technical identity"), h2("p", null, `Workspace item ID: ${target.id}`)),
             target.comments.map(
-              (comment) => h("p", { key: comment.id }, comment.text)
+              (comment) => h2("p", { key: comment.id }, comment.text)
             )
           )
         ),
-        matches.length > limit && h(Action, { onClick: () => setLimit((value) => value + 20) }, "Show more items")
+        matches.length > limit && h2(Action, { onClick: () => setLimit((value) => value + 20) }, "Show more items")
       ),
-      error && h(
+      error && h2(
         "div",
         { role: "alert" },
-        h("p", null, operationError(error, { operation: "runStart", pageTitle: currentTitle, threadId: currentThreadId })),
-        h("details", null, h("summary", null, "Technical details"), h("pre", null, error))
+        h2("p", null, operationError(error, { operation: "runStart", pageTitle: currentTitle, threadId: currentThreadId })),
+        h2("details", null, h2("summary", null, "Technical details"), h2("pre", null, error))
       ),
-      h(
+      h2(
         DialogFooter3,
         { className: "ws-dialog-footer" },
-        h(Action, { disabled: busy, onClick: onClose }, "Cancel"),
-        h(
+        h2(Action, { disabled: busy, onClick: onClose }, "Cancel"),
+        h2(
           Button2,
           {
             "aria-label": selected.length ? "Address selected scope" : "Address current page",
@@ -6460,11 +6484,11 @@ function ScopeReviewDialog({
 
 // frontend/comments.jsx
 var import_react_dom2 = __toESM(require_react_dom(), 1);
-import { useCallback as useCallback3, useEffect as useEffect7, useId as useId6, useLayoutEffect as useLayoutEffect8, useRef as useRef14, useState as useState15 } from "react";
-import { Checkbox as Checkbox4, Textarea as Textarea2, Popover as Popover4, PopoverTrigger as PopoverTrigger4, PopoverContent as PopoverContent4, Tip as Tip3, Dialog as Dialog6, DialogContent as DialogContent6, DialogHeader as DialogHeader6, DialogTitle as DialogTitle6, DialogDescription as DialogDescription6 } from "@hermes/plugin-sdk";
+import { useCallback as useCallback3, useEffect as useEffect7, useId as useId6, useLayoutEffect as useLayoutEffect9, useRef as useRef15, useState as useState16 } from "react";
+import { Checkbox as Checkbox4, Textarea as Textarea2, Tip as Tip3, DialogHeader as DialogHeader6, DialogTitle as DialogTitle6, DialogDescription as DialogDescription6 } from "@hermes/plugin-sdk";
 
 // frontend/comment-bubbles.jsx
-import { useLayoutEffect as useLayoutEffect7, useRef as useRef11, useState as useState12 } from "react";
+import { useLayoutEffect as useLayoutEffect8, useRef as useRef12, useState as useState13 } from "react";
 function passageGroups(geometry, inline) {
   const result = [];
   for (const position of [...geometry].sort((a, b) => a.top - b.top)) {
@@ -6478,24 +6502,24 @@ function passageGroups(geometry, inline) {
   return result;
 }
 function CommentBubbles({ geometry, header, footer, renderGroup }) {
-  const aside = useRef11(null), headerRef = useRef11(null), footerRef = useRef11(null);
-  const slots = useRef11(/* @__PURE__ */ new Map()), frame = useRef11(null);
-  const gaps = useRef11(/* @__PURE__ */ new Map());
-  const paneSize = useRef11(null), resizeFocus = useRef11(null), focusFrame = useRef11(null);
-  const settledFocus = useRef11(null);
-  const [layout, setLayout] = useState12({ groups: [], footer: 0, header: 0, height: 0, inline: false });
-  const latest = useRef11(null);
+  const aside = useRef12(null), headerRef = useRef12(null), footerRef = useRef12(null);
+  const slots = useRef12(/* @__PURE__ */ new Map()), frame = useRef12(null);
+  const gaps = useRef12(/* @__PURE__ */ new Map());
+  const paneSize = useRef12(null), resizeFocus = useRef12(null), focusFrame = useRef12(null);
+  const settledFocus = useRef12(null);
+  const [layout, setLayout] = useState13({ groups: [], footer: 0, header: 0, height: 0, inline: false });
+  const latest = useRef12(null);
   latest.current = { geometry, renderGroup };
   const groups = passageGroups(geometry, layout.inline);
   const signature = groups.map((g) => g.ids.join(",")).join(";");
-  const groupRefs = useRef11(/* @__PURE__ */ new Map());
-  const blockKeys = useRef11(/* @__PURE__ */ new WeakMap()), blockSequence = useRef11(0);
+  const groupRefs = useRef12(/* @__PURE__ */ new Map());
+  const blockKeys = useRef12(/* @__PURE__ */ new WeakMap()), blockSequence = useRef12(0);
   const blockKey = (block) => {
     if (!blockKeys.current.has(block)) blockKeys.current.set(block, `passage-block-${++blockSequence.current}`);
     return blockKeys.current.get(block);
   };
   const groupKey = (group) => `${blockKey(group.block)}:${group.lineGroup ?? "paragraph"}`;
-  useLayoutEffect7(() => {
+  useLayoutEffect8(() => {
     const root = aside.current?.closest(".ws-layout"), page = root?.querySelector(".ws-document");
     if (!root || !page) return;
     const view = root.ownerDocument.defaultView;
@@ -6647,7 +6671,7 @@ function CommentBubbles({ geometry, header, footer, renderGroup }) {
       view.clearTimeout(settledFocus.current);
     };
   }, [geometry, signature, header, footer]);
-  useLayoutEffect7(() => () => {
+  useLayoutEffect8(() => () => {
     aside.current?.closest(".ws-layout")?.style.removeProperty("min-height");
     aside.current?.closest(".ws-layout")?.style.removeProperty("max-width");
     for (const [block, saved] of slots.current) {
@@ -6656,13 +6680,13 @@ function CommentBubbles({ geometry, header, footer, renderGroup }) {
     }
     for (const gap of gaps.current.values()) gap.remove();
   }, []);
-  return h(
+  return h2(
     "aside",
     { ref: aside, className: `ws-comments ws-bubbles${layout.inline ? " ws-bubbles-inline" : ""}`, "aria-label": "Comments and Hermes thread", style: { minHeight: `${layout.height}px` } },
-    header && h("div", { ref: headerRef, className: "ws-bubble-header", style: { top: layout.header } }, header),
+    header && h2("div", { ref: headerRef, className: "ws-bubble-header", style: { top: layout.header } }, header),
     groups.map((group) => {
       const key = groupKey(group), position = layout.groups.find((g) => g.key === key);
-      return h("div", {
+      return h2("div", {
         key,
         ref: (node) => {
           if (node) groupRefs.current.set(key, node);
@@ -6673,21 +6697,21 @@ function CommentBubbles({ geometry, header, footer, renderGroup }) {
         "aria-label": "Passage discussions"
       }, renderGroup(group.ids));
     }),
-    h("div", { ref: footerRef, className: "ws-bubble-footer", style: { top: layout.footer } }, footer)
+    h2("div", { ref: footerRef, className: "ws-bubble-footer", style: { top: layout.footer } }, footer)
   );
 }
 
 // frontend/thread-picker.jsx
-import { useEffect as useEffect5, useId as useId4, useRef as useRef12, useState as useState13 } from "react";
-import { SearchField as SearchField4, Dialog as Dialog4, DialogContent as DialogContent4, DialogHeader as DialogHeader4, DialogTitle as DialogTitle4, DialogDescription as DialogDescription4, DialogFooter as DialogFooter4 } from "@hermes/plugin-sdk";
+import { useEffect as useEffect5, useId as useId4, useRef as useRef13, useState as useState14 } from "react";
+import { SearchField as SearchField4, DialogHeader as DialogHeader4, DialogTitle as DialogTitle4, DialogDescription as DialogDescription4, DialogFooter as DialogFooter4 } from "@hermes/plugin-sdk";
 function ThreadPicker({ workflow, itemId, locked, onBound, onClose }) {
-  const [rows, setRows] = useState13([]), [query, setQuery] = useState13("");
-  const [loading, setLoading] = useState13(true), [busy, setBusy] = useState13(false);
-  const [error, setError] = useState13(""), [attempt, setAttempt] = useState13(0);
-  const [active, setActive] = useState13(0);
-  const alive = useRef12(true), binding = useRef12(false), search = useRef12(null);
+  const [rows, setRows] = useState14([]), [query, setQuery] = useState14("");
+  const [loading, setLoading] = useState14(true), [busy, setBusy] = useState14(false);
+  const [error, setError] = useState14(""), [attempt, setAttempt] = useState14(0);
+  const [active, setActive] = useState14(0);
+  const alive = useRef13(true), binding = useRef13(false), search = useRef13(null);
   const id = useId4();
-  const opener = useRef12(document.activeElement);
+  const opener = useRef13(document.activeElement);
   useEffect5(() => {
     alive.current = true;
     return () => {
@@ -6730,13 +6754,13 @@ function ThreadPicker({ workflow, itemId, locked, onBound, onClose }) {
     }
   };
   const current = Math.min(active, Math.max(0, matches.length - 1));
-  return h(
-    Dialog4,
+  return h2(
+    Dialog2,
     { open: true, onOpenChange: (open) => {
       if (!open && !binding.current) onClose();
     } },
-    h(
-      DialogContent4,
+    h2(
+      DialogContent2,
       {
         className: "ws-dialog ws-thread-picker",
         bodyClassName: "ws-thread-picker-body",
@@ -6748,13 +6772,13 @@ function ThreadPicker({ workflow, itemId, locked, onBound, onClose }) {
         },
         showCloseButton: !busy
       },
-      h(
+      h2(
         DialogHeader4,
         null,
-        h(DialogTitle4, null, "Select existing thread"),
-        h(DialogDescription4, { className: "ws-dialog-description" }, "Recent only; older history is not searched.")
+        h2(DialogTitle4, null, "Select existing thread"),
+        h2(DialogDescription4, { className: "ws-dialog-description" }, "Recent only; older history is not searched.")
       ),
-      h("div", { ref: search }, h(SearchField4, {
+      h2("div", { ref: search }, h2(SearchField4, {
         containerClassName: "ws-thread-search",
         "aria-label": "Search recent native threads",
         placeholder: "Search recent threads\u2026",
@@ -6781,24 +6805,24 @@ function ThreadPicker({ workflow, itemId, locked, onBound, onClose }) {
           }
         }
       })),
-      !loading && matches[current] && h(
+      !loading && matches[current] && h2(
         "p",
         { role: "status", className: "ws-thread-notice" },
         `${matches.length} recent ${matches.length === 1 ? "match" : "matches"}.`,
-        h("span", { className: "sr-only" }, ` Selected: ${matches[current].title || "Untitled thread"}; ${matches[current].id}. Use arrows and Enter, or Tab to a result.`)
+        h2("span", { className: "sr-only" }, ` Selected: ${matches[current].title || "Untitled thread"}; ${matches[current].id}. Use arrows and Enter, or Tab to a result.`)
       ),
-      loading && h("p", { role: "status" }, "Loading native threads\u2026"),
-      !loading && !error && !matches.length && h("p", { role: "status" }, query ? "No matching recent threads. Older history has not been searched." : "No recent native threads available."),
-      error && h(
+      loading && h2("p", { role: "status" }, "Loading native threads\u2026"),
+      !loading && !error && !matches.length && h2("p", { role: "status" }, query ? "No matching recent threads. Older history has not been searched." : "No recent native threads available."),
+      error && h2(
         "div",
         { role: "alert" },
-        h("p", null, error),
-        h(Action, { disabled: busy, onClick: () => setAttempt((n) => n + 1) }, "Reload threads")
+        h2("p", null, error),
+        h2(Action, { disabled: busy, onClick: () => setAttempt((n) => n + 1) }, "Reload threads")
       ),
-      h(
+      h2(
         "div",
         { className: "ws-thread-results", role: "group", "aria-label": "Recent native threads", "aria-busy": loading || busy },
-        matches.map((row, index) => h(
+        matches.map((row, index) => h2(
           Action,
           {
             key: row.id,
@@ -6809,11 +6833,11 @@ function ThreadPicker({ workflow, itemId, locked, onBound, onClose }) {
             onFocus: () => setActive(index),
             onClick: () => void choose(row)
           },
-          h("span", null, row.title || "Untitled thread"),
-          h("small", null, `${row.id}${row.running || row.pending?.length ? " \xB7 Busy" : ""}`)
+          h2("span", null, row.title || "Untitled thread"),
+          h2("small", null, `${row.id}${row.running || row.pending?.length ? " \xB7 Busy" : ""}`)
         ))
       ),
-      h(DialogFooter4, null, h(Action, { disabled: busy, onClick: onClose }, "Cancel"))
+      h2(DialogFooter4, null, h2(Action, { disabled: busy, onClick: onClose }, "Cancel"))
     )
   );
 }
@@ -6917,11 +6941,11 @@ var commentStyles = `
 import { useId as useId5 } from "react";
 import { Checkbox as Checkbox3, Tip as Tip2 } from "@hermes/plugin-sdk";
 function ResolveCheckbox({ "data-state": tooltipState, ...props }) {
-  return h(
+  return h2(
     "span",
     { className: "ws-comment-resolve-wrap" },
-    h(Checkbox3, props),
-    !props.checked && h(Codicon, { name: "check", className: "ws-comment-resolve-tick", "aria-hidden": true })
+    h2(Checkbox3, props),
+    !props.checked && h2(Codicon, { name: "check", className: "ws-comment-resolve-tick", "aria-hidden": true })
   );
 }
 function CommentActions({ comment, locked, pending, onResolve, onDelete, onRevert }) {
@@ -6929,7 +6953,7 @@ function CommentActions({ comment, locked, pending, onResolve, onDelete, onRever
   const change = comment.section_change;
   const reason = locked ? "This discussion is locked while an operation is active." : pending ? "Wait for the current comment action to finish." : change?.status === "available" ? null : change?.status === "reverted" ? "This section was reverted." : change?.reason ?? "No eligible addressed section is saved for this comment.";
   const disabled = locked || pending;
-  const revert = h(Action, {
+  const revert = h2(Action, {
     className: "ws-comment-control",
     variant: "ghost",
     size: "icon-xs",
@@ -6939,14 +6963,14 @@ function CommentActions({ comment, locked, pending, onResolve, onDelete, onRever
     onClick: (event) => {
       if (!reason) onRevert(event.currentTarget);
     }
-  }, h(Codicon, { name: "discard", "aria-hidden": true }));
-  return h(
+  }, h2(Codicon, { name: "discard", "aria-hidden": true }));
+  return h2(
     "div",
     { className: "ws-comment-action-area" },
-    h(
+    h2(
       "div",
       { className: "ws-comment-actions", role: "group", "aria-label": `Actions for comment ${comment.passageNumber}` },
-      h(Tip2, { label: "Resolve" }, h(ResolveCheckbox, {
+      h2(Tip2, { label: "Resolve" }, h2(ResolveCheckbox, {
         className: "ws-checkbox ws-comment-resolve ws-comment-control",
         checked: comment.resolved,
         disabled,
@@ -6954,41 +6978,31 @@ function CommentActions({ comment, locked, pending, onResolve, onDelete, onRever
         "aria-describedby": stateId,
         onCheckedChange: (value) => onResolve(value === true)
       })),
-      h(Tip2, { label: "delete comment" }, h(Action, {
+      h2(Tip2, { label: "delete comment" }, h2(Action, {
         className: "ws-comment-control",
         variant: "ghost",
         size: "icon-xs",
         disabled,
         "aria-label": `delete comment: ${comment.text}`,
         onClick: (event) => onDelete(event.currentTarget)
-      }, h(Codicon, { name: "trash", "aria-hidden": true }))),
-      h(Tip2, { label: "Revert changes" }, change?.status !== "available" ? h("span", {
+      }, h2(Codicon, { name: "trash", "aria-hidden": true }))),
+      h2(Tip2, { label: "Revert changes" }, change?.status !== "available" ? h2("span", {
         className: "ws-comment-revert-target",
         tabIndex: 0,
         "aria-label": `Revert changes unavailable: ${reason}`,
         "aria-describedby": reasonId
       }, revert) : revert)
     ),
-    h("span", { id: stateId, className: "ws-comment-action-state" }, comment.resolved ? "Resolved. Uncheck to reopen." : "Unresolved."),
-    reason && h("span", { id: reasonId, className: "ws-comment-action-reason" }, reason),
-    h("span", { className: "ws-comment-touch-labels", "aria-hidden": true }, "Resolve \xB7 Delete \xB7 Revert")
+    h2("span", { id: stateId, className: "ws-comment-action-state" }, comment.resolved ? "Resolved. Uncheck to reopen." : "Unresolved."),
+    reason && h2("span", { id: reasonId, className: "ws-comment-action-reason" }, reason),
+    h2("span", { className: "ws-comment-touch-labels", "aria-hidden": true }, "Resolve \xB7 Delete \xB7 Revert")
   );
 }
 
 // frontend/identity.jsx
-import { createContext, useContext, useEffect as useEffect6, useMemo as useMemo3, useRef as useRef13, useState as useState14 } from "react";
+import { createContext, useContext, useEffect as useEffect6, useMemo as useMemo3, useRef as useRef14, useState as useState15 } from "react";
 import { host } from "@hermes/plugin-sdk";
-import {
-  Dialog as Dialog5,
-  DialogContent as DialogContent5,
-  DialogHeader as DialogHeader5,
-  DialogTitle as DialogTitle5,
-  DialogDescription as DialogDescription5,
-  DialogFooter as DialogFooter5,
-  Popover as Popover3,
-  PopoverTrigger as PopoverTrigger3,
-  PopoverContent as PopoverContent3
-} from "@hermes/plugin-sdk";
+import { DialogHeader as DialogHeader5, DialogTitle as DialogTitle5, DialogDescription as DialogDescription5, DialogFooter as DialogFooter5 } from "@hermes/plugin-sdk";
 
 // frontend/identity.mjs
 var MAX_AVATAR_BYTES = 256 * 1024;
@@ -7083,12 +7097,12 @@ function authorName(entry) {
 var IdentityContext = createContext(null);
 function IdentityProvider({ client, children }) {
   const loadAvatar = useMemo3(() => createIdentityBridge(client, host), [client]);
-  return h(IdentityContext.Provider, { value: loadAvatar }, children);
+  return h2(IdentityContext.Provider, { value: loadAvatar }, children);
 }
 function AuthorHeader({ entry }) {
   const loadAvatar = useContext(IdentityContext), author = entry?.author_identity;
-  const name = authorName(entry), [loaded, setLoaded] = useState14(null);
-  const [open, setOpen] = useState14(false), trigger = useRef13(null), close = useRef13(null);
+  const name = authorName(entry), [loaded, setLoaded] = useState15(null);
+  const [open, setOpen] = useState15(false), trigger = useRef14(null), close = useRef14(null);
   const key = JSON.stringify(author);
   const image = loaded && loaded.key === key ? loaded.data : null;
   const pending = Boolean(loadAvatar && author?.kind === "agent" && (!loaded || loaded.key !== key));
@@ -7106,7 +7120,7 @@ function AuthorHeader({ entry }) {
     };
   }, [loadAvatar, key]);
   const contents = [
-    h("span", { className: "ws-author-avatar", "aria-hidden": true, "data-avatar-state": pending ? "loading" : image ? "image" : "fallback" }, image ? h("img", {
+    h2("span", { className: "ws-author-avatar", "aria-hidden": true, "data-avatar-state": pending ? "loading" : image ? "image" : "fallback" }, image ? h2("img", {
       src: image,
       alt: "",
       width: 20,
@@ -7116,18 +7130,18 @@ function AuthorHeader({ entry }) {
         if (e.currentTarget.naturalWidth > 2048 || e.currentTarget.naturalHeight > 2048) setLoaded({ key, data: null });
       },
       onError: () => setLoaded({ key, data: null })
-    }) : h("span", null, Array.from(name)[0]?.toLocaleUpperCase() || "\u2022")),
-    h("strong", { className: "ws-author-name" }, name)
+    }) : h2("span", null, Array.from(name)[0]?.toLocaleUpperCase() || "\u2022")),
+    h2("strong", { className: "ws-author-name" }, name)
   ];
   if (entry?.author !== "user" && entry?.author !== "agent")
-    return h("span", { className: "ws-author", title: name, "aria-busy": pending }, ...contents);
-  return h(
-    Popover3,
+    return h2("span", { className: "ws-author", title: name, "aria-busy": pending }, ...contents);
+  return h2(
+    Popover2,
     { open, onOpenChange: setOpen },
-    h(
-      PopoverTrigger3,
+    h2(
+      PopoverTrigger2,
       { asChild: true },
-      h(Action, {
+      h2(Action, {
         ref: trigger,
         variant: "ghost",
         className: "ws-author ws-author-disclosure",
@@ -7136,8 +7150,8 @@ function AuthorHeader({ entry }) {
         onMouseDown: (event) => event.preventDefault()
       }, ...contents)
     ),
-    h(
-      PopoverContent3,
+    h2(
+      PopoverContent2,
       {
         className: "ws-author-details",
         align: "start",
@@ -7151,16 +7165,16 @@ function AuthorHeader({ entry }) {
         },
         onClick: (event) => event.stopPropagation()
       },
-      h("p", { className: "ws-author-full-name" }, name),
-      h(Action, { ref: close, variant: "text", onClick: () => setOpen(false), "aria-label": "Close author name" }, "Close")
+      h2("p", { className: "ws-author-full-name" }, name),
+      h2(Action, { ref: close, variant: "text", onClick: () => setOpen(false), "aria-label": "Close author name" }, "Close")
     )
   );
 }
 function UsernameDialog({ client, onClose, returnFocus }) {
   const initial = client.snapshot()?.identity?.human?.name ?? "user";
-  const [value, setValue] = useState14(initial === "user" ? "" : initial);
-  const [busy, setBusy] = useState14(false), [error, setError] = useState14("");
-  const pending = useRef13(false), opener = useRef13(returnFocus ?? document.activeElement);
+  const [value, setValue] = useState15(initial === "user" ? "" : initial);
+  const [busy, setBusy] = useState15(false), [error, setError] = useState15("");
+  const pending = useRef14(false), opener = useRef14(returnFocus ?? document.activeElement);
   const save = async (name) => {
     if (pending.current) return;
     pending.current = true;
@@ -7176,13 +7190,13 @@ function UsernameDialog({ client, onClose, returnFocus }) {
       setBusy(false);
     }
   };
-  return h(
-    Dialog5,
+  return h2(
+    Dialog2,
     { open: true, onOpenChange: (open) => {
       if (!open && !pending.current) onClose();
     } },
-    h(
-      DialogContent5,
+    h2(
+      DialogContent2,
       {
         className: "ws-dialog ws-username-dialog",
         style: { width: "min(24rem,calc(100% - 24px))" },
@@ -7192,13 +7206,13 @@ function UsernameDialog({ client, onClose, returnFocus }) {
           if (opener.current?.isConnected) opener.current.focus({ preventScroll: true });
         }
       },
-      h(
+      h2(
         DialogHeader5,
         null,
-        h(DialogTitle5, null, "Set username"),
-        h(DialogDescription5, null, "Shown on your comments and replies. Leave blank to use user.")
+        h2(DialogTitle5, null, "Set username"),
+        h2(DialogDescription5, null, "Shown on your comments and replies. Leave blank to use user.")
       ),
-      h(
+      h2(
         "form",
         {
           onSubmit: (e) => {
@@ -7209,7 +7223,7 @@ function UsernameDialog({ client, onClose, returnFocus }) {
             if (e.key === "Enter" && !isSubmitEnter2(e)) e.preventDefault();
           }
         },
-        h("label", { className: "ws-field" }, "Username", h(Input, {
+        h2("label", { className: "ws-field" }, "Username", h2(Input, {
           value,
           disabled: busy,
           "aria-label": "Username",
@@ -7218,13 +7232,13 @@ function UsernameDialog({ client, onClose, returnFocus }) {
           autoComplete: "off",
           onChange: (e) => setValue(e.target.value)
         })),
-        error && h("p", { id: "ws-username-error", role: "alert" }, error),
-        h(
+        error && h2("p", { id: "ws-username-error", role: "alert" }, error),
+        h2(
           DialogFooter5,
           { className: "ws-dialog-footer" },
-          h(Action, { disabled: busy, onClick: () => void save("") }, "Reset to user"),
-          h(Action, { disabled: busy, onClick: onClose }, "Cancel"),
-          h(Action, { type: "submit", disabled: busy }, busy ? "Saving\u2026" : "Save")
+          h2(Action, { disabled: busy, onClick: () => void save("") }, "Reset to user"),
+          h2(Action, { disabled: busy, onClick: onClose }, "Cancel"),
+          h2(Action, { type: "submit", disabled: busy }, busy ? "Saving\u2026" : "Save")
         )
       )
     )
@@ -7256,10 +7270,10 @@ function Comment({
   },
   onReplyPending = () => true
 }) {
-  const [reply, setReply] = useState15(retainedReply), [busy, setBusy] = useState15(false), [replyOpen, setReplyOpen] = useState15(Boolean(retainedReply));
-  const replying = useRef14(false);
+  const [reply, setReply] = useState16(retainedReply), [busy, setBusy] = useState16(false), [replyOpen, setReplyOpen] = useState16(Boolean(retainedReply));
+  const replying = useRef15(false);
   const location = locateAnchor(text, comment.anchor);
-  return h(
+  return h2(
     "article",
     {
       id: `ws-discussion-${comment.id}`,
@@ -7269,25 +7283,25 @@ function Comment({
       onFocusCapture: () => onActivate(comment.id),
       onClick: () => onActivate(comment.id)
     },
-    showContext && h(
+    showContext && h2(
       "div",
       { className: "ws-comment-meta" },
-      h(
+      h2(
         "strong",
         null,
-        h(AuthorHeader, { entry: comment }),
+        h2(AuthorHeader, { entry: comment }),
         passageNumber ? ` \xB7 Comment ${passageNumber}` : ""
       ),
-      h(
+      h2(
         "span",
         { className: "ws-muted" },
         comment.resolved ? "Resolved" : "Unresolved"
       )
     ),
-    comment.anchor ? h(
+    comment.anchor ? h2(
       "div",
       { className: "ws-anchor" },
-      location.status === "attached" && h(
+      location.status === "attached" && h2(
         Action,
         {
           className: "ws-comment-passage",
@@ -7298,29 +7312,29 @@ function Comment({
         },
         `Show passage ${passageNumber}`
       ),
-      location.status === "detached" && h(
+      location.status === "detached" && h2(
         "div",
         null,
-        h("p", { role: "status" }, "The original text is missing or ambiguous. This comment has not been attached elsewhere."),
-        originalAnchor?.quote && h(
+        h2("p", { role: "status" }, "The original text is missing or ambiguous. This comment has not been attached elsewhere."),
+        originalAnchor?.quote && h2(
           "details",
           { className: "ws-anchor-recovery" },
-          h("summary", null, "Show original excerpt"),
-          h("blockquote", null, originalAnchor.quote)
+          h2("summary", null, "Show original excerpt"),
+          h2("blockquote", null, originalAnchor.quote)
         )
       )
-    ) : h("span", { className: "ws-muted" }, state.items.find((item) => item.id === comment.item_id)?.kind === "database" ? "Whole database" : "Whole page"),
-    h("p", null, comment.text),
-    comment.target_item_ids?.length > 0 && h(
+    ) : h2("span", { className: "ws-muted" }, state.items.find((item) => item.id === comment.item_id)?.kind === "database" ? "Whole database" : "Whole page"),
+    h2("p", null, comment.text),
+    comment.target_item_ids?.length > 0 && h2(
       "div",
       { "aria-label": "Named edit targets" },
-      h(
+      h2(
         "span",
         { className: "ws-muted" },
         "Referenced items; fresh run approval required: "
       ),
       comment.target_item_ids.map(
-        (id) => h(
+        (id) => h2(
           "span",
           { key: id, className: "ws-target" },
           itemLabel(state.items.find((i) => i.id === id), state.items, state.attachments)
@@ -7328,7 +7342,7 @@ function Comment({
       )
     ),
     comment.replies.map(
-      (reply2) => h(
+      (reply2) => h2(
         "div",
         {
           className: "ws-reply",
@@ -7336,15 +7350,15 @@ function Comment({
           // Saved origin is display authority; names and literal content are not.
           "data-origin": reply2.author === "user" ? "human" : reply2.author === "agent" ? "agent" : "unknown"
         },
-        h(AuthorHeader, { entry: reply2 }),
-        h("p", null, reply2.text)
+        h2(AuthorHeader, { entry: reply2 }),
+        h2("p", null, reply2.text)
       )
     ),
-    h(
+    h2(
       "details",
       { className: "ws-reply-compose", open: replyOpen, onToggle: (event) => setReplyOpen(event.currentTarget.open) },
-      h("summary", null, "Reply"),
-      h(
+      h2("summary", null, "Reply"),
+      h2(
         "form",
         {
           onSubmit: async (e) => {
@@ -7366,7 +7380,7 @@ function Comment({
             }
           }
         },
-        h(Textarea2, {
+        h2(Textarea2, {
           "aria-label": `Reply to ${comment.text}`,
           placeholder: "Reply\u2026",
           value: reply,
@@ -7376,12 +7390,12 @@ function Comment({
             retainReply(comment.id, e.target.value);
           }
         }),
-        h(
+        h2(
           Action,
           { type: "submit", disabled: locked || busy || !reply.trim() },
           "Reply"
         ),
-        reply && h(Action, { variant: "text", style: { color: "var(--ui-text-secondary)" }, disabled: busy, onClick: (event) => {
+        reply && h2(Action, { variant: "text", style: { color: "var(--ui-text-secondary)" }, disabled: busy, onClick: (event) => {
           setReply("");
           retainReply(comment.id, "");
           event.currentTarget.closest("form")?.querySelector("textarea")?.focus();
@@ -7423,19 +7437,19 @@ function Comments({
   onRevertSection = () => {
   }
 }) {
-  const retained = useRef14(draftBuffer?.read()?.draft ?? {});
-  const surfaces = useRef14(null), opened = useRef14(/* @__PURE__ */ new Set()), pointerStart = useRef14(null);
+  const retained = useRef15(draftBuffer?.read()?.draft ?? {});
+  const surfaces = useRef15(null), opened = useRef15(/* @__PURE__ */ new Set()), pointerStart = useRef15(null);
   if (activeComment) opened.current.add(activeComment);
   const composerId = useId6();
-  const resolvedControl = useRef14(null);
-  const resolvedAction = useRef14(null);
-  const [optionsOpen, setOptionsOpen] = useState15(false);
-  const [threadInfoOpen, setThreadInfoOpen] = useState15(false);
-  const [deleting, setDeleting] = useState15(null);
-  const deletedIds = useRef14(/* @__PURE__ */ new Set());
-  const mutationInFlight = useRef14(false), composing = useRef14(false);
-  const actionInFlight = useRef14(/* @__PURE__ */ new Set());
-  const [pendingActions, setPendingActions] = useState15(/* @__PURE__ */ new Set());
+  const resolvedControl = useRef15(null);
+  const resolvedAction = useRef15(null);
+  const [optionsOpen, setOptionsOpen] = useState16(false);
+  const [threadInfoOpen, setThreadInfoOpen] = useState16(false);
+  const [deleting, setDeleting] = useState16(null);
+  const deletedIds = useRef15(/* @__PURE__ */ new Set());
+  const mutationInFlight = useRef15(false), composing = useRef15(false);
+  const actionInFlight = useRef15(/* @__PURE__ */ new Set());
+  const [pendingActions, setPendingActions] = useState16(/* @__PURE__ */ new Set());
   const commentAction = async (comment, work) => {
     if (locked || busy || mutationInFlight.current || actionInFlight.current.has(comment.id)) return;
     actionInFlight.current.add(comment.id);
@@ -7449,8 +7463,8 @@ function Comments({
       setPendingActions(new Set(actionInFlight.current));
     }
   };
-  const revealFrame = useRef14(null);
-  const saveViewport = useRef14(null);
+  const revealFrame = useRef15(null);
+  const saveViewport = useRef15(null);
   useEffect7(() => () => {
     window.cancelAnimationFrame?.(revealFrame.current);
     saveViewport.current?.stop();
@@ -7476,7 +7490,7 @@ function Comments({
     for (const type of ["pointerdown", "wheel", "touchstart", "keydown"]) doc.addEventListener(type, saved.stop, { capture: true, passive: true });
     saveViewport.current = saved;
   };
-  useLayoutEffect8(() => {
+  useLayoutEffect9(() => {
     const saved = saveViewport.current;
     if (!saved) return;
     saved.restore();
@@ -7491,14 +7505,14 @@ function Comments({
       });
     }
   });
-  const [resolutionFocus, setResolutionFocus] = useState15(null);
-  const discussion = useRef14({
+  const [resolutionFocus, setResolutionFocus] = useState16(null);
+  const discussion = useRef15({
     text: typeof retained.current.text === "string" ? retained.current.text : "",
     targets: Array.isArray(retained.current.targets) ? retained.current.targets.filter((id) => typeof id === "string") : [],
     anchor: retained.current.anchor ?? null,
     replies: Object.fromEntries(Object.entries(retained.current.replies ?? {}).filter(([, value]) => typeof value === "string"))
   });
-  const retentionError = useRef14(null), [hasDraft, setHasDraft] = useState15(Boolean(draftBuffer?.read()));
+  const retentionError = useRef15(null), [hasDraft, setHasDraft] = useState16(Boolean(draftBuffer?.read()));
   const persist = (patch) => {
     discussion.current = { ...discussion.current, ...patch };
     const saved = discussion.current, meaningful = Boolean(saved.text || saved.targets.length || saved.anchor || Object.values(saved.replies).some(Boolean));
@@ -7513,12 +7527,12 @@ function Comments({
     }
   };
   const retainReply = (id, value) => persist({ replies: { ...discussion.current.replies, [id]: value } });
-  const [draft, setDraft] = useState15(discussion.current.text), [busy, setBusy] = useState15(false), [threads, setThreads] = useState15(false), [targets, setTargets] = useState15(discussion.current.targets);
-  const composer = useRef14(null), focusWholePage = useRef14(false);
-  const wholeScopeAction = useRef14(null);
-  const transferComposerFocus = useRef14(false);
-  const composerOwnsFocus = useRef14(false);
-  const composerAnchor = useRef14(anchor), focusComposerOnMount = useRef14(Boolean(anchor));
+  const [draft, setDraft] = useState16(discussion.current.text), [busy, setBusy] = useState16(false), [threads, setThreads] = useState16(false), [targets, setTargets] = useState16(discussion.current.targets);
+  const composer = useRef15(null), focusWholePage = useRef15(false);
+  const wholeScopeAction = useRef15(null);
+  const transferComposerFocus = useRef15(false);
+  const composerOwnsFocus = useRef15(false);
+  const composerAnchor = useRef15(anchor), focusComposerOnMount = useRef15(Boolean(anchor));
   if (composerAnchor.current !== anchor) {
     composerAnchor.current = anchor;
     focusComposerOnMount.current = Boolean(anchor);
@@ -7567,20 +7581,20 @@ function Comments({
       focusWholePage.current = false;
     });
   };
-  useLayoutEffect8(() => {
+  useLayoutEffect9(() => {
     onPageActionsChange?.({ busy, compose: composeWholePage, thread: () => setThreadInfoOpen(true) });
   }, [onPageActionsChange, busy, locked]);
   const currentCommentIds = new Set(state.comments.map((c) => c.id));
   for (const id of deletedIds.current) if (!currentCommentIds.has(id)) deletedIds.current.delete(id);
   for (const id of opened.current) if (!currentCommentIds.has(id)) opened.current.delete(id);
   const all = numberComments(state.comments.filter((c) => c.item_id === item.id && !deletedIds.current.has(c.id))).map((c) => ({ ...c, originalAnchor: c.anchor, anchor: commentAnchor(c) }));
-  const [pageComposerOpen, setPageComposerOpen] = useState15(Boolean(discussion.current.text || discussion.current.targets.length));
+  const [pageComposerOpen, setPageComposerOpen] = useState16(Boolean(discussion.current.text || discussion.current.targets.length));
   useEffect7(() => {
     const reply = all.find((c) => discussion.current.replies[c.id]);
     if (reply && !activeComment) setActiveComment(reply.id);
   }, []);
   const unresolved = all.filter((c) => !c.resolved);
-  useLayoutEffect8(() => {
+  useLayoutEffect9(() => {
     if (!resolutionFocus) return;
     setResolutionFocus(null);
     const { id, card, control } = resolutionFocus;
@@ -7635,7 +7649,7 @@ function Comments({
       setBusy(false);
     }
   };
-  const composerElement = h(
+  const composerElement = h2(
     "form",
     {
       className: `ws-comment-composer${anchor ? " ws-comment-composer-anchored" : ""}`,
@@ -7653,22 +7667,22 @@ function Comments({
       },
       onSubmit: submit
     },
-    h(
+    h2(
       "div",
       { className: "ws-field" },
-      h(
+      h2(
         "div",
         { className: "ws-comment-compose-heading" },
-        h("label", { htmlFor: composerId }, anchor ? "Comment on selection" : item.kind === "database" ? "Whole-database comment" : "Whole-page comment"),
-        h(Action, { variant: "text", style: { color: "var(--ui-text-secondary)" }, disabled: busy, onClick: cancel }, "Cancel comment")
+        h2("label", { htmlFor: composerId }, anchor ? "Comment on selection" : item.kind === "database" ? "Whole-database comment" : "Whole-page comment"),
+        h2(Action, { variant: "text", style: { color: "var(--ui-text-secondary)" }, disabled: busy, onClick: cancel }, "Cancel comment")
       ),
-      anchor && h(
+      anchor && h2(
         "div",
         { className: "ws-anchor" },
         `\u201C${anchor.quote}\u201D`,
-        locateAnchor(text, anchor).status === "detached" && h("p", { role: "status" }, "This passage changed. Your feedback is retained; choose a new passage or select Add whole-page comment in the page header.")
+        locateAnchor(text, anchor).status === "detached" && h2("p", { role: "status" }, "This passage changed. Your feedback is retained; choose a new passage or select Add whole-page comment in the page header.")
       ),
-      h(Textarea2, {
+      h2(Textarea2, {
         id: composerId,
         ref: mountComposer,
         "aria-label": "New comment",
@@ -7696,14 +7710,14 @@ function Comments({
         }
       })
     ),
-    h(
+    h2(
       Tip3,
       { label: "Add comment (Ctrl+Enter)" },
-      h(
+      h2(
         Action,
         { type: "submit", disabled: locked || busy || !draft.trim() },
         busy ? "Adding comment\u2026" : "Add comment",
-        h(Codicon, { name: "arrow-right", "aria-hidden": true })
+        h2(Codicon, { name: "arrow-right", "aria-hidden": true })
       )
     )
   );
@@ -7714,8 +7728,7 @@ function Comments({
     const doc = surfaces.current?.ownerDocument;
     if (!doc) return;
     let pointer = false, tabFocus = false, tabFrame = null;
-    const popup = '[role="dialog"],[role="menu"],[role="listbox"],[data-slot="popover-content"],[data-slot="dropdown-menu-content"]';
-    const protectedTarget = (target) => target?.closest?.(".ws-bubble") === doc.getElementById(`ws-bubble-${activeComment}`)?.closest(".ws-bubble") || target?.closest?.(".ws-passage-controls") || target?.closest?.(popup) || doc.querySelector(popup);
+    const protectedTarget = (target) => target?.closest?.(".ws-bubble") === doc.getElementById(`ws-bubble-${activeComment}`)?.closest(".ws-bubble") || target?.closest?.(".ws-passage-controls") || isWorkspacePopupTarget(target) || isWorkspacePopupTrigger(target) || hasWorkspacePopup();
     const passageHit = (event) => {
       const editor = event.target?.closest?.(".ws-editor");
       if (!editor || event.target.closest("a,input") || !doc.getSelection()?.isCollapsed) return false;
@@ -7737,8 +7750,10 @@ function Comments({
     };
     const click = (event) => {
       pointer = false;
-      const inComment = event.composedPath().some((node) => node?.classList?.contains("ws-bubble"));
-      if (!event.defaultPrevented && !inComment && !passageHit(event)) collapse(event.target);
+      const path = event.composedPath();
+      const inComment = path.some((node) => node?.classList?.contains("ws-bubble"));
+      const inPopup = path.some((node) => node?.hasAttribute?.("data-workspace-popup") || node?.hasAttribute?.("data-workspace-popup-trigger"));
+      if (!event.defaultPrevented && !inComment && !inPopup && !passageHit(event)) collapse(event.target);
     };
     const key = (event) => {
       tabFocus = event.key === "Tab" && !event.isComposing;
@@ -7781,7 +7796,7 @@ function Comments({
     const selected = activeComment === comment.id;
     const detached = comment.anchor && !attached.has(comment.id);
     const context = `Comment ${number}${comment.anchor ? detached ? " \xB7 Detached" : "" : item.kind === "database" ? " \xB7 Whole database" : " \xB7 Whole page"}`;
-    return h(
+    return h2(
       "section",
       {
         key: comment.id,
@@ -7797,7 +7812,7 @@ function Comments({
           select(comment.id);
         },
         onKeyDown: (event) => {
-          if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || event.nativeEvent?.isComposing || event.target.closest('[role="dialog"],[role="menu"],[data-slot="popover-content"]') || actionInFlight.current.size) return;
+          if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || event.nativeEvent?.isComposing || isWorkspacePopupTarget(event.target) || hasWorkspacePopup() || actionInFlight.current.size) return;
           event.preventDefault();
           event.stopPropagation();
           retainSaveViewport(event.currentTarget.closest(".ws-work"));
@@ -7811,10 +7826,10 @@ function Comments({
           if (!event.currentTarget.contains(event.relatedTarget)) setHoveredComment(null);
         }
       },
-      h(
+      h2(
         "div",
         { className: "ws-comment-heading" },
-        h(
+        h2(
           Action,
           {
             id: `ws-bubble-${comment.id}`,
@@ -7825,16 +7840,16 @@ function Comments({
             "aria-controls": selected ? `ws-discussion-${comment.id}` : void 0,
             onClick: () => selected ? setActiveComment(null) : select(comment.id)
           },
-          h(
+          h2(
             "span",
             { className: "ws-bubble-author" },
-            h(AuthorHeader, { entry: comment }),
-            h("span", { className: "ws-bubble-context" }, `${!grouped ? context : `Comment ${number}`}${comment.resolved ? " \xB7 Resolved" : ""}`)
+            h2(AuthorHeader, { entry: comment }),
+            h2("span", { className: "ws-bubble-context" }, `${!grouped ? context : `Comment ${number}`}${comment.resolved ? " \xB7 Resolved" : ""}`)
           ),
-          !selected && h("span", { className: "ws-bubble-preview" }, comment.text),
-          h("span", { className: "ws-bubble-context" }, `${comment.replies.length} ${comment.replies.length === 1 ? "reply" : "replies"}`)
+          !selected && h2("span", { className: "ws-bubble-preview" }, comment.text),
+          h2("span", { className: "ws-bubble-context" }, `${comment.replies.length} ${comment.replies.length === 1 ? "reply" : "replies"}`)
         ),
-        h(CommentActions, {
+        h2(CommentActions, {
           comment,
           locked: locked || busy,
           pending: pendingActions.has(comment.id),
@@ -7855,10 +7870,10 @@ function Comments({
           onRevert: (opener) => commentAction(comment, () => onRevertSection(comment, opener))
         })
       ),
-      opened.current.has(comment.id) && h(
+      opened.current.has(comment.id) && h2(
         "div",
         { className: "ws-comment-body", hidden: !selected },
-        h(Comment, {
+        h2(Comment, {
           comment,
           text,
           command,
@@ -7888,18 +7903,18 @@ function Comments({
     );
   };
   const threadDescription = item.thread_id ? `Native thread: ${item.thread_id}` : "A native thread will be created on the first run and reused.";
-  const threadContent = h(
+  const threadContent = h2(
     "div",
     { className: "ws-page-thread-details" },
-    h(
+    h2(
       "p",
       { className: "ws-muted" },
       threadDescription
     ),
-    h(
+    h2(
       "div",
       { className: "ws-actions" },
-      h(
+      h2(
         Action,
         {
           disabled: !item.thread_id || busy,
@@ -7907,7 +7922,7 @@ function Comments({
         },
         "Open thread"
       ),
-      h(
+      h2(
         Action,
         {
           disabled: locked || busy,
@@ -7916,17 +7931,17 @@ function Comments({
         "Select existing thread"
       )
     ),
-    run && h(
+    run && h2(
       "p",
       { role: "status" },
       `Run ${run.status}${run.error ? `: ${run.error}` : ""}`
     )
   );
-  const linkedThread = onPageActionsChange ? h(
-    Dialog6,
+  const linkedThread = onPageActionsChange ? h2(
+    Dialog2,
     { open: threadInfoOpen, onOpenChange: setThreadInfoOpen },
-    h(
-      DialogContent6,
+    h2(
+      DialogContent2,
       {
         className: "ws-dialog",
         onCloseAutoFocus: (event) => {
@@ -7934,21 +7949,21 @@ function Comments({
           document.getElementById(`ws-page-actions-${item.id}`)?.focus({ preventScroll: true });
         }
       },
-      h(
+      h2(
         DialogHeader6,
         null,
-        h(DialogTitle6, null, "Page thread"),
-        h(DialogDescription6, null, "View or change the Hermes thread linked to this page.")
+        h2(DialogTitle6, null, "Page thread"),
+        h2(DialogDescription6, null, "View or change the Hermes thread linked to this page.")
       ),
       threadContent
     )
-  ) : h(
-    Popover4,
+  ) : h2(
+    Popover2,
     { open: threadInfoOpen, onOpenChange: setThreadInfoOpen },
-    h(
-      PopoverTrigger4,
+    h2(
+      PopoverTrigger2,
       { asChild: true },
-      h(
+      h2(
         Action,
         {
           className: "ws-page-control ws-page-thread-control",
@@ -7956,18 +7971,18 @@ function Comments({
           "aria-label": "Linked Hermes thread",
           title: "Linked Hermes thread for this page"
         },
-        h(Codicon, { name: "link", "aria-hidden": true }),
+        h2(Codicon, { name: "link", "aria-hidden": true }),
         "Page thread"
       )
     ),
-    h(
-      PopoverContent4,
+    h2(
+      PopoverContent2,
       { align: "end", className: "ws-page-thread-info" },
-      h("h3", null, "Linked Hermes thread"),
+      h2("h3", null, "Linked Hermes thread"),
       threadContent
     )
   );
-  const wholePageAction = h(Action, {
+  const wholePageAction = h2(Action, {
     className: "ws-page-control",
     variant: "ghost",
     ref: wholeScopeAction,
@@ -7975,25 +7990,25 @@ function Comments({
     "aria-label": item.kind === "database" ? "Add database comment" : "Add whole-page comment",
     onClick: composeWholePage
   }, item.kind === "database" ? "Add database comment" : "Add whole-page comment");
-  const header = h(
+  const header = h2(
     "div",
     { className: "ws-page-comment-row" },
-    h(
+    h2(
       "div",
       { className: "ws-comment-totals", role: "group", "aria-label": "Page comment counts" },
-      h(
+      h2(
         "div",
         { className: "ws-comments-heading" },
-        h(Codicon, { name: "comment-discussion", "aria-hidden": true }),
-        h(
+        h2(Codicon, { name: "comment-discussion", "aria-hidden": true }),
+        h2(
           "h2",
           { "aria-label": "Open comments" },
-          h("span", { className: "ws-page-label-full", "aria-hidden": true }, "Open comments"),
-          h("span", { className: "ws-page-label-short", "aria-hidden": true }, "Open")
+          h2("span", { className: "ws-page-label-full", "aria-hidden": true }, "Open comments"),
+          h2("span", { className: "ws-page-label-short", "aria-hidden": true }, "Open")
         ),
-        h("span", { className: "ws-comment-count", "aria-label": `${unresolved.length} open comments` }, String(unresolved.length))
+        h2("span", { className: "ws-comment-count", "aria-label": `${unresolved.length} open comments` }, String(unresolved.length))
       ),
-      h(
+      h2(
         Action,
         {
           className: "ws-page-control ws-resolved-comment-total",
@@ -8003,17 +8018,17 @@ function Comments({
           title: `${showResolved ? "Hide" : "Show"} resolved comments`,
           onClick: () => setShowResolved((value) => !value)
         },
-        h(Codicon, { name: "check", "aria-hidden": true }),
-        h("span", { className: "ws-page-label-full", "aria-hidden": true }, "Resolved comments"),
-        h("span", { className: "ws-page-label-short", "aria-hidden": true }, "Resolved"),
-        h("span", { className: "ws-comment-count", "aria-label": `${all.length - unresolved.length} resolved comments` }, String(all.length - unresolved.length))
+        h2(Codicon, { name: "check", "aria-hidden": true }),
+        h2("span", { className: "ws-page-label-full", "aria-hidden": true }, "Resolved comments"),
+        h2("span", { className: "ws-page-label-short", "aria-hidden": true }, "Resolved"),
+        h2("span", { className: "ws-comment-count", "aria-label": `${all.length - unresolved.length} resolved comments` }, String(all.length - unresolved.length))
       )
     ),
     !onPageActionsChange && wholePageAction,
-    all.length > 0 && h(
+    all.length > 0 && h2(
       "div",
       { className: "ws-actions" },
-      unresolved.length || controlsTarget ? h(
+      unresolved.length || controlsTarget ? h2(
         Action,
         {
           disabled: locked || busy || !unresolved.length,
@@ -8032,21 +8047,21 @@ function Comments({
           }
         },
         `Address (${unresolved.length})`
-      ) : h(Action, {
+      ) : h2(Action, {
         ref: resolvedAction,
         variant: "text",
         style: { color: "var(--ui-text-secondary)" },
         onClick: () => setShowResolved(!showResolved)
       }, `${showResolved ? "Hide" : "Show"} resolved (${all.length})`)
     ),
-    !controlsTarget && all.length > 0 && h(
-      Popover4,
+    !controlsTarget && all.length > 0 && h2(
+      Popover2,
       { open: optionsOpen, onOpenChange: setOptionsOpen },
-      h(PopoverTrigger4, { asChild: true }, h(Action, { ref: resolvedControl, variant: "ghost", size: "icon-xs", "aria-label": "Comment options" }, h(Codicon, { name: "ellipsis" }))),
-      h(
-        PopoverContent4,
+      h2(PopoverTrigger2, { asChild: true }, h2(Action, { ref: resolvedControl, variant: "ghost", size: "icon-xs", "aria-label": "Comment options" }, h2(Codicon, { name: "ellipsis" }))),
+      h2(
+        PopoverContent2,
         { align: "end", className: "ws-comment-options" },
-        h("label", { className: "ws-check" }, h(Checkbox4, {
+        h2("label", { className: "ws-check" }, h2(Checkbox4, {
           className: "ws-checkbox",
           "aria-label": "Show resolved comments",
           checked: showResolved,
@@ -8054,32 +8069,32 @@ function Comments({
         }), "Show resolved comments")
       )
     ),
-    hasDraft && h("p", { className: "ws-comment-action-state", role: "status" }, "Unsubmitted feedback is retained for this Workspace."),
+    hasDraft && h2("p", { className: "ws-comment-action-state", role: "status" }, "Unsubmitted feedback is retained for this Workspace."),
     !onPageActionsChange && linkedThread
   );
-  const footer = h(
+  const footer = h2(
     "div",
     null,
-    visible.some((c) => !c.anchor) && h("h2", null, item.kind === "database" ? "Database feedback" : "Page feedback"),
+    visible.some((c) => !c.anchor) && h2("h2", null, item.kind === "database" ? "Database feedback" : "Page feedback"),
     visible.filter((c) => !c.anchor).map((comment) => bubble(comment)),
-    visible.some((c) => c.anchor && !attached.has(c.id)) && h("h2", null, "Detached passages"),
+    visible.some((c) => c.anchor && !attached.has(c.id)) && h2("h2", null, "Detached passages"),
     visible.filter((c) => c.anchor && !attached.has(c.id)).map((comment) => bubble(comment)),
     anchor && locateAnchor(text, anchor).status !== "attached" && !attached.has("__workspace-comment-draft") && composerElement,
     !anchor && pageComposerOpen && composerElement,
-    !all.length && h("p", { className: "ws-muted" }, item.kind === "database" ? "No comments yet." : "Select a passage to add a comment beside it.")
+    !all.length && h2("p", { className: "ws-muted" }, item.kind === "database" ? "No comments yet." : "Select a passage to add a comment beside it.")
   );
-  return h(
+  return h2(
     "div",
     { ref: surfaces, className: "ws-comment-surfaces" },
-    h("style", null, commentStyles),
-    threads && h(ThreadPicker, {
+    h2("style", null, commentStyles),
+    threads && h2(ThreadPicker, {
       workflow,
       itemId: item.id,
       locked,
       onBound: onRefresh,
       onClose: () => setThreads(false)
     }),
-    deleting && h(FormDialog, {
+    deleting && h2(FormDialog, {
       title: "Delete comment?",
       confirm: "Delete comment",
       destructive: true,
@@ -8117,16 +8132,16 @@ function Comments({
     }),
     onPageActionsChange && linkedThread,
     controlsTarget && (0, import_react_dom2.createPortal)(header, controlsTarget),
-    h(CommentBubbles, {
+    h2(CommentBubbles, {
       geometry: geometry.filter((p) => !deletedIds.current.has(p.id)),
       header: controlsTarget ? null : header,
       footer,
       renderGroup: (ids) => {
         const comments = ids.map((id) => visible.find((c) => c.id === id)).filter(Boolean);
-        return h(
+        return h2(
           "div",
           null,
-          ids.includes("__workspace-comment-draft") && h("div", { className: "ws-bubble ws-bubble-selected" }, composerElement),
+          ids.includes("__workspace-comment-draft") && h2("div", { className: "ws-bubble ws-bubble-selected" }, composerElement),
           ...comments.map((comment) => bubble(comment))
         );
       }
@@ -8188,6 +8203,19 @@ function createWorkflowAdapter(ctx) {
     if (result.running || result.pending?.length) throw new Error("This Hermes thread is busy. Wait or select another thread.");
     return result;
   };
+  const displayTitle = async (token, route) => {
+    let result;
+    try {
+      result = await rpc(token, route, "profiles.list", { include_sessions: false });
+    } catch {
+      check(token);
+      return void 0;
+    }
+    const rows = Array.isArray(result?.profiles) ? result.profiles.filter((row) => row?.name === route.targetProfile) : [];
+    if (rows.length !== 1) return void 0;
+    const title = rows[0].ui_meta?.["hermes-bots"]?.title ?? rows[0].display_name;
+    return typeof title === "string" && title.length <= 4096 ? title : void 0;
+  };
   const adapter = {
     async listThreads() {
       const token = capture();
@@ -8219,7 +8247,7 @@ function createWorkflowAdapter(ctx) {
       const session = await snapshot(token, route, threadId);
       return post(token, "/workflow/bind", { item_id: itemId, thread_id: session.stored_session_id });
     },
-    async addressComments(itemId, explicitItemIds = [], confirmedReview = null) {
+    async addressComments(itemId, explicitItemIds = [], confirmedReview = null, onPrepared = null) {
       if (!Array.isArray(explicitItemIds) || explicitItemIds.some((id) => typeof id !== "string") || new Set(explicitItemIds).size !== explicitItemIds.length)
         throw new Error("Select valid Workspace targets for this run.");
       const targets = [...explicitItemIds];
@@ -8254,15 +8282,25 @@ function createWorkflowAdapter(ctx) {
         session = await rpc(token, route, "session.create", { source: "gui", title: `Workspace: ${String(item.title).slice(0, 100)} (${requestId})`, request_id: requestId });
         if (session.info?.desktop_protocol !== "hermes-gateway-v1") throw new Error("Native Hermes gateway required.");
       }
+      const title = await displayTitle(token, route);
       const prepared = await post(token, "/workflow/prepare", {
         item_id: itemId,
         session_id: session.stored_session_id,
         explicit_item_ids: targets,
+        ...title === void 0 ? {} : { display_title: title },
         ...reviewId ? { review_id: reviewId } : {}
       });
       owners.set(prepared.run.id, { token, route });
       creations.delete(`${token.scope_id}:${itemId}`);
-      await rpc(token, route, "prompt.submit", { session_id: session.session_id, text: prepared.prompt, submission_id: prepared.submission_id, queued: true });
+      await onPrepared?.();
+      check(token);
+      const admission = await rpc(token, route, "prompt.submit", { session_id: session.session_id, text: prepared.prompt, submission_id: prepared.submission_id, queued: true });
+      if (!admission || typeof admission.admission_id !== "string" || !admission.admission_id)
+        throw new Error("Native submission acknowledgement is unknown. Workspace will not guess a cancellation target; Stop revokes local saves and unlocks locally without proving provider cancellation.");
+      const submitted = await post(token, "/workflow/submitted", { run_id: prepared.run.id, admission_id: admission.admission_id });
+      if (submitted.control?.admission_id) {
+        await rpc(token, route, "prompt.cancel", { session_id: submitted.control.session_id, admission_id: submitted.control.admission_id });
+      }
       await post(token, "/workflow/consume", { run_id: prepared.run.id });
       return (await post(token, "/workflow/status", { run_id: prepared.run.id })).run;
     },
@@ -8316,20 +8354,20 @@ var ownerNow = () => [
 function Workspace({ ctx }) {
   const profile = useValue(host3.state.profile), connection = useValue(host3.state.connectionId), epoch = useGatewayActivationEpoch();
   const key = JSON.stringify([connection, profile, epoch]);
-  return h(
+  return h2(
     "div",
     { className: "ws-root" },
-    h("style", null, styles),
-    h(WorkspaceSource, { key, ctx, profile, sourceKey: key })
+    h2("style", null, styles),
+    h2(WorkspaceSource, { key, ctx, profile, sourceKey: key })
   );
 }
 function NavigationLabel({ item, context, descriptionId }) {
-  return h(
+  return h2(
     "span",
     { className: "ws-nav-label", title: item.title },
-    h("span", null, item.title),
-    context && h("small", { title: context.description }, context.caption),
-    context && h("span", { className: "ws-title-reader", id: descriptionId }, context.description)
+    h2("span", null, item.title),
+    context && h2("small", { title: context.description }, context.caption),
+    context && h2("span", { className: "ws-title-reader", id: descriptionId }, context.description)
   );
 }
 function NavigationOrderControls({ item, siblings, order }) {
@@ -8339,7 +8377,7 @@ function NavigationOrderControls({ item, siblings, order }) {
     const target = siblings[index + direction];
     if (target) order.save(order.capture(item), target, direction < 0 ? "before" : "after");
   };
-  return h(
+  return h2(
     "span",
     {
       className: "ws-order-controls",
@@ -8350,7 +8388,7 @@ function NavigationOrderControls({ item, siblings, order }) {
         if (e.key !== "Escape") e.stopPropagation();
       }
     },
-    h(Action, {
+    h2(Action, {
       variant: "ghost",
       className: "ws-order-handle",
       "aria-label": `Drag ${item.title}`,
@@ -8360,42 +8398,42 @@ function NavigationOrderControls({ item, siblings, order }) {
       draggable: !order.pending && siblings.length > 1,
       onDragStart: (e) => order.start(e, item),
       onDragEnd: order.end
-    }, h(Codicon, { name: "gripper" })),
-    h(Action, {
+    }, h2(Codicon, { name: "gripper" })),
+    h2(Action, {
       variant: "ghost",
       "aria-label": `Move ${item.title} up`,
       title: "Move up",
       disabled: order.pending || index === 0,
       onClick: () => move(-1)
-    }, h(Codicon, { name: "arrow-up" })),
-    h(Action, {
+    }, h2(Codicon, { name: "arrow-up" })),
+    h2(Action, {
       variant: "ghost",
       "aria-label": `Move ${item.title} down`,
       title: "Move down",
       disabled: order.pending || index === siblings.length - 1,
       onClick: () => move(1)
-    }, h(Codicon, { name: "arrow-down" }))
+    }, h2(Codicon, { name: "arrow-down" }))
   );
 }
 var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOpen, selected, initializeDisclosure, order }) {
-  return h(
+  return h2(
     "ul",
     null,
     (childrenByParent.get(parent) ?? []).map(
-      (item) => h(
+      (item) => h2(
         "li",
         { key: item.id, "data-ws-item-id": item.id },
-        item.kind === "folder" ? h(
+        item.kind === "folder" ? h2(
           "details",
           { ref: initializeDisclosure },
-          h(
+          h2(
             "summary",
             order.row(item),
-            h(Codicon, {
+            h2(Codicon, {
               name: "chevron-right",
               className: "ws-disclosure-caret"
             }),
-            h(
+            h2(
               Action,
               {
                 variant: "ghost",
@@ -8404,15 +8442,15 @@ var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOp
                 "aria-label": contexts.has(item.id) ? item.title : void 0,
                 "aria-describedby": contexts.has(item.id) ? `ws-tree-context-${item.id}` : void 0
               },
-              h(NavigationLabel, { item, context: contexts.get(item.id), descriptionId: `ws-tree-context-${item.id}` })
+              h2(NavigationLabel, { item, context: contexts.get(item.id), descriptionId: `ws-tree-context-${item.id}` })
             ),
-            h(NavigationOrderControls, { item, siblings: childrenByParent.get(parent), order })
+            h2(NavigationOrderControls, { item, siblings: childrenByParent.get(parent), order })
           ),
-          h(Tree2, { childrenByParent, contexts, parent: item.id, onOpen, selected, initializeDisclosure, order })
-        ) : h(
+          h2(Tree2, { childrenByParent, contexts, parent: item.id, onOpen, selected, initializeDisclosure, order })
+        ) : h2(
           "div",
           { ...order.row(item), className: "ws-nav-row ws-order-row" },
-          h(
+          h2(
             Action,
             {
               className: "ws-tree-item",
@@ -8422,12 +8460,12 @@ var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOp
               "aria-describedby": contexts.has(item.id) ? `ws-tree-context-${item.id}` : void 0,
               onClick: () => onOpen(item.id)
             },
-            h(Codicon, {
+            h2(Codicon, {
               name: item.kind === "database" ? "table" : "file-text"
             }),
-            h(NavigationLabel, { item, context: contexts.get(item.id), descriptionId: `ws-tree-context-${item.id}` })
+            h2(NavigationLabel, { item, context: contexts.get(item.id), descriptionId: `ws-tree-context-${item.id}` })
           ),
-          h(NavigationOrderControls, { item, siblings: childrenByParent.get(parent), order })
+          h2(NavigationOrderControls, { item, siblings: childrenByParent.get(parent), order })
         )
       )
     )
@@ -8435,7 +8473,7 @@ var Tree = memo(function Tree2({ childrenByParent, contexts, parent = null, onOp
 });
 function FolderNavigation({ childrenByParent, contexts, onOpen, selected, scope, reorder }) {
   const treeId = useId7();
-  const tree = useRef15(null), defaultOpen = useRef15(true);
+  const tree = useRef16(null), defaultOpen = useRef16(true);
   const initializeDisclosure = useCallback4((node) => {
     if (node) node.open = defaultOpen.current;
   }, []);
@@ -8445,16 +8483,16 @@ function FolderNavigation({ childrenByParent, contexts, onOpen, selected, scope,
       node.open = open;
     });
   }, []);
-  const [mode, setMode] = useState16(false), [pending, setPending] = useState16(false), [feedback, setFeedback] = useState16({ text: "", failed: false }), [target, setTarget] = useState16(null);
-  const busy = useRef15(false), drag = useRef15(null), serial = useRef15(0), toggle = useRef15(null), mounted = useRef15(true);
-  const restoreOrderFocus = useRef15(null);
+  const [mode, setMode] = useState17(false), [pending, setPending] = useState17(false), [feedback, setFeedback] = useState17({ text: "", failed: false }), [target, setTarget] = useState17(null);
+  const busy = useRef16(false), drag = useRef16(null), serial = useRef16(0), toggle = useRef16(null), mounted = useRef16(true);
+  const restoreOrderFocus = useRef16(null);
   const helpId = `${treeId}-order-help`, mime = "application/x-hermes-workspace-order";
   const signature = JSON.stringify([...childrenByParent].map(([parent, rows]) => [parent, rows.map((row) => row.id)]));
-  useLayoutEffect9(() => {
+  useLayoutEffect10(() => {
     drag.current = null;
     setTarget(null);
   }, [scope, signature]);
-  useLayoutEffect9(() => {
+  useLayoutEffect10(() => {
     if (pending || !restoreOrderFocus.current) return;
     const { node, id, sourceScope } = restoreOrderFocus.current;
     restoreOrderFocus.current = null;
@@ -8558,7 +8596,7 @@ function FolderNavigation({ childrenByParent, contexts, onOpen, selected, scope,
   };
   const hasFolders = [...childrenByParent.values()].some((items) => items.some((item) => item.kind === "folder"));
   const canReorder = [...childrenByParent.values()].some((items) => items.length > 1);
-  return h(
+  return h2(
     "div",
     {
       className: "ws-folder-navigation",
@@ -8575,20 +8613,20 @@ function FolderNavigation({ childrenByParent, contexts, onOpen, selected, scope,
         }
       }
     },
-    h(
+    h2(
       "div",
       { className: "ws-tree-actions", role: "group", "aria-label": "Folder tree actions" },
-      hasFolders && h(Action, {
+      hasFolders && h2(Action, {
         variant: "ghost",
         "aria-controls": treeId,
         onClick: () => setAll(true)
       }, "Expand all"),
-      hasFolders && h(Action, {
+      hasFolders && h2(Action, {
         variant: "ghost",
         "aria-controls": treeId,
         onClick: () => setAll(false)
       }, "Collapse all"),
-      canReorder && h(Action, {
+      canReorder && h2(Action, {
         ref: toggle,
         variant: "ghost",
         "aria-pressed": mode,
@@ -8600,9 +8638,9 @@ function FolderNavigation({ childrenByParent, contexts, onOpen, selected, scope,
         }
       }, mode ? "Done reordering" : "Reorder")
     ),
-    mode && h("p", { id: helpId, className: "ws-order-help" }, "Drag a handle, or use Move up and Move down. Escape cancels. Same folder only; use Move to change folders."),
-    h("p", { className: "ws-order-status", role: feedback.failed ? "alert" : "status", "aria-atomic": true }, feedback.text),
-    h("div", { id: treeId, ref: tree }, h(Tree, { childrenByParent, contexts, onOpen, selected, initializeDisclosure, order }))
+    mode && h2("p", { id: helpId, className: "ws-order-help" }, "Drag a handle, or use Move up and Move down. Escape cancels. Same folder only; use Move to change folders."),
+    h2("p", { className: "ws-order-status", role: feedback.failed ? "alert" : "status", "aria-atomic": true }, feedback.text),
+    h2("div", { id: treeId, ref: tree }, h2(Tree, { childrenByParent, contexts, onOpen, selected, initializeDisclosure, order }))
   );
 }
 function WorkspaceSource({ ctx, profile, sourceKey }) {
@@ -8614,8 +8652,8 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
   const workflow = useMemo4(() => createWorkflowAdapter(ctx), [ctx, sourceKey]);
   const navigation = useNavigationResize(ctx.storage, client.owner);
   const compactHeader = navigation.availableWidth > 0 && navigation.availableWidth <= 480;
-  const header = useRef15(null), focusedHeaderAction = useRef15(null);
-  useLayoutEffect9(() => {
+  const header = useRef16(null), focusedHeaderAction = useRef16(null);
+  useLayoutEffect10(() => {
     if (compactHeader && focusedHeaderAction.current && !focusedHeaderAction.current.isConnected && document.activeElement === document.body)
       header.current?.querySelector('[aria-label="Workspace menu"]')?.focus({ preventScroll: true });
   }, [compactHeader]);
@@ -8633,20 +8671,20 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
     client.snapshot,
     client.snapshot
   );
-  const [usernameDialog, setUsernameDialog] = useState16(null);
-  const [selected, setSelected] = useState16(null), [error, setError] = useState16(""), [dialog, setDialog] = useState16(null), [confirmation, setConfirmation] = useState16(null), [restore, setRestore] = useState16(null), [replacementLoad, setReplacementLoad] = useState16(null), [notice, setNotice] = useState16(""), [trash, setTrash] = useState16(false), [navExpanded, setNavExpanded] = useState16(false), [errorAction, setErrorAction] = useState16("action"), [errorContext, setErrorContext] = useState16(null);
-  const navId = useId7(), navToggle = useRef15(null), workPane = useRef15(null);
-  const importing = useRef15(false), [importBusy, setImportBusy] = useState16(false), [importedItem, setImportedItem] = useState16(null);
-  useLayoutEffect9(() => {
+  const [usernameDialog, setUsernameDialog] = useState17(null);
+  const [selected, setSelected] = useState17(null), [error, setError] = useState17(""), [dialog, setDialog] = useState17(null), [confirmation, setConfirmation] = useState17(null), [restore, setRestore] = useState17(null), [replacementLoad, setReplacementLoad] = useState17(null), [notice, setNotice] = useState17(""), [trash, setTrash] = useState17(false), [navExpanded, setNavExpanded] = useState17(false), [errorAction, setErrorAction] = useState17("action"), [errorContext, setErrorContext] = useState17(null);
+  const navId = useId7(), navToggle = useRef16(null), workPane = useRef16(null);
+  const importing = useRef16(false), [importBusy, setImportBusy] = useState17(false), [importedItem, setImportedItem] = useState17(null);
+  useLayoutEffect10(() => {
     if (workPane.current) {
       workPane.current.scrollTop = 0;
       workPane.current.scrollLeft = 0;
     }
   }, [selected, trash]);
-  const importInput = useRef15(null), backupInput = useRef15(null), flush = useRef15(async () => {
-  }), selectionIntent = useRef15(0);
+  const importInput = useRef16(null), backupInput = useRef16(null), flush = useRef16(async () => {
+  }), selectionIntent = useRef16(0);
   const nextSelectionIntent = useCallback4(() => ++selectionIntent.current, []);
-  const errorReceipt = useRef15(null);
+  const errorReceipt = useRef16(null);
   const report = useCallback4(
     (err, action = "action") => {
       if (client.current() && err instanceof UnsavedEditError) return;
@@ -8726,11 +8764,11 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
     gcTime: 0,
     retry: false
   });
-  const failedRunIds = useRef15(/* @__PURE__ */ new Set());
+  const failedRunIds = useRef16(/* @__PURE__ */ new Set());
   const runs = (state?.runs ?? []).filter(
     (r) => ["running", "pending", "starting", "stopping"].includes(r.status) && !failedRunIds.current.has(r.id)
   );
-  const runFailureContext = useRef15(null);
+  const runFailureContext = useRef16(null);
   const runQuery = useQuery({
     queryKey: ["workspace-runs", sourceKey, queryInstance, runs.map((r) => r.id).join(",")],
     enabled: runs.length > 0,
@@ -8891,71 +8929,71 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
   const navContexts = useMemo4(() => navigationContexts(state?.items, state?.attachments), [state?.items, state?.attachments]);
   const item = itemIndex.get(selected);
   const currentRun = item && activeRun(state, item.id);
-  return h(IdentityProvider, { client }, h(
+  return h2(IdentityProvider, { client }, h2(
     "div",
     { className: "ws-root" },
-    h(
+    h2(
       "header",
       { ref: header, className: `ws-topbar${compactHeader ? " ws-topbar-compact" : ""}` },
-      h("h1", null, h(Codicon, { name: "notebook" }), "Workspace"),
-      h("span", { className: "ws-source" }, profile),
-      !compactHeader && h(Action, { ...trackHeaderFocus, onClick: () => act(home) }, "Home"),
-      !compactHeader && h(
+      h2("h1", null, h2(Codicon, { name: "notebook" }), "Workspace"),
+      h2("span", { className: "ws-source" }, profile),
+      !compactHeader && h2(Action, { ...trackHeaderFocus, onClick: () => act(home) }, "Home"),
+      !compactHeader && h2(
         Action,
         { ...trackHeaderFocus, disabled: !state, onClick: () => create("page") },
         "New page"
       ),
-      h(
+      h2(
         ActionMenu,
         {
           label: "Workspace menu",
           disabled: !state,
           showChevron: !compactHeader,
-          triggerLabel: compactHeader ? h(Codicon, { name: "ellipsis", "aria-hidden": true }) : "Workspace menu",
+          triggerLabel: compactHeader ? h2(Codicon, { name: "ellipsis", "aria-hidden": true }) : "Workspace menu",
           triggerProps: compactHeader ? { size: "icon-sm" } : {}
         },
-        compactHeader && h(Action, { onClick: () => act(home) }, "Home"),
-        compactHeader && h(Action, { disabled: !state, onClick: (_event, opener) => create("page", opener) }, "New page"),
-        h(Action, { disabled: !state, onClick: () => act(async () => {
+        compactHeader && h2(Action, { onClick: () => act(home) }, "Home"),
+        compactHeader && h2(Action, { disabled: !state, onClick: (_event, opener) => create("page", opener) }, "New page"),
+        h2(Action, { disabled: !state, onClick: () => act(async () => {
           await flush.current();
           await refresh();
           setError("");
         }) }, "Reload state"),
-        h(Action, { disabled: !state, onClick: (_event, opener) => setUsernameDialog({ opener }) }, "set username"),
-        h(
+        h2(Action, { disabled: !state, onClick: (_event, opener) => setUsernameDialog({ opener }) }, "set username"),
+        h2(
           Action,
           { disabled: !state, onClick: (_event, opener) => create("folder", opener) },
           "New folder"
         ),
-        h(
+        h2(
           Action,
           { disabled: !state, onClick: (_event, opener) => create("database", opener) },
           "New database"
         ),
-        h(
+        h2(
           Action,
           { disabled: !state || importBusy, onClick: () => importInput.current.click() },
           "Import"
         ),
-        h(
+        h2(
           Action,
           { disabled: !state, onClick: () => act(() => download("/backup")) },
           "Back up Workspace"
         ),
-        h(
+        h2(
           Action,
           { disabled: !state, onClick: () => backupInput.current.click() },
           "Restore backup"
         )
       )
     ),
-    notice && h(
+    notice && h2(
       "div",
       { className: "ws-notice", role: "status" },
       notice,
-      importedItem && h(Action, { onClick: () => act(() => open(importedItem.id)) }, "Open imported page"),
-      !replacementLoad && h(Action, { variant: "text", onClick: () => setNotice("") }, "Dismiss notice"),
-      replacementLoad && h(
+      importedItem && h2(Action, { onClick: () => act(() => open(importedItem.id)) }, "Open imported page"),
+      !replacementLoad && h2(Action, { variant: "text", onClick: () => setNotice("") }, "Dismiss notice"),
+      replacementLoad && h2(
         Action,
         {
           onClick: () => void loadReplacement(
@@ -8966,16 +9004,16 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
         "Load replaced Workspace"
       )
     ),
-    error && h(
+    error && h2(
       "div",
       { className: "ws-error", role: "alert" },
-      h("p", null, operationError(error, errorContext)),
-      operationError(error, errorContext) !== error && h("details", null, h("summary", null, "Technical details"), h("pre", null, error)),
-      h(
+      h2("p", null, operationError(error, errorContext)),
+      operationError(error, errorContext) !== error && h2("details", null, h2("summary", null, "Technical details"), h2("pre", null, error)),
+      h2(
         "div",
         { className: "ws-actions" },
-        errorAction === "import" && h(Action, { onClick: () => importInput.current.click() }, "Choose another file"),
-        errorAction === "load" && h(
+        errorAction === "import" && h2(Action, { onClick: () => importInput.current.click() }, "Choose another file"),
+        errorAction === "load" && h2(
           Action,
           {
             onClick: () => act(async () => {
@@ -8985,23 +9023,23 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
           },
           "Reload state"
         ),
-        errorContext?.retry && (!errorContext.itemId || errorContext.itemId === item?.id) && h(Action, {
+        errorContext?.retry && (!errorContext.itemId || errorContext.itemId === item?.id) && h2(Action, {
           onClick: () => void errorContext.retry().then(() => setError("")).catch((err) => report(err, errorContext))
         }, "Retry thread list"),
-        ["runStart", "runStatus"].includes(errorContext?.operation) && errorContext.itemId && errorContext.itemId !== item?.id && h(Action, {
+        ["runStart", "runStatus"].includes(errorContext?.operation) && errorContext.itemId && errorContext.itemId !== item?.id && h2(Action, {
           onClick: () => act(() => open(errorContext.itemId))
         }, "Open run page"),
-        ["runStart", "runStatus"].includes(errorContext?.operation) && errorContext.threadId && h(Action, {
+        ["runStart", "runStatus"].includes(errorContext?.operation) && errorContext.threadId && h2(Action, {
           onClick: () => act(() => workflow.openThread(errorContext.threadId))
         }, "Open linked thread"),
-        h(
+        h2(
           Action,
           { variant: "text", onClick: () => setError("") },
           "Dismiss"
         )
       )
     ),
-    h("input", {
+    h2("input", {
       ref: importInput,
       type: "file",
       hidden: true,
@@ -9012,8 +9050,8 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
         void upload(file).catch((err) => report(err, { operation: "import", fileName: file?.name }));
       }
     }),
-    importBusy && h("div", { className: "ws-notice", role: "status" }, "Importing file\u2026 You can keep browsing Workspace."),
-    h("input", {
+    importBusy && h2("div", { className: "ws-notice", role: "status" }, "Importing file\u2026 You can keep browsing Workspace."),
+    h2("input", {
       ref: backupInput,
       type: "file",
       hidden: true,
@@ -9024,33 +9062,33 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
         void upload(file, true).catch((err) => report(err, "backup"));
       }
     }),
-    !state ? h(
+    !state ? h2(
       "div",
       { className: "ws-home", role: "status" },
-      queryState.error ? h(ErrorState, {
+      queryState.error ? h2(ErrorState, {
         title: "Workspace could not be loaded",
-        description: h(
+        description: h2(
           "p",
           { className: "ws-state-description max-w-prose text-center text-sm leading-5" },
           "Check that the Workspace backend is enabled for this profile, then reload state."
         )
-      }) : h(
+      }) : h2(
         "span",
         { className: "ws-loading" },
-        h(GlyphSpinner2, { ariaLabel: "Loading Workspace" }),
+        h2(GlyphSpinner2, { ariaLabel: "Loading Workspace" }),
         "Loading Workspace\u2026"
       )
-    ) : h(
+    ) : h2(
       "div",
       { className: "ws-body", ref: navigation.body, style: { "--ws-nav-width": `${navigation.width}px`, "--ws-pane-height": `${navigation.availableHeight || 640}px` } },
-      h(
+      h2(
         "nav",
         { className: "ws-nav", "aria-label": "Workspace pages", "data-expanded": navExpanded },
-        h(Action, { ref: navToggle, className: "ws-nav-toggle", variant: "ghost", "aria-expanded": navExpanded, "aria-controls": navId, onClick: () => setNavExpanded((v) => !v) }, h(Codicon, { name: navExpanded ? "chevron-down" : "chevron-right" }), h("span", null, `Pages \xB7 ${item?.title ?? "Home"}`)),
-        h(
+        h2(Action, { ref: navToggle, className: "ws-nav-toggle", variant: "ghost", "aria-expanded": navExpanded, "aria-controls": navId, onClick: () => setNavExpanded((v) => !v) }, h2(Codicon, { name: navExpanded ? "chevron-down" : "chevron-right" }), h2("span", null, `Pages \xB7 ${item?.title ?? "Home"}`)),
+        h2(
           "div",
           { className: "ws-nav-content", id: navId },
-          h(WorkspaceSearch, {
+          h2(WorkspaceSearch, {
             client,
             scope: state.scope_id,
             revision: state.revision,
@@ -9058,18 +9096,18 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
             onOpen: open,
             contexts: navContexts
           }),
-          h("h2", null, "Folders and pages"),
-          items.length ? h(FolderNavigation, { childrenByParent, contexts: navContexts, onOpen: open, selected, scope: state.scope_id, reorder }) : h("p", { className: "ws-empty" }, "Create your first page."),
-          h("h2", null, "Recents"),
-          h(
+          h2("h2", null, "Folders and pages"),
+          items.length ? h2(FolderNavigation, { childrenByParent, contexts: navContexts, onOpen: open, selected, scope: state.scope_id, reorder }) : h2("p", { className: "ws-empty" }, "Create your first page."),
+          h2("h2", null, "Recents"),
+          h2(
             "ul",
             null,
             (state.recents ?? []).map((recent) => {
               const row = itemIndex.get(typeof recent === "string" ? recent : recent.item_id ?? recent.id);
-              return row && h(
+              return row && h2(
                 "li",
                 { key: row.id },
-                h(
+                h2(
                   Action,
                   {
                     variant: "ghost",
@@ -9077,12 +9115,12 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
                     "aria-label": navContexts.has(row.id) ? row.title : void 0,
                     "aria-describedby": navContexts.has(row.id) ? `ws-recent-context-${row.id}` : void 0
                   },
-                  h(NavigationLabel, { item: row, context: navContexts.get(row.id), descriptionId: `ws-recent-context-${row.id}` })
+                  h2(NavigationLabel, { item: row, context: navContexts.get(row.id), descriptionId: `ws-recent-context-${row.id}` })
                 )
               );
             })
           ),
-          h(
+          h2(
             Action,
             {
               onClick: () => {
@@ -9098,12 +9136,12 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
           )
         )
       ),
-      h(NavigationResizeHandle, { navigation, controls: navId }),
-      navigation.error && h("p", { className: "ws-status-announcement", role: "status" }, navigation.error),
-      h(
+      h2(NavigationResizeHandle, { navigation, controls: navId }),
+      navigation.error && h2("p", { className: "ws-status-announcement", role: "status" }, navigation.error),
+      h2(
         "main",
         { className: "ws-work", ref: workPane, tabIndex: -1, "aria-label": "Workspace content" },
-        trash ? h(Trash, { state, command, onError: report, confirm }) : item ? h(Document, {
+        trash ? h2(Trash, { state, command, onError: report, confirm }) : item ? h2(Document, {
           key: JSON.stringify([state.scope_id, item.id]),
           item,
           state,
@@ -9121,7 +9159,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
           confirm,
           currentRun,
           setDialog
-        }) : h(Home, {
+        }) : h2(Home, {
           contexts: navContexts,
           itemIndex,
           items,
@@ -9133,8 +9171,8 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
         })
       )
     ),
-    usernameDialog && h(UsernameDialog, { client, returnFocus: usernameDialog.opener, onClose: () => setUsernameDialog(null) }),
-    dialog && h(CreateDialog, {
+    usernameDialog && h2(UsernameDialog, { client, returnFocus: usernameDialog.opener, onClose: () => setUsernameDialog(null) }),
+    dialog && h2(CreateDialog, {
       dialog,
       items,
       state,
@@ -9143,7 +9181,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
       onOpen: open,
       parentId: item?.kind === "folder" ? item.id : null
     }),
-    restore && h(RestoreDialog, {
+    restore && h2(RestoreDialog, {
       client,
       ticket: restore.ticket,
       data: restore.data,
@@ -9152,7 +9190,7 @@ function WorkspaceSource({ ctx, profile, sourceKey }) {
       onRefused: (ticket) => void loadReplacement(ticket, false),
       onUseCurrent: (ticket) => void loadReplacement(ticket, "unknown")
     }),
-    confirmation && h(FormDialog, {
+    confirmation && h2(FormDialog, {
       returnFocus: confirmation.returnFocus,
       title: confirmation.title,
       description: confirmation.description,
@@ -9175,41 +9213,41 @@ function Home({ items, state, drafts, onOpen, create, setDialog, contexts, itemI
     () => items.filter((item) => item.kind === "page" || item.kind === "database").map((item) => {
       const context = contexts?.get(item.id), description = `${descriptionPrefix}-${item.id}`;
       const parent = itemIndex?.get(item.parent_id);
-      return h(
+      return h2(
         "li",
         { key: item.id, className: "ws-home-item" },
-        h(Action, { variant: "link", "aria-describedby": description, onClick: () => onOpen(item.id) }, item.title),
-        h("span", { className: "ws-home-location", "aria-hidden": true }, context?.caption ?? `${parent?.title || "Workspace"} \xB7 ${item.kind}`),
-        h("span", { id: description, className: "ws-title-reader" }, context?.description ?? itemContext(item, items, state.attachments))
+        h2(Action, { variant: "link", "aria-describedby": description, onClick: () => onOpen(item.id) }, item.title),
+        h2("span", { className: "ws-home-location", "aria-hidden": true }, context?.caption ?? `${parent?.title || "Workspace"} \xB7 ${item.kind}`),
+        h2("span", { id: description, className: "ws-title-reader" }, context?.description ?? itemContext(item, items, state.attachments))
       );
     }),
     [items, state.attachments, onOpen, contexts, itemIndex, descriptionPrefix]
   );
-  return h(
+  return h2(
     "section",
     { className: "ws-home" },
-    recoverable.length > 0 && h(
+    recoverable.length > 0 && h2(
       "section",
       { "aria-label": "Recoverable drafts" },
-      h("h2", null, "Recoverable drafts"),
-      h(
+      h2("h2", null, "Recoverable drafts"),
+      h2(
         "p",
         { className: "ws-muted" },
         "These local drafts belong to this exact connection, profile and Workspace. Open a page to recover or discard its draft; nothing is saved automatically."
       ),
-      h(
+      h2(
         "ul",
         null,
         recoverable.map((entry) => {
           const page = items.find((i) => i.id === entry.item_id);
-          return h(
+          return h2(
             "li",
             { key: `${entry.field ?? "content"}:${entry.item_id}:${entry.property_id ?? ""}` },
-            page ? h(
+            page ? h2(
               Action,
               { onClick: () => onOpen(page.id) },
               `${entry.field === "title" ? "Recover title" : entry.field === "property" ? "Recover property" : entry.field === "discussion" ? "Continue feedback" : "Recover draft"}: ${page.title}${entry.property_id ? ` \xB7 ${state.items.find((i) => i.id === page.database_id)?.columns?.find((c) => c.id === entry.property_id)?.name ?? "Property"}` : ""}`
-            ) : h(
+            ) : h2(
               "span",
               null,
               `Draft for unavailable item ${entry.item_id}; restore the item from Trash to recover it.`
@@ -9218,41 +9256,41 @@ function Home({ items, state, drafts, onOpen, create, setDialog, contexts, itemI
         })
       )
     ),
-    h("h2", null, "Your pages"),
-    h(
+    h2("h2", null, "Your pages"),
+    h2(
       "p",
       { className: "ws-muted" },
       "Keep documents and databases together. Leave comments when you want Hermes to work on a page."
     ),
-    h(
+    h2(
       "div",
       { className: "ws-actions" },
-      h(Action, { onClick: () => create("page") }, "New page"),
-      h(Action, { onClick: () => create("database") }, "New database")
+      h2(Action, { onClick: () => create("page") }, "New page"),
+      h2(Action, { onClick: () => create("database") }, "New database")
     ),
-    h(
+    h2(
       "ul",
       { className: "ws-list" },
       pageRows
     ),
-    h("h2", null, "Templates"),
-    state.templates.length ? h(
+    h2("h2", null, "Templates"),
+    state.templates.length ? h2(
       "ul",
       { className: "ws-list" },
       state.templates.map(
-        (t) => h(
+        (t) => h2(
           "li",
           { key: t.id },
-          h(Action, { onClick: () => setDialog({ template: t }) }, t.name)
+          h2(Action, { onClick: () => setDialog({ template: t }) }, t.name)
         )
       )
-    ) : h(
+    ) : h2(
       "p",
       { className: "ws-empty" },
       "Save a page or record as a template to reuse its content and properties."
     ),
-    h("h2", null, "Import and recovery"),
-    h(
+    h2("h2", null, "Import and recovery"),
+    h2(
       "p",
       { className: "ws-muted" },
       "Import Markdown, CSV, Word (.docx) or text-based PDF. Word and PDF become editable content with their original attachments; exact layout and scanned-PDF OCR are not supported. Markdown and CSV exports are portable content. Use Back up Workspace to preserve comments, structure, history and attachments."
@@ -9261,36 +9299,36 @@ function Home({ items, state, drafts, onOpen, create, setDialog, contexts, itemI
 }
 function Trash({ state, command, onError, confirm }) {
   const rows = state.items.filter((i) => i.deleted_at);
-  return h(
+  return h2(
     "section",
     { className: "ws-home" },
-    h("h2", null, "Trash"),
-    h(
+    h2("h2", null, "Trash"),
+    h2(
       "p",
       { className: "ws-muted" },
       "Items stay here until you restore or permanently delete them. There is no automatic expiry."
     ),
-    !rows.length && h("p", { className: "ws-empty" }, "Trash is empty."),
-    h(
+    !rows.length && h2("p", { className: "ws-empty" }, "Trash is empty."),
+    h2(
       "ul",
       { className: "ws-list" },
       rows.map(
-        (item) => h(
+        (item) => h2(
           "li",
           { key: item.id },
-          h("strong", null, item.title),
-          h("span", { className: "ws-muted" }, ` (${item.kind})`),
-          h(
+          h2("strong", null, item.title),
+          h2("span", { className: "ws-muted" }, ` (${item.kind})`),
+          h2(
             "div",
             { className: "ws-actions" },
-            h(
+            h2(
               Action,
               {
                 onClick: () => void command("restore", { id: item.id }).catch(onError)
               },
               "Restore"
             ),
-            h(
+            h2(
               Action,
               {
                 onClick: () => confirm({
@@ -9342,7 +9380,7 @@ function CreateDialog({
         ...items.filter((i) => i.kind === "database").map((i) => [i.id, i.title])
       ]
     });
-  return h(FormDialog, {
+  return h2(FormDialog, {
     title: template ? `Use ${template.name}` : `New ${kind}`,
     returnFocus: dialog.returnFocus,
     initial: { parent_id: parentId ?? "" },
@@ -9384,10 +9422,10 @@ function Document({
   currentRun,
   setDialog
 }) {
-  const [formatTarget, setFormatTarget] = useState16(null), [toolbarTarget, setToolbarTarget] = useState16(null), [commentTarget, setCommentTarget] = useState16(null), [pageActions, setPageActions] = useState16(null);
-  const transferPageMenuFocus = useRef15(false);
-  const pageHeader = useRef15(null);
-  useLayoutEffect9(() => {
+  const [formatTarget, setFormatTarget] = useState17(null), [toolbarTarget, setToolbarTarget] = useState17(null), [commentTarget, setCommentTarget] = useState17(null), [pageActions, setPageActions] = useState17(null);
+  const transferPageMenuFocus = useRef16(false);
+  const pageHeader = useRef16(null);
+  useLayoutEffect10(() => {
     const header = pageHeader.current, pane = header?.closest(".ws-work");
     if (!pane) return;
     const previous = pane.style.scrollPaddingTop;
@@ -9411,13 +9449,15 @@ function Document({
   );
   const discussionBuffer = useMemo4(() => drafts?.bind(state.scope_id, item.id, "discussion") ?? null, [drafts, state.scope_id, item.id]);
   const retainedDiscussion = useMemo4(() => discussionBuffer?.read()?.draft ?? null, [discussionBuffer]);
-  const [scopeReview, setScopeReview] = useState16(null);
-  const [commentGeometry, setCommentGeometry] = useState16([]), [hoveredComment, setHoveredComment] = useState16(null);
+  const [scopeReview, setScopeReview] = useState17(null);
+  const [commentGeometry, setCommentGeometry] = useState17([]), [hoveredComment, setHoveredComment] = useState17(null);
   const receiveGeometry = useCallback4((next) => setCommentGeometry((old) => old.length === next.length && old.every((p, i) => p.id === next[i].id && p.block === next[i].block && p.slotBlock === next[i].slotBlock && p.lineGroup === next[i].lineGroup && JSON.stringify(p.anchor) === JSON.stringify(next[i].anchor) && Math.abs(p.top - next[i].top) < 0.5 && Math.abs(p.blockBottom - next[i].blockBottom) < 0.5) ? old : next), []);
-  const [pending, setPending] = useState16(false);
-  const [sectionBusy, setSectionBusy] = useState16(false), [sectionFrozen, setSectionFrozen] = useState16(false), [sectionReview, setSectionReview] = useState16(null);
-  const sectionOperation = useRef15(null);
-  const pendingFiles = useRef15(async () => {
+  const [pending, setPending] = useState17(false);
+  const submissionSequence = useRef16(0);
+  const [controlPending, setControlPending] = useState17(false), controlOperation = useRef16(false);
+  const [sectionBusy, setSectionBusy] = useState17(false), [sectionFrozen, setSectionFrozen] = useState17(false), [sectionReview, setSectionReview] = useState17(null);
+  const sectionOperation = useRef16(null);
+  const pendingFiles = useRef16(async () => {
   });
   const registerPendingFiles = useCallback4((fn) => {
     pendingFiles.current = fn;
@@ -9427,10 +9467,10 @@ function Document({
     };
   }, []);
   const locked = Boolean(currentRun) || pending;
-  const [text, setText] = useState16(""), [anchor, setAnchor] = useState16(() => retainedDiscussion?.anchor ?? null), [activeComment, setActiveComment] = useState16(null), [showResolved, setShowResolved] = useState16(() => state.comments.some((c) => c.item_id === item.id && c.resolved && retainedDiscussion?.replies?.[c.id])), [localDialog, setLocalDialog] = useState16(null);
-  const localDialogOpener = useRef15(null);
-  const [pageSurface, setPageSurface] = useState16(null), [surfaceBusy, setSurfaceBusy] = useState16(false), [surfaceError, setSurfaceError] = useState16("");
-  const surfaceOpener = useRef15(null), surfaceTransfer = useRef15(false);
+  const [text, setText] = useState17(""), [anchor, setAnchor] = useState17(() => retainedDiscussion?.anchor ?? null), [activeComment, setActiveComment] = useState17(null), [showResolved, setShowResolved] = useState17(() => state.comments.some((c) => c.item_id === item.id && c.resolved && retainedDiscussion?.replies?.[c.id])), [localDialog, setLocalDialog] = useState17(null);
+  const localDialogOpener = useRef16(null);
+  const [pageSurface, setPageSurface] = useState17(null), [surfaceBusy, setSurfaceBusy] = useState17(false), [surfaceError, setSurfaceError] = useState17("");
+  const surfaceOpener = useRef16(null), surfaceTransfer = useRef16(false);
   const openPageSurface = (name, opener) => {
     surfaceOpener.current = opener ?? document.activeElement;
     surfaceTransfer.current = false;
@@ -9441,14 +9481,14 @@ function Document({
     localDialogOpener.current = opener ?? document.activeElement;
     setLocalDialog(name);
   };
-  const attachment = useRef15(null), editorFocus = useRef15(null);
+  const attachment = useRef16(null), editorFocus = useRef16(null);
   const headingId = useId7();
   const titleBuffer = useMemo4(() => drafts?.bind(state.scope_id, item.id, "title") ?? null, [drafts, state.scope_id, item.id]);
-  const editorFlushes = useRef15({ title: async () => {
+  const editorFlushes = useRef16({ title: async () => {
   }, body: async () => {
   }, discussion: async () => {
   } });
-  const propertyFlushes = useRef15(/* @__PURE__ */ new Map());
+  const propertyFlushes = useRef16(/* @__PURE__ */ new Map());
   const propertyBuffer = useCallback4((recordId, columnId) => drafts?.bind(state.scope_id, recordId, "property", columnId) ?? null, [drafts, state.scope_id]);
   const registerPropertyFlush = useCallback4((id, fn) => {
     propertyFlushes.current.set(id, fn);
@@ -9617,15 +9657,19 @@ function Document({
       throw new Error(
         "Comments or target items changed. Close and review this run again."
       );
+    const sequence = ++submissionSequence.current;
     setPending(true);
     try {
       await workflow.addressComments(item.id, explicitItemIds, review && {
         scope_id: review.scope_id,
         revision: review.revision
+      }, async () => {
+        await refresh();
+        if (client.current() && submissionSequence.current === sequence) setPending(false);
       });
     } finally {
       if (client.current()) {
-        setPending(false);
+        if (submissionSequence.current === sequence) setPending(false);
         await refresh();
       }
     }
@@ -9637,13 +9681,16 @@ function Document({
     if (review.targets.length) setScopeReview(review);
     else await submitRun([]);
   };
-  const stop = async () => {
-    setPending(true);
+  const runControl = async (action) => {
+    if (controlOperation.current) return;
+    controlOperation.current = true;
+    setControlPending(true);
     try {
-      await workflow.stop(currentRun);
+      await action();
     } finally {
+      controlOperation.current = false;
       if (client.current()) {
-        setPending(false);
+        setControlPending(false);
         await refresh();
       }
     }
@@ -9652,20 +9699,20 @@ function Document({
     client.assertCurrent();
     downloadFile(attachment2);
   };
-  return h(
+  return h2(
     "div",
     {
       className: `ws-layout${item.kind === "folder" ? " ws-folder-layout" : ""}${documentWidth.wide ? " ws-wide-document" : ""}`
     },
-    h(
+    h2(
       "header",
       { ref: pageHeader, className: "ws-page-controls", "aria-label": "Page controls" },
-      h("div", { ref: setFormatTarget, className: "ws-page-format-slot ws-rich-editor" }),
-      item.kind !== "folder" && h("div", { ref: setCommentTarget, className: "ws-page-comment-controls" }),
-      h(
+      h2("div", { ref: setFormatTarget, className: "ws-page-format-slot ws-rich-editor" }),
+      item.kind !== "folder" && h2("div", { ref: setCommentTarget, className: "ws-page-comment-controls" }),
+      h2(
         "div",
         { className: "ws-page-actions" },
-        h(
+        h2(
           ActionMenu,
           {
             label: "Page actions",
@@ -9676,37 +9723,37 @@ function Document({
                 transferPageMenuFocus.current = false;
               }
             },
-            triggerLabel: h(Codicon, { name: "ellipsis", "aria-hidden": true }),
+            triggerLabel: h2(Codicon, { name: "ellipsis", "aria-hidden": true }),
             showChevron: false,
             triggerProps: { id: `ws-page-actions-${item.id}`, className: "ws-page-control ws-page-menu-control", title: "Page actions" }
           },
-          item.kind !== "folder" && h(Action, {
+          item.kind !== "folder" && h2(Action, {
             disabled: locked || pageActions?.busy || !pageActions,
             onClick: () => {
               transferPageMenuFocus.current = true;
               pageActions?.compose();
             }
           }, item.kind === "database" ? "Add database comment" : "Add whole-page comment"),
-          item.kind !== "folder" && h(Action, {
+          item.kind !== "folder" && h2(Action, {
             onClick: () => {
               transferPageMenuFocus.current = true;
               pageActions?.thread();
             },
             disabled: !pageActions
           }, "Page thread"),
-          item.kind !== "folder" && h(Action, {
+          item.kind !== "folder" && h2(Action, {
             onClick: (_event, opener) => openPageSurface("details", opener)
           }, "Page details"),
-          item.kind !== "folder" && h(Action, {
+          item.kind !== "folder" && h2(Action, {
             onClick: (_event, opener) => openPageSurface("export", opener)
           }, "Export and recovery"),
-          ["page", "record"].includes(item.kind) && h(Action, {
+          ["page", "record"].includes(item.kind) && h2(Action, {
             onClick: () => act(() => {
               client.assertCurrent();
               documentWidth.toggle();
             })
           }, `Wide document mode: ${documentWidth.wide ? "On" : "Off"}`),
-          ["page", "record"].includes(item.kind) && h(
+          ["page", "record"].includes(item.kind) && h2(
             Action,
             {
               disabled: locked,
@@ -9714,7 +9761,7 @@ function Document({
             },
             "Save as template"
           ),
-          item.kind !== "record" && h(
+          item.kind !== "record" && h2(
             Action,
             {
               disabled: locked,
@@ -9722,7 +9769,7 @@ function Document({
             },
             "Move to folder"
           ),
-          h(
+          h2(
             Action,
             {
               disabled: locked,
@@ -9737,9 +9784,9 @@ function Document({
           )
         )
       ),
-      h("div", { ref: setToolbarTarget, className: "ws-page-toolbar-slot ws-rich-editor" })
+      h2("div", { ref: setToolbarTarget, className: "ws-page-toolbar-slot ws-rich-editor" })
     ),
-    scopeReview && h(ScopeReviewDialog, {
+    scopeReview && h2(ScopeReviewDialog, {
       review: scopeReview,
       currentTitle: item.title,
       currentId: item.id,
@@ -9747,8 +9794,8 @@ function Document({
       onClose: () => setScopeReview(null),
       onSubmit: (ids) => submitRun(ids, scopeReview)
     }),
-    sectionBusy && h("div", { className: "ws-banner", role: "status" }, sectionFrozen ? "Reviewing the saved section\u2026 Editing will resume when this operation finishes." : "Finishing pending files before section review\u2026"),
-    sectionReview && h(FormDialog, {
+    sectionBusy && h2("div", { className: "ws-banner", role: "status" }, sectionFrozen ? "Reviewing the saved section\u2026 Editing will resume when this operation finishes." : "Finishing pending files before section review\u2026"),
+    sectionReview && h2(FormDialog, {
       key: `${sectionReview.preview.content_hash}:${sectionReview.preview.manual_revision}`,
       title: "Revert section after manual edits?",
       confirm: "Revert section",
@@ -9768,25 +9815,25 @@ function Document({
       }) } : void 0,
       returnFocus: sectionReview.opener,
       description: "You edited this page after Hermes changed it. Reverting restores only this highlighted section and removes its associated AI responses. Manual edits inside it may be overwritten; every unrelated change and human reply stays intact. Saved history retains the recovery receipt.",
-      renderHelp: () => h(
+      renderHelp: () => h2(
         "div",
         { className: "ws-section-preview" },
-        h("strong", null, "Current section"),
-        h(RichPreview, {
+        h2("strong", null, "Current section"),
+        h2(RichPreview, {
           label: "Current section preview",
           html: sectionReview.preview.current_html,
           text: sectionReview.preview.current_text,
           attachments: state.attachments
         }),
-        h("strong", null, "Restore this section"),
-        h(RichPreview, {
+        h2("strong", null, "Restore this section"),
+        h2(RichPreview, {
           label: "Restored section preview",
           html: sectionReview.preview.before_html,
           text: sectionReview.preview.before_text,
           attachments: state.attachments
         }),
-        sectionReview.preview.before_text === sectionReview.preview.current_text && sectionReview.preview.before_html !== sectionReview.preview.current_html && h("p", { className: "ws-muted" }, "The text is unchanged; the highlighted section\u2019s formatting will change."),
-        h("p", { className: "ws-muted" }, "If the page changes while this dialog is open, this approval expires. Cancel keeps all current changes.")
+        sectionReview.preview.before_text === sectionReview.preview.current_text && sectionReview.preview.before_html !== sectionReview.preview.current_html && h2("p", { className: "ws-muted" }, "The text is unchanged; the highlighted section\u2019s formatting will change."),
+        h2("p", { className: "ws-muted" }, "If the page changes while this dialog is open, this approval expires. Cancel keeps all current changes.")
       ),
       onClose: () => {
         setSectionReview(null);
@@ -9802,81 +9849,75 @@ function Document({
       },
       onSuccessFocus: () => document.getElementById(`ws-bubble-${sectionReview.commentId}`)?.focus({ preventScroll: true })
     }),
-    locked && h(
+    locked && h2(
       "div",
       { className: "ws-banner ws-run-banner", role: "status", "aria-label": "Active Workspace run" },
-      h(GlyphSpinner2, { ariaLabel: "Hermes is working" }),
-      h(
+      h2(GlyphSpinner2, { ariaLabel: "Hermes is working" }),
+      h2(
         "strong",
         null,
         currentRun ? "Read-only while Hermes addresses comments" : "Preparing comment run\u2026"
       ),
-      h(
+      h2(
         "span",
         null,
         typeof currentRun?.progress === "string" ? currentRun.progress : currentRun?.status ?? "Editing is disabled while this run is prepared."
       ),
-      currentRun && h(Action, { disabled: pending, onClick: () => act(stop) }, "Stop"),
-      currentRun && h(
+      currentRun && h2(Action, { disabled: controlPending, onClick: () => act(() => runControl(() => workflow.stop(currentRun))) }, "Stop"),
+      currentRun && h2(
         Action,
         {
-          disabled: pending,
+          disabled: controlPending,
           onClick: () => confirm({
             title: "Recover document?",
             description: "The native thread may continue. This revokes its Workspace edit authority and unlocks this document. Saved partial changes and the pre-run version remain available for Restore. The native outcome remains unknown; this does not confirm the thread stopped.",
             label: "Revoke Workspace edits",
             skipFlush: true,
-            action: async () => {
-              try {
-                await workflow.recover(currentRun);
-              } finally {
-                if (client.current()) await refresh();
-              }
-            }
+            action: () => runControl(() => workflow.recover(currentRun))
           })
         },
         "Recover document"
       )
     ),
-    lastRun && !locked && lastRun.status !== "completed" && !runOutcome.dismissed && h(
+    lastRun && !locked && lastRun.status !== "completed" && !runOutcome.dismissed && h2(
       "div",
       { className: "ws-banner ws-run-banner ws-outcome", role: "status", "aria-label": "Workspace run needs review" },
-      h("strong", null, lastRun.status === "cancelled" ? "Run stopped \u2014 review saved changes" : "Run needs review"),
-      h("span", null, lastRun.error?.startsWith("The native turn ended, but its proposed edits were not saved:") ? "The Hermes turn ended. Its proposed edits were not saved." : "Saved changes may be partial. The native thread may still be running."),
-      h(
+      h2("strong", null, lastRun.status === "cancelled" ? "Run stopped \u2014 review saved changes" : "Run needs review"),
+      h2("span", null, lastRun.error?.startsWith("The native turn ended, but its proposed edits were not saved:") ? "The Hermes turn ended. Its proposed edits were not saved." : "Saved changes may be partial. The native thread may still be running."),
+      h2(
         "div",
         { className: "ws-actions" },
-        h(Action, { disabled: !preRunVersions.length, onClick: (event) => openLocalDialog("version", event.currentTarget) }, "Restore pre-run version"),
-        h(Action, { disabled: !item.thread_id, onClick: () => act(() => workflow.openThread(item.thread_id)) }, "Open run thread"),
-        h(Action, { "aria-label": "Dismiss run message", onClick: () => {
+        h2(Action, { disabled: !preRunVersions.length, onClick: (event) => openLocalDialog("version", event.currentTarget) }, "Restore pre-run version"),
+        h2(Action, { disabled: !item.thread_id, onClick: () => act(() => workflow.openThread(item.thread_id)) }, "Open run thread"),
+        h2(Action, { "aria-label": "Dismiss run message", onClick: () => {
           runOutcome.dismiss();
           returnToEditor();
         } }, "Dismiss")
       ),
-      h(
+      h2(
         "details",
         null,
-        h("summary", null, "Run outcome details"),
-        h("p", null, lastRun.error ? errorMessage(lastRun.error) : `Last run: ${lastRun.status}. Saved partial changes may remain.`),
-        h("p", null, "Restoring Workspace content does not confirm that the native thread stopped. Comments remain yours to resolve.")
+        h2("summary", null, "Run outcome details"),
+        h2("p", null, lastRun.error ? errorMessage(lastRun.error) : `Last run: ${lastRun.status}. Saved partial changes may remain.`),
+        h2("p", null, "Restoring Workspace content does not confirm that the native thread stopped. Comments remain yours to resolve.")
       )
     ),
-    h(
+    h2(
       "article",
       { className: "ws-document", "aria-labelledby": headingId },
-      lastRun?.status === "completed" && !locked && h("div", { className: "ws-save", role: "status" }, "Last run completed. Comments remain yours to resolve."),
-      h(
+      lastRun?.status === "completed" && !locked && h2("div", { className: "ws-save", role: "status" }, "Last run completed. Comments remain yours to resolve."),
+      h2(
         "div",
         { className: "ws-document-header" },
-        h(
+        h2(
           "div",
           { className: "ws-page-kind" },
-          h(Codicon, {
+          h2(Codicon, {
             name: item.kind === "database" ? "table" : item.kind === "folder" ? "folder" : "file-text"
           }),
           item.kind === "record" ? "Record" : item.kind === "database" ? "Database" : item.kind === "folder" ? "Folder" : "Page"
         ),
-        h(PageTitle, {
+        h2(PageTitle, {
           item,
           locked,
           interactionBlocked: sectionFrozen,
@@ -9887,38 +9928,38 @@ function Document({
           onSave: (title) => command("update_item", { id: item.id, patch: { title } })
         })
       ),
-      documentWidth.error && h("p", { className: "ws-muted", role: "status" }, documentWidth.error),
-      item.kind === "folder" ? h(
+      documentWidth.error && h2("p", { className: "ws-muted", role: "status" }, documentWidth.error),
+      item.kind === "folder" ? h2(
         "section",
         null,
-        h("h2", null, "In this folder"),
-        h(
+        h2("h2", null, "In this folder"),
+        h2(
           "div",
           { className: "ws-actions" },
-          h(
+          h2(
             Action,
             { onClick: () => setDialog({ kind: "page" }) },
             "New page"
           ),
-          h(
+          h2(
             Action,
             { onClick: () => setDialog({ kind: "folder" }) },
             "New subfolder"
           ),
-          h(
+          h2(
             Action,
             { onClick: () => setDialog({ kind: "database" }) },
             "New database"
           )
         ),
-        h(
+        h2(
           "ul",
           { className: "ws-list" },
           state.items.filter((i) => !i.deleted_at && i.parent_id === item.id).map(
-            (i) => h(
+            (i) => h2(
               "li",
               { key: i.id },
-              h(
+              h2(
                 Action,
                 { variant: "link", onClick: () => onOpen(i.id) },
                 i.title
@@ -9926,18 +9967,18 @@ function Document({
             )
           )
         )
-      ) : h(
+      ) : h2(
         "div",
         null,
-        item.kind === "record" && h(
+        item.kind === "record" && h2(
           "div",
           null,
-          database && h(
+          database && h2(
             Action,
             { variant: "link", onClick: () => onOpen(database.id) },
             database.title
           ),
-          h(RecordProperties, {
+          h2(RecordProperties, {
             item,
             database,
             propertyBuffer,
@@ -9949,7 +9990,7 @@ function Document({
             onError
           })
         ),
-        item.kind === "database" ? h(Database, {
+        item.kind === "database" ? h2(Database, {
           item,
           propertyBuffer,
           registerPropertyFlush,
@@ -9959,7 +10000,7 @@ function Document({
           onError,
           locked,
           confirm
-        }) : h(RichEditor, {
+        }) : h2(RichEditor, {
           formatTarget,
           toolbarTarget,
           item,
@@ -9997,7 +10038,7 @@ function Document({
           },
           onAnchor: (value) => value.navigate ? onOpen(value.navigate) : setAnchor(value)
         }),
-        h("input", {
+        h2("input", {
           ref: attachment,
           type: "file",
           hidden: true,
@@ -10017,25 +10058,25 @@ function Document({
               });
           }
         }),
-        h(
+        h2(
           "div",
           { className: "ws-attachments" },
-          h("h2", null, "Attachments"),
+          h2("h2", null, "Attachments"),
           attachmentLabels(state.attachments.filter((a) => a.item_id === item.id)).map(
-            ({ attachment: a, label, detail }) => h(
+            ({ attachment: a, label, detail }) => h2(
               "div",
               { key: a.id },
-              h(
+              h2(
                 Action,
                 { variant: "link", "aria-describedby": `ws-attachment-${a.id}`, onClick: () => attachmentDownload(a) },
                 label
               ),
-              h("span", { id: `ws-attachment-${a.id}`, className: "ws-muted ws-attachment-detail" }, detail)
+              h2("span", { id: `ws-attachment-${a.id}`, className: "ws-muted ws-attachment-detail" }, detail)
             )
           )
         )
       ),
-      pageSurface && h(ContentDialog, {
+      pageSurface && h2(ContentDialog, {
         title: pageSurface === "details" ? "Page details" : "Export and recovery",
         description: item.title,
         returnFocus: surfaceOpener.current,
@@ -10044,14 +10085,14 @@ function Document({
         onClose: () => {
           if (!surfaceBusy) setPageSurface(null);
         }
-      }, pageSurface === "details" ? h("p", { className: "ws-muted ws-item-id" }, `Workspace item ID: ${item.id}`) : h(
+      }, pageSurface === "details" ? h2("p", { className: "ws-muted ws-item-id" }, `Workspace item ID: ${item.id}`) : h2(
         "div",
         { className: "ws-page-utilities" },
-        h("h3", null, item.kind === "database" ? "Export table" : "Export document"),
-        h(
+        h2("h3", null, item.kind === "database" ? "Export table" : "Export document"),
+        h2(
           "div",
           { className: "ws-actions" },
-          ["md", "csv", "docx", "pdf"].filter((format) => item.kind === "database" ? format === "csv" : format !== "csv").map((format) => h(Action, {
+          ["md", "csv", "docx", "pdf"].filter((format) => item.kind === "database" ? format === "csv" : format !== "csv").map((format) => h2(Action, {
             key: format,
             disabled: surfaceBusy,
             onClick: async () => {
@@ -10071,13 +10112,13 @@ function Document({
             }
           }, `Export ${format.toUpperCase()}`))
         ),
-        h("p", { className: "ws-muted" }, "Document exports are not a full Workspace backup. Use the Workspace menu for a complete backup."),
-        h("h3", null, "Attachments and recovery"),
-        h(
+        h2("p", { className: "ws-muted" }, "Document exports are not a full Workspace backup. Use the Workspace menu for a complete backup."),
+        h2("h3", null, "Attachments and recovery"),
+        h2(
           "div",
           { className: "ws-actions" },
-          h(Action, { disabled: locked || surfaceBusy, onClick: () => attachment.current.click() }, "Attach file"),
-          h(Action, {
+          h2(Action, { disabled: locked || surfaceBusy, onClick: () => attachment.current.click() }, "Attach file"),
+          h2(Action, {
             disabled: locked || surfaceBusy || !preRunVersions.length,
             onClick: () => {
               surfaceTransfer.current = true;
@@ -10085,7 +10126,7 @@ function Document({
               openLocalDialog("version", surfaceOpener.current);
             }
           }, "Restore pre-run version"),
-          sectionVersions.length > 0 && h(Action, {
+          sectionVersions.length > 0 && h2(Action, {
             disabled: locked || surfaceBusy,
             onClick: () => {
               surfaceTransfer.current = true;
@@ -10094,10 +10135,10 @@ function Document({
             }
           }, "Recover before section revert")
         ),
-        surfaceBusy && h("p", { role: "status" }, "Preparing export\u2026"),
-        surfaceError && h("p", { role: "alert", className: "ws-save-error" }, surfaceError)
+        surfaceBusy && h2("p", { role: "status" }, "Preparing export\u2026"),
+        surfaceError && h2("p", { role: "alert", className: "ws-save-error" }, surfaceError)
       )),
-      localDialog && h(FormDialog, {
+      localDialog && h2(FormDialog, {
         returnFocus: localDialogOpener.current,
         confirm: versionDialog ? localDialog === "section-version" ? "Restore whole-page version" : "Restore pre-run version" : "Save",
         title: localDialog === "template" ? "Save template" : localDialog === "move" ? "Move to folder" : localDialog === "section-version" ? "Recover before section revert" : "Restore pre-run version",
@@ -10119,12 +10160,12 @@ function Document({
         onClose: () => setLocalDialog(null),
         renderHelp: versionDialog ? (values) => {
           const version = dialogVersions.find((row) => row.id === values.id);
-          return version && h(
+          return version && h2(
             "details",
             null,
-            h("summary", null, "Version details"),
-            h("p", null, "Exact saved time: ", h("time", { dateTime: version.created_at }, version.created_at)),
-            h("p", null, "Version ID: ", h("code", null, version.id))
+            h2("summary", null, "Version details"),
+            h2("p", null, "Exact saved time: ", h2("time", { dateTime: version.created_at }, version.created_at)),
+            h2("p", null, "Version ID: ", h2("code", null, version.id))
           );
         } : void 0,
         onSubmit: async (values) => {
@@ -10143,7 +10184,7 @@ function Document({
         }
       })
     ),
-    item.kind !== "folder" && h(Comments, {
+    item.kind !== "folder" && h2(Comments, {
       controlsTarget: commentTarget,
       onPageActionsChange: setPageActions,
       key: item.id,
@@ -10283,7 +10324,7 @@ var index_default = {
         id: "page",
         area: ROUTES_AREA,
         data: { path: "/workspace" },
-        render: () => h2(Workspace, { ctx })
+        render: () => h3(Workspace, { ctx })
       });
       ctx.register({
         id: "nav",

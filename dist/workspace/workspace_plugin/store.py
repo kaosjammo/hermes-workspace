@@ -21,7 +21,8 @@ not comment resolution. Computed formula properties are always server-derived.
 """
 import base64
 import copy
-from contextlib import closing
+from contextlib import closing, contextmanager
+from threading import local
 from datetime import date, datetime, timezone
 import html
 import hashlib
@@ -213,6 +214,7 @@ def _process_identity(pid=None):
 
 class Store:
     def __init__(self, profile_home: Path, *, shared=False):
+        self._atomic = local()
         if not isinstance(profile_home, Path) or not profile_home.is_absolute():
             raise StoreError('An explicit absolute profile_home Path is required')
         self.profile_home = profile_home.resolve()
@@ -270,6 +272,32 @@ class Store:
         conn.execute('PRAGMA synchronous=FULL')
         return conn
 
+    @contextmanager
+    def atomic(self):
+        """One plugin-owned writer for run authority, effects and receipts.
+
+        Nested Store operations use savepoints and this thread's connection.
+        Nothing here acquires or mutates native Hermes authority.
+        """
+        current = getattr(self._atomic, 'connection', None)
+        if current is not None:
+            yield current
+            return
+        conn = self._connect()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            if conn.execute("SELECT value FROM metadata WHERE key='scope_id'").fetchone()[0] != self.scope_id:
+                raise StoreError('Workspace scope changed; reopen before writing', 409)
+            self._atomic.connection = conn
+            yield conn
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            self._atomic.connection = None
+            conn.close()
+
     def check_scope(self, expected_scope):
         if not isinstance(expected_scope, str) or expected_scope != self.scope_id:
             raise StoreError('Workspace profile scope changed; reload before writing', 409)
@@ -308,9 +336,19 @@ class Store:
             conn.execute(f"UPDATE {schema}.metadata SET value=? WHERE key='section_epoch'", (state['_section_epoch'],))
 
     def _transaction(self, action, expected_revision=None, authorize=None, skip_unchanged=False):
-        conn = self._connect()
+        parent = getattr(self._atomic, 'connection', None)
+        conn = parent if parent is not None else self._connect()
+        savepoint = 'workspace_' + uuid.uuid4().hex if parent is not None else None
+        def commit():
+            conn.execute('RELEASE '+savepoint) if savepoint else conn.commit()
+        def rollback():
+            if savepoint:
+                conn.execute('ROLLBACK TO '+savepoint)
+                conn.execute('RELEASE '+savepoint)
+            else:
+                conn.rollback()
         try:
-            conn.execute('BEGIN IMMEDIATE')
+            conn.execute('SAVEPOINT '+savepoint) if savepoint else conn.execute('BEGIN IMMEDIATE')
             if authorize is not None:
                 authorize()  # Trusted native check AFTER any SQLite lock wait.
             state = self._load(conn)
@@ -319,29 +357,32 @@ class Store:
             before = _json(state) if skip_unchanged else None
             result = action(state)
             if skip_unchanged and _json(state)==before:
-                conn.commit()
+                commit()
                 return self._public(copy.deepcopy(result),state)
             self._validate_state(state)
             state['revision'] += 1
             self._save(conn, state)
-            conn.commit()
+            commit()
             return self._public(copy.deepcopy(result), state)
         except sqlite3.Error as exc:
-            conn.rollback()
+            rollback()
             raise StoreError('Workspace transaction failed: ' + str(exc), 409 if 'locked' in str(exc) else 400) from exc
         except (TypeError,KeyError,OverflowError,RecursionError) as exc:
-            conn.rollback()
+            rollback()
             raise StoreError('Invalid Workspace data shape') from exc
         except BaseException:
-            conn.rollback()
+            rollback()
             raise
         finally:
-            conn.close()
+            if parent is None:
+                conn.close()
 
     def snapshot(self, *, human_actor=None, include_identity=False, include_content_revisions=False):
-        conn = self._connect()
+        parent = getattr(self._atomic, 'connection', None)
+        conn = parent if parent is not None else self._connect()
         try:
-            conn.execute('BEGIN')
+            if parent is None:
+                conn.execute('BEGIN')
             state = self._load(conn)
             result = {key:self._public(copy.deepcopy([row for row in state[key]
                 if key != 'comments' or not row.get('_deleted_at')]), state) for key in CATEGORIES}
@@ -355,10 +396,12 @@ class Store:
                     item['content_revision'] = revisions[item['id']]
             if include_identity:
                 result['identity'] = self._identity_view(state,human_actor)
-            conn.commit()
+            if parent is None:
+                conn.commit()
             return result
         finally:
-            conn.close()
+            if parent is None:
+                conn.close()
 
     def backup_snapshot(self):
         """Consistent persisted v1 data, without formula/error/anchor projections.
@@ -367,9 +410,11 @@ class Store:
         derived values. Runs remain until the converter checks lifecycle state.
         The receiving Store never adopts scope_id or native execution authority.
         """
-        conn = self._connect()
+        parent = getattr(self._atomic, 'connection', None)
+        conn = parent if parent is not None else self._connect()
         try:
-            conn.execute('BEGIN')
+            if parent is None:
+                conn.execute('BEGIN')
             state = self._load(conn)
             state.pop('_locks')
             state.pop('_section_epoch',None)
@@ -378,10 +423,12 @@ class Store:
             # must never infer ownership from the receiving profile.
             self._stamp_legacy(state)
             state['scope_id'] = self.scope_id
-            conn.commit()
+            if parent is None:
+                conn.commit()
             return state
         finally:
-            conn.close()
+            if parent is None:
+                conn.close()
 
     def _read_fence(self, conn, expected_scope=None, expected_revision=None):
         scope = conn.execute("SELECT value FROM metadata WHERE key='scope_id'").fetchone()[0]

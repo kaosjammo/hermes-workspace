@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test, after, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -39,7 +40,7 @@ const {
   switchProfile,
   FormDialog,
   ScopeReviewDialog,
-} = await import("../../.local/frontend/ui-runtime.mjs");
+} = await import(frontendRuntime('ui-runtime.mjs'));
 const tick = async (ms = 0) => act(() => new Promise((r) => setTimeout(r, ms)));
 const button = (text) =>
   [...document.querySelectorAll("button")].find((b) => (b.getAttribute("aria-label") ?? b.textContent) === text);
@@ -275,6 +276,13 @@ test("production Workspace renders editor/comments, autosaves, resolves only use
         state.revision++;
         return { run, prompt: "Address unresolved", submission_id: "run1" };
       }
+      if (path === "/workflow/submitted") {
+        assert.equal(opts.body.run_id,state.runs[0].id);
+        assert.equal(typeof opts.body.admission_id,'string');
+        assert.ok(opts.body.admission_id.length>0);
+        return {run:structuredClone(state.runs[0])};
+      }
+      if (path === "/workflow/consume") return {run:structuredClone(state.runs[0])};
       if (path === "/workflow/status")
         return { run: structuredClone(state.runs[0]) };
       if (path === "/workflow/stop") {

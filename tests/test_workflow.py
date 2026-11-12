@@ -1,449 +1,18 @@
-"""Behavioural workflow tests; all homes and native DBs are synthetic task state."""
+"""Canonical RPC, Desktop adapter and source-policy integration qualification.
+
+Private owner/row-journal workflow tests were consolidated into the production
+public contract suites. See phase-04-integration/workflow-retired-tests.json in
+the local task evidence for the exact names, replacements and unqualified lanes.
+No full native/IPC/provider acceptance is claimed by that consolidation.
+"""
 import json
 import os
+from runtime_paths import node_command
 from pathlib import Path
 import tempfile
 import unittest
-
 from workspace_plugin.workflow import Workflow
 from workspace_plugin.native import NativeSessions
-
-
-class WorkflowTests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1] / '.local/workflow/tmp')
-        self.home = Path(self.temp.name).resolve()
-        from workspace_plugin.store import Store
-        from hermes_state import SessionDB
-        from hermes_state_runtime import begin_runtime_epoch
-        self.store = Store(self.home)
-        self.db = SessionDB(self.home / 'state.db')
-        self.db.create_session('native-one', source='local')
-        self.db.create_session('native-two', source='local')
-        self.epoch = begin_runtime_epoch(self.db, instance_id='synthetic-runtime')
-        self.native = NativeSessions(self.home, db=self.db)
-        self.flow = Workflow(self.home, store=self.store, native=self.native)
-        self.page = self.store.execute('create_item', {'kind':'page','title':'Current','content':'<p>Before</p>'})
-        self.related = self.store.execute('create_item', {'kind':'page','title':'Related','content':'<p>Related before</p>'})
-        self.other = self.store.execute('create_item', {'kind':'page','title':'Unrelated'})
-        self.comment = self.store.execute('add_comment', {'item_id':self.page['id'],'text':'Edit Current and Related.','target_item_ids':[self.related['id']]})
-        self.answered = self.store.execute('add_comment', {'item_id':self.page['id'],'text':'Also fix this.'})
-        self.store.execute('reply_comment', {'id':self.answered['id'],'text':'Earlier response'})
-        self.resolved = self.store.execute('add_comment', {'item_id':self.page['id'],'text':'Do not process'})
-        self.store.execute('resolve_comment', {'id':self.resolved['id'],'resolved':True})
-
-    def tearDown(self):
-        self.db.close()
-        self.temp.cleanup()
-
-    def prepare(self, explicit_item_ids=None):
-        return self.flow.prepare(self.page['id'], 'native-one', explicit_item_ids)
-
-    def admit(self, prepared, claim=True, text=None, request_id=None):
-        from hermes_state_runtime import admit_session_input, claim_session_input
-        row = admit_session_input(self.db, epoch=self.epoch, principal_id='synthetic-user', session_id='native-one',
-            request_id=request_id or prepared['submission_id'], payload={'text':text or prepared['prompt']})
-        if claim:
-            row = claim_session_input(self.db, epoch=self.epoch, session_id='native-one')
-        return row
-
-    def apply(self, prepared, row, **kwargs):
-        return self.flow.apply(prepared['run']['id'], session_id='native-one', task_id='synthetic-native-task',
-            admission_id=row['admission_id'], **kwargs)
-
-    def test_all_unresolved_persistent_binding_scope_and_restore(self):
-        prepared = self.prepare([self.related['id']])
-        run = prepared['run']
-        self.assertEqual(set(run['comment_ids']), {self.comment['id'], self.answered['id']})
-        self.assertIn(self.related['id'], run['allowed_item_ids'])
-        self.assertNotIn(self.other['id'], run['allowed_item_ids'])
-        row = self.admit(prepared)
-        self.apply(prepared,row,edits=[{'item_id':self.page['id'],'patch':{'content':'<p>After</p>'}}],
-            replies=[{'comment_id':c,'text':'Edited the document.'} for c in run['comment_ids']])
-        from hermes_state_runtime import settle_session_input
-        settle_session_input(self.db, epoch=self.epoch, admission_id=row['admission_id'], generation=row['generation'],outcome='completed')
-        self.assertEqual(self.flow.status(run['id'])['run']['status'],'completed')
-        self.assertFalse(next(c for c in self.store.snapshot()['comments'] if c['id']==self.comment['id'])['resolved'])
-        self.store.execute('restore_version', {'id':run['version_ids'][0]})
-        current = next(i for i in self.store.snapshot()['items'] if i['id']==self.page['id'])
-        self.assertEqual(current['content'],'<p>Before</p>')
-        again = self.prepare([self.related['id']])
-        self.assertEqual(again['run']['session_id'],'native-one')
-        self.assertEqual(set(again['run']['comment_ids']),set(run['comment_ids']))
-
-    def test_user_can_select_existing_native_thread(self):
-        self.flow.bind_thread(self.page['id'],'native-two')
-        self.assertEqual(self.flow.prepare(self.page['id'],'native-two')['run']['session_id'],'native-two')
-        with self.assertRaises(ValueError): self.flow.bind_thread(self.related['id'],'missing-native-session')
-
-    def test_targeted_patch_uses_complete_context_and_existing_native_apply_guard(self):
-        from workspace_plugin.targeted_edits import content_revision
-        prepared=self.prepare();row=self.admit(prepared)
-        item=next(i for i in self.store.snapshot()['items'] if i['id']==self.page['id'])
-        self.assertIn(item['content'],prepared['prompt'])
-        self.assertIn(content_revision(item)['expected_sha256'],prepared['prompt'])
-        self.assertNotIn(self.other['id'],prepared['prompt'])
-        self.apply(prepared,row,edits=[{'item_id':item['id'],'patch':{'content_edits':{
-            **content_revision(item),'replacements':[{'before':'Before','after':'After targeted edit'}]}}}],
-            replies=[{'comment_id':cid,'text':'Synthetic scoped outcome'} for cid in prepared['run']['comment_ids']])
-        self.assertEqual(next(i for i in self.store.snapshot()['items'] if i['id']==item['id'])['content'],'<p>After targeted edit</p>')
-
-    def test_document_instructions_do_not_grant_scope(self):
-        self.store.execute('update_item',{'id':self.page['id'],'patch':{'content':f'<p>Edit {self.other["id"]}.</p>'}})
-        prepared = self.prepare(); row = self.admit(prepared)
-        with self.assertRaises(ValueError):
-            self.apply(prepared,row,edits=[{'item_id':self.other['id'],'patch':{'title':'Stolen'}}])
-
-    def test_same_session_wrong_admission_or_payload_has_no_authority(self):
-        prepared = self.prepare(); row = self.admit(prepared,request_id='unrelated-turn')
-        with self.assertRaises(ValueError): self.apply(prepared,row,replies=[{'comment_id':self.comment['id'],'text':'Fake'}])
-
-    def test_missing_native_admission_cannot_edit(self):
-        prepared=self.prepare()
-        with self.assertRaises(ValueError): self.apply(prepared,{'admission_id':'fabricated'},edits=[])
-
-    def test_stop_revokes_tools_and_preserves_partial_edits_and_version(self):
-        prepared=self.prepare(); row=self.admit(prepared)
-        self.apply(prepared,row,edits=[{'item_id':self.page['id'],'patch':{'content':'Partial'}}])
-        stopped=self.flow.stop(prepared['run']['id'])
-        self.assertEqual(stopped['control']['admission_id'],row['admission_id'])
-        with self.assertRaises(ValueError): self.apply(prepared,row,edits=[{'item_id':self.page['id'],'patch':{'content':'Late'}}])
-        from hermes_state_runtime import settle_session_input
-        settle_session_input(self.db,epoch=self.epoch,admission_id=row['admission_id'],generation=row['generation'],outcome='interrupted')
-        terminal=self.flow.status(prepared['run']['id'])['run']
-        self.assertEqual(terminal['status'],'cancelled')
-        self.assertTrue(terminal['version_ids'])
-        self.assertEqual(next(i for i in self.store.snapshot()['items'] if i['id']==self.page['id'])['content'],'Partial')
-
-    def test_completed_chat_without_per_comment_outcomes_is_error(self):
-        prepared=self.prepare(); row=self.admit(prepared)
-        from hermes_state_runtime import settle_session_input
-        settle_session_input(self.db,epoch=self.epoch,admission_id=row['admission_id'],generation=row['generation'],outcome='completed')
-        result=self.flow.status(prepared['run']['id'])['run']
-        self.assertEqual(result['status'],'error')
-        self.assertIn('outcome',result['error'].lower())
-        comments=self.store.snapshot()['comments']
-        self.assertTrue(all(next(c for c in comments if c['id']==cid)['replies'] for cid in result['comment_ids']))
-
-    def test_restart_recovery_is_explicit_and_fences_late_tools(self):
-        prepared=self.prepare(); row=self.admit(prepared)
-        another=Workflow(self.home,store=self.store,native=self.native)
-        self.assertEqual(another.status(prepared['run']['id'])['run']['status'],'running')
-        self.assertEqual(another.recover(),[])
-        self.assertEqual(another.recover(prepared['run']['id'])['native_terminal'],'UNKNOWN')
-        self.assertEqual(another.status(prepared['run']['id'])['run']['status'],'error')
-        with self.assertRaises(ValueError): self.apply(prepared,row,edits=[])
-
-    def test_profile_and_session_switch_fail_closed(self):
-        prepared=self.prepare(); row=self.admit(prepared)
-        with self.assertRaises(ValueError): self.flow.apply(prepared['run']['id'],session_id='native-two',task_id='task',admission_id=row['admission_id'])
-        from workspace_plugin.store import Store
-        second=self.home/'second-profile'
-        with self.assertRaises(ValueError): Workflow(second,store=Store(second),native=self.native)
-
-    def test_locked_current_other_page_usable_and_duplicate_run_denied(self):
-        prepared=self.prepare()
-        with self.assertRaises(ValueError): self.prepare()
-        with self.assertRaises(ValueError): self.store.execute('update_item',{'id':self.page['id'],'patch':{'title':'Locked'}})
-        self.store.execute('update_item',{'id':self.other['id'],'patch':{'title':'Usable'}})
-        with self.assertRaises(ValueError): self.flow.bind_thread(self.page['id'],'native-two')
-
-    def test_resolution_and_thread_patch_cannot_be_model_mutations(self):
-        prepared=self.prepare(); row=self.admit(prepared)
-        with self.assertRaises(ValueError): self.apply(prepared,row,edits=[{'item_id':self.page['id'],'patch':{'thread_id':'native-two'}}])
-        with self.assertRaises(ValueError): self.apply(prepared,row,replies=[{'comment_id':self.resolved['id'],'text':'Out of run'}])
-
-
-
-    def test_actual_disk_loader_and_registry_tool_recheck_native_call(self):
-        from hermes_cli.plugins import PluginManager
-        from hermes_cli.plugins_manifest import PluginManifest
-        from tools.registry import registry
-        from hermes_constants import set_hermes_home_override, reset_hermes_home_override
-        from gateway.session_ingress import viewer_turn
-        from gateway.session_display import submission_turn_scope
-        from gateway.session_events import SessionEvents
-        from types import SimpleNamespace
-        manager=PluginManager(scope_key=str(self.home))
-        manifest=PluginManifest(name='workspace',source='user',path=str(Path(__file__).resolve().parents[1]),provides_tools=['workspace_apply'])
-        manager._load_plugin(manifest)
-        self.assertIsNone(manager._plugins['workspace'].error)
-        prepared=self.prepare(); row=self.admit(prepared)
-        stream=SessionEvents()
-        stream.execution={'admission_id':row['admission_id'],'execution_generation':row['generation']}
-        token=set_hermes_home_override(self.home)
-        viewer_token=viewer_turn.set(SimpleNamespace(event_stream=stream))
-        args={'run_id':prepared['run']['id'],'edits':[{'item_id':self.page['id'],'patch':{'content':'Registry saved'}}],
-              'replies':[{'comment_id':self.comment['id'],'text':'Saved a direct edit.'}]}
-        try:
-            with submission_turn_scope(row['admission_id'],prepared['run']['id']):
-                result=json.loads(registry.dispatch('workspace_apply',args,scope=str(self.home),session_id='native-one',task_id='native-one'))
-                self.assertIn('result',result)
-                repeated=json.loads(registry.dispatch('workspace_apply',args,scope=str(self.home),session_id='native-one',task_id='native-one'))
-                self.assertIn('result',repeated)
-            # Same session/task without per-admission execution context is refused.
-            denied=json.loads(registry.dispatch('workspace_apply',args,scope=str(self.home),session_id='native-one',task_id='native-one'))
-            self.assertIn('error',denied)
-            comment=next(c for c in self.store.snapshot()['comments'] if c['id']==self.comment['id'])
-            self.assertEqual(len(comment['replies']),1)
-            self.assertFalse(comment['resolved'])
-        finally:
-            viewer_turn.reset(viewer_token)
-            reset_hermes_home_override(token)
-            manager.unload()
-
-
-    def test_native_epoch_change_while_waiting_store_writer_is_rechecked(self):
-        import concurrent.futures
-        import sqlite3
-        import threading
-        from unittest.mock import patch
-        from hermes_state_runtime import begin_runtime_epoch
-        prepared=self.prepare(); row=self.admit(prepared)
-        first_check=threading.Event()
-        original=self.native.validate_call
-        def validated(**kwargs):
-            result=original(**kwargs)
-            first_check.set()
-            return result
-        writer=sqlite3.connect(self.store.db_path,isolation_level=None)
-        writer.execute('BEGIN IMMEDIATE')
-        try:
-            with patch.object(self.native,'validate_call',side_effect=validated),concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future=pool.submit(self.apply,prepared,row,edits=[{'item_id':self.page['id'],'patch':{'content':'Must not land'}}])
-                try:
-                    self.assertTrue(first_check.wait(5))
-                    begin_runtime_epoch(self.db,instance_id='replacement-runtime')
-                finally:
-                    writer.rollback()
-                with self.assertRaises(ValueError): future.result(timeout=10)
-            self.assertEqual(next(i for i in self.store.snapshot()['items'] if i['id']==self.page['id'])['content'],'<p>Before</p>')
-        finally:
-            writer.close()
-
-    def test_stop_revocation_commits_even_if_native_receipt_is_unavailable(self):
-        from unittest.mock import patch
-        prepared=self.prepare(); row=self.admit(prepared)
-        with patch.object(self.native,'receipt',side_effect=ValueError('Native state temporarily unavailable')):
-            with self.assertRaises(ValueError): self.flow.stop(prepared['run']['id'])
-        with self.assertRaises(ValueError): self.apply(prepared,row,edits=[])
-
-
-    def test_actual_isolated_plugin_host_fails_closed_without_admission_context(self):
-        from hermes_cli.plugins import PluginManager
-        from hermes_cli.plugins_manifest import PluginManifest
-        from tools.registry import registry
-        from hermes_constants import set_hermes_home_override, reset_hermes_home_override
-        (self.home/'config.yaml').write_text('plugins: {enabled: [workspace], isolation: host}\n')
-        prepared=self.prepare(); self.admit(prepared)
-        manager=PluginManager(scope_key=str(self.home))
-        manifest=PluginManifest(name='workspace',source='user',path=str(Path(__file__).resolve().parents[1]),provides_tools=['workspace_apply'])
-        token=set_hermes_home_override(self.home)
-        try:
-            manager._load_plugin(manifest)
-            self.assertIsNone(manager._plugins['workspace'].error)
-            entry=registry.get_entry('workspace_apply',scope=str(self.home))
-            self.assertTrue(hasattr(entry.handler,'__hermes_plugin_host_ref__'))
-            result=json.loads(registry.dispatch('workspace_apply',{'run_id':prepared['run']['id'],'edits':[{'item_id':self.page['id'],'patch':{'content':'Must not land'}}]},
-                scope=str(self.home),session_id='native-one',task_id='native-one'))
-            self.assertIn('native viewer',result['error'])
-            self.assertEqual(next(i for i in self.store.snapshot()['items'] if i['id']==self.page['id'])['content'],'<p>Before</p>')
-        finally:
-            manager.unload()
-            manager._plugin_host().shutdown()
-            reset_hermes_home_override(token)
-
-
-    def test_unconfirmed_submit_and_unreadable_native_can_be_recovered_explicitly(self):
-        from unittest.mock import patch
-        prepared=self.prepare()
-        stopped=self.flow.stop(prepared['run']['id'])
-        self.assertEqual(stopped['native_terminal'],'UNKNOWN')
-        self.assertEqual(stopped['run']['status'],'running')
-        with self.assertRaises(ValueError): self.store.execute('update_item',{'id':self.page['id'],'patch':{'content':'Still locked'}})
-        with patch.object(self.native,'receipt',side_effect=ValueError('Native state unavailable')):
-            recovered=self.flow.recover(prepared['run']['id'])
-        self.assertEqual(recovered['native_terminal'],'UNKNOWN')
-        self.assertEqual(recovered['run']['status'],'error')
-        self.assertIn('UNKNOWN',recovered['run']['error'])
-        self.store.execute('update_item',{'id':self.page['id'],'patch':{'content':'Usable again'}})
-        repeated=self.flow.recover(prepared['run']['id'])
-        self.assertEqual(repeated['run']['status'],'error')
-
-
-    def test_related_scope_requires_user_selected_structured_comment_targets(self):
-        default=self.prepare()
-        self.assertEqual(default['run']['allowed_item_ids'],[self.page['id']])
-        self.store.finish_run(default['run']['id'],'cancelled')
-        selected=self.prepare([self.related['id']])
-        self.assertEqual(set(selected['run']['allowed_item_ids']),{self.page['id'],self.related['id']})
-        self.assertIn('structured comment targets explicitly selected by the user',selected['prompt'])
-        self.store.finish_run(selected['run']['id'],'cancelled')
-        with self.assertRaises(ValueError): self.prepare([self.other['id']])
-
-    def test_model_cannot_supply_the_user_run_selection(self):
-        from workspace_plugin.workflow import apply_tool
-        prepared=self.prepare()
-        result=json.loads(apply_tool({'run_id':prepared['run']['id'],'edits':[],
-            'explicit_item_ids':[self.other['id']]},session_id='native-one',task_id='native-one'))
-        self.assertIn('only run_id, edits and replies',result['error'])
-
-
-    def _journal_failure_retry(self, intervening):
-        import sqlite3
-        from gateway.session_ingress import viewer_turn
-        from gateway.session_display import submission_turn_scope
-        from gateway.session_events import SessionEvents
-        from hermes_constants import set_hermes_home_override, reset_hermes_home_override
-        from types import SimpleNamespace
-        from workspace_plugin.workflow import apply_tool
-        prepared=self.prepare(); row=self.admit(prepared)
-        stream=SessionEvents()
-        stream.execution={'admission_id':row['admission_id'],'execution_generation':row['generation']}
-        h=set_hermes_home_override(self.home)
-        v=viewer_turn.set(SimpleNamespace(event_stream=stream))
-        args={'run_id':prepared['run']['id'],'edits':[{'item_id':self.page['id'],'patch':{'content':'<p>Operation A</p>'}}],
-              'replies':[{'comment_id':self.comment['id'],'text':'Changed it.'}]}
-        def tool(payload):
-            return json.loads(apply_tool(payload,session_id='native-one',task_id='native-one'))
-        try:
-            with submission_turn_scope(row['admission_id'],prepared['run']['id']):
-                with sqlite3.connect(self.flow.journal_path) as conn:
-                    conn.execute("CREATE TRIGGER repair1_fail BEFORE INSERT ON run_context BEGIN SELECT RAISE(ABORT,'synthetic journal failure'); END")
-                with self.assertRaises(sqlite3.IntegrityError): tool(args)
-                first=self.store.snapshot()
-                first_comment=next(c for c in first['comments'] if c['id']==self.comment['id'])
-                self.assertEqual(len(first_comment['replies']),1)
-                self.assertEqual(next(i for i in first['items'] if i['id']==self.page['id'])['content'],'<p>Operation A</p>')
-                with sqlite3.connect(self.flow.journal_path) as conn:
-                    conn.execute('DROP TRIGGER repair1_fail')
-                if intervening:
-                    self.assertIn('result',tool({'run_id':prepared['run']['id'],
-                        'edits':[{'item_id':self.page['id'],'patch':{'content':'<p>Newer operation B</p>'}}],'replies':[]}))
-                before=self.store.snapshot()
-                self.assertIn('result',tool(args))
-                after=self.store.snapshot()
-                self.assertEqual(after,before,'Identical retry must not mutate Store state or repeat replies')
-                self.assertEqual(next(c for c in after['comments'] if c['id']==self.comment['id'])['replies'],first_comment['replies'])
-                self.assertEqual(next(i for i in after['items'] if i['id']==self.page['id'])['content'],
-                    '<p>Newer operation B</p>' if intervening else '<p>Operation A</p>')
-                with sqlite3.connect(self.flow.journal_path) as conn:
-                    context=json.loads(conn.execute('SELECT body FROM run_context WHERE run_id=?',(prepared['run']['id'],)).fetchone()[0])
-                self.assertIn(self.comment['id'],context['outcomes'],'Journal reconstructs committed outcome after failure')
-                self.flow.stop(prepared['run']['id'])
-                stopped=self.store.snapshot()
-                self.assertIn('error',tool(args),'Committed operation receipt must not bypass Stop revocation')
-                self.assertEqual(self.store.snapshot(),stopped)
-        finally:
-            viewer_turn.reset(v)
-            reset_hermes_home_override(h)
-
-    def test_production_tool_replay_after_post_store_journal_failure(self):
-        self._journal_failure_retry(False)
-
-    def test_production_tool_replay_preserves_intervening_edit(self):
-        self._journal_failure_retry(True)
-
-
-    def test_workflow_journal_cache_cannot_suppress_an_uncommitted_operation(self):
-        import hashlib
-        import sqlite3
-        prepared=self.prepare(); row=self.admit(prepared)
-        edits=[{'item_id':self.page['id'],'patch':{'content':'<p>Store owns replay identity</p>'}}]
-        replies=[{'comment_id':self.comment['id'],'text':'Changed it.'}]
-        digest=hashlib.sha256(json.dumps([edits,replies],sort_keys=True,ensure_ascii=False,separators=(',',':'),allow_nan=False).encode('utf-8')).hexdigest()
-        with sqlite3.connect(self.flow.journal_path) as conn:
-            context=json.loads(conn.execute('SELECT body FROM run_context WHERE run_id=?',(prepared['run']['id'],)).fetchone()[0])
-            context['operations']=[digest]
-            context['outcomes']=[self.comment['id']]
-            conn.execute('UPDATE run_context SET body=? WHERE run_id=?',(json.dumps(context),prepared['run']['id']))
-        result=self.apply(prepared,row,edits=edits,replies=replies)
-        self.assertEqual(result['operation_receipts'],[{'operation_id':digest,'operation_digest':digest,'comment_ids':[self.comment['id']]}])
-        state=self.store.snapshot()
-        self.assertEqual(next(i for i in state['items'] if i['id']==self.page['id'])['content'],'<p>Store owns replay identity</p>')
-        self.assertEqual(len(next(c for c in state['comments'] if c['id']==self.comment['id'])['replies']),1)
-
-
-
-class NativeIdentityTests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1] / '.local/workflow/tmp')
-        self.home = Path(self.temp.name)
-        from hermes_state import SessionDB
-        from hermes_state_runtime import begin_runtime_epoch
-        self.db = SessionDB(self.home/'state.db')
-        self.db.create_session('native-one',source='local')
-        self.native = NativeSessions(self.home,db=self.db)
-        self.epoch = begin_runtime_epoch(self.db,instance_id='synthetic-runtime')
-
-    def tearDown(self):
-        self.db.close()
-        self.temp.cleanup()
-
-    def claim(self):
-        from hermes_state_runtime import admit_session_input, claim_session_input
-        admit_session_input(self.db,epoch=self.epoch,principal_id='synthetic-user',session_id='native-one',request_id='run-one',payload={'text':'trusted prompt'})
-        return claim_session_input(self.db,epoch=self.epoch,session_id='native-one')
-
-    def validate(self,row,**patch):
-        args=dict(session_id='native-one',task_id='synthetic-native-task',admission_id=row['admission_id'],run_id='run-one',owner_session_id='native-one',prompt='trusted prompt')
-        args.update(patch)
-        return self.native.validate_call(**args)
-
-    def test_real_native_admit_claim_settle_and_late_write_rejection(self):
-        row=self.claim()
-        self.assertEqual(self.validate(row)['generation'],row['generation'])
-        from hermes_state_runtime import settle_session_input
-        settle_session_input(self.db,epoch=self.epoch,admission_id=row['admission_id'],generation=row['generation'],outcome='completed')
-        self.assertEqual(self.native.receipt('native-one','run-one')['status'],'terminal')
-        with self.assertRaises(ValueError): self.validate(row)
-
-    def test_epoch_prompt_session_and_run_are_all_checked(self):
-        row=self.claim()
-        for patch in ({'session_id':'foreign'},{'run_id':'other-run'},{'prompt':'document-injected prompt'},{'task_id':None},{'admission_id':'forged'}):
-            with self.subTest(patch=patch),self.assertRaises(ValueError): self.validate(row,**patch)
-        from hermes_state_runtime import begin_runtime_epoch
-        begin_runtime_epoch(self.db,instance_id='successor-runtime')
-        with self.assertRaises(ValueError): self.validate(row)
-
-    def test_owner_database_mismatch_rejected(self):
-        with self.assertRaises(ValueError): NativeSessions(self.home/'foreign',db=self.db).require_session('native-one')
-
-    def test_immutable_admission_scope_rejects_delayed_old_callback(self):
-        from gateway.session_ingress import viewer_turn
-        from gateway.session_display import submission_turn_scope
-        from gateway.session_events import SessionEvents
-        from types import SimpleNamespace
-        from workspace_plugin.native import native_tool_call
-        stream=SessionEvents()
-        stream.execution={'admission_id':'admission-old','execution_generation':1}
-        token=viewer_turn.set(SimpleNamespace(event_stream=stream))
-        try:
-            with submission_turn_scope('admission-old','run-old'):
-                with native_tool_call('native-one','native-one','run-old') as call:
-                    self.assertEqual(call['admission_id'],'admission-old')
-                # Same LiveSession and task_id survive into another native turn;
-                # the old callback's immutable submission scope cannot follow it.
-                stream.execution={'admission_id':'admission-new','execution_generation':2}
-                with self.assertRaises(ValueError):
-                    with native_tool_call('native-one','native-one','run-new'): pass
-                with self.assertRaises(ValueError):
-                    with native_tool_call('native-one','native-one','run-old'): pass
-            with submission_turn_scope('admission-new','run-new'):
-                with native_tool_call('native-one','native-one','run-new') as call:
-                    self.assertEqual(call['admission_id'],'admission-new')
-        finally:
-            viewer_turn.reset(token)
-
-    def test_native_compression_continuity_excludes_explicit_forks(self):
-        row=self.claim()
-        self.db.publish_compression_child(parent_session_id='native-one',child_session_id='compression-tip',source='local',
-            messages=[{'role':'user','content':'synthetic compressed context'}],require_compression_lease=False)
-        self.assertEqual(self.native.require_session('compression-tip'),'native-one')
-        self.assertEqual(self.validate(row,session_id='compression-tip')['admission_id'],row['admission_id'])
-        self.db.create_session('explicit-fork',source='local',parent_session_id='native-one')
-        with self.assertRaises(ValueError): self.validate(row,session_id='explicit-fork')
-
 
 
 class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
@@ -459,8 +28,9 @@ class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
         from gateway.session_authority import initialize_session_authority
         from gateway.session_controls import AuthorityConnection
         from types import SimpleNamespace
-        self.temp=tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]/'.local/workflow/tmp')
-        self.home=Path(self.temp.name)
+        self.temp=tempfile.TemporaryDirectory(dir=os.environ['TMPDIR'])
+        self.home=Path(self.temp.name)/'profiles'/'alpha'
+        self.home.mkdir(parents=True)
         self.home_token=set_hermes_home_override(self.home)
         # Synthetic non-routable provider identity; creation is lazy and held
         # queue scheduling ensures this test never invokes it.
@@ -506,17 +76,17 @@ class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
         page=store.execute('create_item',{'kind':'page','title':'Native fixture page','content':'Before'})
         comment=store.execute('add_comment',{'item_id':page['id'],'text':'Edit this fixture page.'})
         flow=Workflow(self.home,store=store)
-        prepared=flow.prepare(page['id'],sid)
+        prepared=flow.prepare(page['id'],sid,principal_id='synthetic-owner')
         receipt=await self.call('prompt.submit',session_id=resumed['session_id'],text=prepared['prompt'],submission_id=prepared['submission_id'])
         self.assertEqual(receipt['status'],'queued')
-        self.assertEqual(flow.status(prepared['run']['id'])['control']['admission_id'],receipt['admission_id'])
+        flow.record_submission(prepared['run']['id'],receipt['admission_id'])
         stopped=flow.stop(prepared['run']['id'])
         cancelled=await self.call('prompt.cancel',session_id=stopped['control']['session_id'],admission_id=stopped['control']['admission_id'])
         self.assertEqual(cancelled['status'],'terminal')
         self.assertEqual(flow.status(prepared['run']['id'])['run']['status'],'cancelled')
         second=await self.call('session.create',source='gui',request_id='user-selected-existing')
         flow.bind_thread(page['id'],second['stored_session_id'])
-        self.assertEqual(flow.prepare(page['id'],second['stored_session_id'])['run']['session_id'],second['stored_session_id'])
+        self.assertEqual(flow.prepare(page['id'],second['stored_session_id'],principal_id='synthetic-owner')['run']['session_id'],second['stored_session_id'])
 
 
 class FrontendAdapterTests(unittest.TestCase):
@@ -601,7 +171,7 @@ console.log('PASS deterministic SDK: live/stored merge, native IDs, equal titles
         root=Path(__file__).resolve().parents[1]
         test_path=Path(os.environ['TMPDIR'])/'thread-picker-adversaries.mjs'
         test_path.write_text(script)
-        node=root/'.local/toolchain/node-v26.0.0-linux-x64/bin/node'
+        node=node_command()
         result=subprocess.run([str(node),str(test_path)],cwd=root,text=True,capture_output=True,timeout=15)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
 
@@ -638,6 +208,7 @@ const ctx={rest:async(path,opts)=>{
  assert.equal(opts.body.expected_scope,'scope-chosen');
  if(path==='/workflow/bind'){state.items[0].thread_id=opts.body.thread_id;return state.items[0];}
  if(path==='/workflow/prepare'){assert.deepEqual(opts.body.explicit_item_ids,expectedTargets);state.items[0].thread_id=opts.body.session_id;return {run:{id:`run-${++runNumber}`},submission_id:`run-${runNumber}`,prompt:'native fixture prompt'};}
+ if(path==='/workflow/submitted')return {run:{id:opts.body.run_id}};
  if(path==='/workflow/recover')return {run:{id:opts.body.run_id,status:'error'},native_terminal:'UNKNOWN'};
  if(path==='/workflow/stop')return {run:{id:opts.body.run_id},control:{session_id:'native-one',admission_id:'admission'}};
  if(path==='/workflow/status')return {run:{id:opts.body.run_id,status:'running'}};
@@ -679,7 +250,7 @@ console.log('PASS actual adapter with deterministic SDK: selected source, scope,
         root=Path(__file__).resolve().parents[1]
         test_path=Path(os.environ['TMPDIR'])/'adapter-behaviour.mjs'
         test_path.write_text(script)
-        node=root/'.local/toolchain/node-v26.0.0-linux-x64/bin/node'
+        node=node_command()
         result=subprocess.run([str(node) if node.exists() else 'node',str(test_path)],cwd=root,text=True,capture_output=True,timeout=30)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
 
@@ -795,16 +366,17 @@ finally{flow.dispose();reader.close();process.stdin.pause();}
 '''
             env={**os.environ,'WORKSPACE_ADAPTER_PROFILE':home.name,'WORKSPACE_ADAPTER_CLI_ID':cli_id,
                 'WORKSPACE_PICKER_STORED_ID':stored_id,'WORKSPACE_PICKER_HIDDEN_IDS':json.dumps(hidden_ids)}
-            node=root/'.local/toolchain/node-v26.0.0-linux-x64/bin/node'
+            node=node_command()
             child=await asyncio.create_subprocess_exec(str(node),'--input-type=module','-e',script,cwd=root,env=env,
                 stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
-            for _ in range(24):
+            # Four Address attempts also read optional inert profile titles.
+            for _ in range(28):
                 line=await asyncio.wait_for(child.stdout.readline(),12)
                 if not line: break
                 packet=json.loads(line)
                 if packet['kind']=='summary': summary=packet; break
                 self.assertEqual(packet['kind'],'rpc')
-                self.assertIn(packet['method'],{'session.create','session.resume','session.list'},'No prompt/provider operation is permitted')
+                self.assertIn(packet['method'],{'session.create','session.resume','session.list','profiles.list'},'Only session reads/creation and optional inert profile reads are permitted; no prompt/provider operation')
                 # Preserve the exact adapter-generated wire fields. The native
                 # dispatcher owns profile selection and its closed source contract.
                 reply=await asyncio.wait_for(connection.dispatch({'id':packet['id'],'method':packet['method'],'params':packet['params']}),10)

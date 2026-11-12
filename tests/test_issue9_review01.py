@@ -1,4 +1,5 @@
 """F006-F008 regressions against real Store/SQLite; external synthetic state."""
+from host_auth import host_auth
 import copy
 import json
 import os
@@ -196,7 +197,7 @@ class Review01(unittest.TestCase):
         envelope={'format':'workspace-backup','version':1,'snapshot':bad,'sha256':hashlib.sha256(_json_bytes(bad)).hexdigest()}
         data=io.BytesIO()
         with zipfile.ZipFile(data,'w',zipfile.ZIP_STORED)as archive:archive.writestr('snapshot.json',_json_bytes(envelope))
-        app=FastAPI();app.include_router(create_router(lambda:self.home),prefix='/api')
+        app=FastAPI();app.include_router(create_router(lambda:self.home,authorize=host_auth),prefix='/api')
         with TestClient(with_hosted_admission(app,True))as client:
             before=client.get('/api/state').json();raw=self.store.backup_snapshot()
             payload={'data_base64':base64.b64encode(data.getvalue()).decode(),'expected_scope':before['scope_id'],'expected_revision':before['revision'],'restore_id':'a'*32,'include_state':False}

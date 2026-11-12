@@ -35,31 +35,25 @@ def _valid_agent_name(value):
 def agent_display(value, profile):
     """Bound native display data without throwing away a known executor."""
     value = value.strip() if isinstance(value, str) else ''
-    return value if _valid_agent_name(value) else f'{profile} (display name unavailable)'
+    return value if _valid_agent_name(value) else profile
 
 
-def executor(home: Path):
-    """Capture ONLY the admitted executing home's host-internal structured metadata.
+def executor(home: Path, display_title=None):
+    """Server identity plus inert title captured from the admitted Desktop route.
 
-    Host-internal helpers retain catalogue rule 9 coupling; this is not a
-    qualified public server metadata contract. The task-profile helper is
-    checked against this exact home; launch
-    pins/ambient active selection cannot relabel a differently scoped executor.
-    No roster, free-form persona, model, credentials or image files are read.
-    Images use the supported SDK avatar route, separately fenced by this source.
+    A title never selects the home, canonical profile, source, role or rights.
+    No profile metadata file or ambient selected profile is consulted.
     """
-    try:
-        from hermes_cli.profiles import current_profile_name, profile_matches_home, read_profile_meta
-        profile = current_profile_name()
-        if not profile or not profile_matches_home(profile, home):
-            return None
-        meta = read_profile_meta(home)
-        name = agent_display(meta.get('bot_title') or meta.get('display_name') or profile, profile)
-        source = human_id(home)
-        return {'kind':'agent', 'id':hashlib.sha256((source + ':' + profile).encode()).hexdigest(),
-                'name':name, 'profile':profile, 'source_id':source, 'avatar_eligible':True}
-    except (ImportError, OSError, ValueError, TypeError):
-        return None
+    from hermes_constants import profile_name_for_home
+    profile = profile_name_for_home(home)
+    if not profile:
+        raise ValueError('Canonical executor profile is unavailable.')
+    source = human_id(home)
+    result = {'kind':'agent', 'id':hashlib.sha256((source + ':' + profile).encode()).hexdigest(),
+              'name':agent_display(display_title, profile), 'profile':profile,
+              'source_id':source, 'avatar_eligible':True}
+    validate(result, 'agent')
+    return result
 
 
 def validate(value, kind=None):

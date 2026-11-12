@@ -1,7 +1,7 @@
+import { SelectTrigger, Select, SelectContent, Dialog, DialogContent } from "./owned-popups.jsx";
 /** Standalone: the original integration owner wires navigation/draft hooks. */
 import { createElement as h, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@hermes/plugin-sdk';
+import { Button, Input, SelectValue, SelectItem, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@hermes/plugin-sdk";
 import { executorChoice } from './profile-workspaces.mjs';
 import { profileWorkspacesStyles } from './profile-workspaces-styles.mjs';
 

@@ -12,14 +12,23 @@ for (const name of ['home', 'hermes', 'tmp', 'cache', 'runtime'])
 const env = {
   PATH: process.env.PATH ?? '/usr/bin:/bin',
   LANG: process.env.LANG ?? 'C.UTF-8',
-  HWS_QUALIFICATION_HOME: process.env.HWS_QUALIFICATION_HOME ?? fixture,
+  // The per-run child HOME/TMPDIR and fixture evidence share one private root.
+  // The parent TMPDIR already confines this directory to the caller's task.
+  HWS_QUALIFICATION_HOME: fixture,
+  HWS_PRIVATE_RUNTIME_ROOT: process.env.HWS_PRIVATE_RUNTIME_ROOT ?? fixture,
   ISSUE4_OUT: fixture,
+  ISSUE9_EVIDENCE: fixture,
+  HWS_PYTHON: process.env.HWS_PYTHON ?? 'python3',
+  HWS_UI_RUNTIME_ROOT: process.env.HWS_UI_RUNTIME_ROOT ?? path.join(fixture, 'frontend'),
+  ...(process.env.HWS_NATIVE_DESKTOP_SOURCE ? {HWS_NATIVE_DESKTOP_SOURCE: process.env.HWS_NATIVE_DESKTOP_SOURCE} : {}),
+  HOME: path.join(fixture, 'home'),
   HERMES_HOME: path.join(fixture, 'hermes'),
+  XDG_RUNTIME_DIR: path.join(fixture, 'runtime'),
   TMPDIR: path.join(fixture, 'tmp'),
   XDG_CACHE_HOME: path.join(fixture, 'cache'),
   HERMES_RUNTIME_DIR: path.join(fixture, 'runtime'),
   PYTHONDONTWRITEBYTECODE: '1',
-  PYTHONPATH: [root, path.join(root, 'tests')].join(path.delimiter),
+  PYTHONPATH: process.env.PYTHONPATH ?? [root, path.join(root, 'tests')].join(path.delimiter),
 };
 function run(args) {
   const result = spawnSync(process.execPath, args, {

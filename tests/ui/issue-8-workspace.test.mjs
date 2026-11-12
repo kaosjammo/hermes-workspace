@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 // Full production Workspace wiring; synthetic DOM/transport, not native acceptance.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,7 +15,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 window.Range.prototype.getClientRects = function () {
   return [{ top: this.startOffset * 30, bottom: this.startOffset * 30 + 20, left: 10, right: 210, width: 200, height: 20 }];
 };
-const { Workspace, createElement: h, createRoot, act } = await import('../../.local/frontend/ui-runtime.mjs');
+const { Workspace, createElement: h, createRoot, act } = await import(frontendRuntime('ui-runtime.mjs'));
 const root = createRoot(document.querySelector('#app'));
 const tick = () => act(() => new Promise(resolve => setTimeout(resolve, 30)));
 const click = async node => { assert.ok(node); await act(async () => node.click()); await tick(); };

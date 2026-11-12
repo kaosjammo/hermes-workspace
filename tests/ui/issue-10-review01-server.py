@@ -3,6 +3,7 @@
 Reuse only the originating fixture code. All state/assets live in this run's
 qualification packet, never the original contribution's immutable evidence.
 """
+from host_auth import host_auth
 import json
 import os
 from pathlib import Path
@@ -52,7 +53,7 @@ if not any(r['text']=='Long native recorded response'for r in comment['replies']
     run=store.begin_run(page['id'],'synthetic-recorded-native',executor_identity=author)
     store.apply_run(run['id'],[],[{'comment_id':cid,'text':'Long native recorded response' if cid==comment['id'] else 'Independent captured outcome'}for cid in run['comment_ids']]);store.finish_run(run['id'],'completed')
 
-app.include_router(create_router(lambda:base/'profiles'/selected.get(),shared_root=out/'shared-store'),prefix='/shared-api')
+app.include_router(create_router(lambda:base/'profiles'/selected.get(),authorize=host_auth,shared_root=out/'shared-store'),prefix='/shared-api')
 @app.get('/fixture/review01')
 def config():return {'project_id':project_id,'long_agent_name':long_name}
 app.routes.append(static)

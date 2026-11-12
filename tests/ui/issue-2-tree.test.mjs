@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -9,7 +10,7 @@ globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.win
 globalThis.cancelAnimationFrame = dom.window.cancelAnimationFrame.bind(dom.window);
 globalThis.getSelection = () => dom.window.getSelection();
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-const { Workspace, createElement: h, createRoot, act } = await import('../../.local/frontend/ui-runtime.mjs');
+const { Workspace, createElement: h, createRoot, act } = await import(frontendRuntime('ui-runtime.mjs'));
 const root = createRoot(document.querySelector('#app'));
 const tick = (ms = 0) => act(() => new Promise(resolve => setTimeout(resolve, ms)));
 const button = name => [...document.querySelectorAll('button')].find(node => (node.getAttribute('aria-label') ?? node.textContent) === name);
