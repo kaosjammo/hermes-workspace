@@ -2,17 +2,23 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { activateWorkspaceBackend } from '../../frontend/backend-activation.mjs';
 
-function fixture({ enabled = false, decision = true, routes, reply } = {}) {
-  let profile = 'writer', connectionId = 'local', epoch = 1, dispose;
+function fixture({ enabled = false, decision = true, routes, reply, starting = false } = {}) {
+  let profile = starting ? '' : 'writer', connectionId = starting ? null : 'local', epoch = 1, dispose;
   const calls = [];
-  const route = { connectionId, profile, targetProfile: 'writer-backend', mode: 'local' };
+  const route = { connectionId: 'local', profile: 'writer', targetProfile: 'writer-backend', mode: 'local' };
+  const listeners = new Set();
+  let gateway = starting ? 'idle' : 'open';
+  const atom = get => ({ get, subscribe(fn) { listeners.add(fn); fn(); return () => listeners.delete(fn); } });
+  const notify = () => { for (const fn of [...listeners]) fn(); };
   const ctx = { onDispose(fn) { dispose = fn; } };
   const row = () => ({ plugins: [{ key: 'workspace', status: enabled ? 'enabled' : 'disabled' }] });
   const host = {
     activeConnectionId: () => connectionId,
-    state: { profile: { get: () => profile } },
+    state: { profile: atom(() => profile), connectionId: atom(() => connectionId), gateway: atom(() => gateway) },
     pluginDecisions: { get: () => ({ workspace: decision }) },
-    profileRoutes: async () => routes ?? [route],
+    profileRoutes: async () => typeof routes === 'function' ? routes() : routes ?? [{
+      ...route, connectionId, profile, targetProfile: profile === 'writer' ? 'writer-backend' : profile + '-backend',
+    }],
     requestProfile: async (captured, method, params) => {
       calls.push({ route: captured, method, params });
       const custom = await reply?.(params, calls.length);
@@ -23,9 +29,44 @@ function fixture({ enabled = false, decision = true, routes, reply } = {}) {
     },
   };
   return { ctx, host, calls, route, run: () => activateWorkspaceBackend(ctx, host, () => epoch),
+    listeners,
+    connect() { connectionId = 'local'; profile = 'writer'; epoch++; gateway = 'connecting'; notify(); },
+    ready() { gateway = 'open'; notify(); },
     dispose: () => dispose(), switchProfile: () => { profile = 'other'; },
     switchConnection: () => { connectionId = 'remote'; }, restart: () => { epoch++; } };
 }
+
+test('cold startup waits for profile and gateway readiness before checking the backend', async () => {
+  const f = fixture({ starting: true, enabled: true });
+  const activation = f.run();
+  // Observe a rejection immediately so the pre-fix regression has a clean failure.
+  const result = activation.then(value => ({ value }), error => ({ error }));
+  await Promise.resolve();
+  assert.equal(f.calls.length, 0);
+  f.connect();
+  await Promise.resolve();
+  assert.equal(f.calls.length, 0, 'profile hydration must not race gateway startup');
+  f.ready();
+  const settled = await result;
+  assert.equal(settled.error, undefined);
+  assert.equal(settled.value, true);
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.listeners.size, 0);
+});
+
+test('turning Workspace off while startup is pending releases listeners and never activates later', async () => {
+  const f = fixture({ starting: true });
+  const activation = f.run();
+  const result = activation.then(value => ({ value }), error => ({ error }));
+  f.dispose();
+  f.connect();
+  f.ready();
+  const settled = await result;
+  assert.equal(settled.error, undefined);
+  assert.equal(settled.value, false);
+  assert.deepEqual(f.calls, []);
+  assert.equal(f.listeners.size, 0);
+});
 
 test('Desktop On enables Workspace through admitted RPC and confirms the captured profile', async () => {
   const f = fixture();
@@ -98,12 +139,42 @@ test('missing dependencies require restart rather than reporting availability', 
   assert.equal(f.calls.length, 2);
 });
 
-test('profile, connection and gateway changes before admission prevent all writes', async () => {
+test('profile, connection and gateway changes during inventory restart only the read checks', async () => {
   for (const change of ['switchProfile', 'switchConnection', 'restart']) {
-    const f = fixture({ reply: (_params, call) => { if (call === 1) f[change](); } });
-    await assert.rejects(f.run(), /changed while enabling/);
-    assert.equal(f.calls.length, 1);
+    const f = fixture({ enabled: true, reply: (_params, call) => { if (call === 1) f[change](); } });
+    assert.equal(await f.run(), true);
+    assert.deepEqual(f.calls.map(call => call.params.action), ['list', 'list']);
+    assert.equal(f.calls[1].route.profile, f.host.state.profile.get());
+    assert.equal(f.calls[1].route.connectionId, f.host.activeConnectionId());
   }
+});
+
+test('native startup source replacement while profileRoutes is pending captures the new epoch automatically', async () => {
+  const f = fixture({ enabled: true });
+  const routes = f.host.profileRoutes;
+  let inventories = 0;
+  f.host.profileRoutes = async () => {
+    const result = await routes();
+    if (++inventories === 1) f.restart();
+    return result;
+  };
+  assert.equal(await f.run(), true);
+  assert.equal(inventories, 2);
+  assert.deepEqual(f.calls.map(call => call.params.action), ['list']);
+});
+
+test('failed read from a replaced startup source is discarded before trying the current source', async () => {
+  const f = fixture({ enabled: true, reply: (_params, call) => {
+    if (call === 1) { f.restart(); throw new Error('Old source closed'); }
+  } });
+  assert.equal(await f.run(), true);
+  assert.deepEqual(f.calls.map(call => call.params.action), ['list', 'list']);
+});
+
+test('read error from the current source surfaces without an automatic retry', async () => {
+  const f = fixture({ reply: () => { throw new Error('Current source unavailable'); } });
+  await assert.rejects(f.run(), /Current source unavailable/);
+  assert.equal(f.calls.length, 1);
 });
 
 test('profile change during admission prevents follow-up publication in a new owner', async () => {

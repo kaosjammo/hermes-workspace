@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test, after, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -32,7 +33,7 @@ const {
   switchProfile,
   switchConnection,
   advanceEpoch,
-} = await import("../../.local/frontend/ui-runtime.mjs");
+} = await import(frontendRuntime('ui-runtime.mjs'));
 const root = createRoot(document.querySelector("#app"));
 const tick = (ms) => act(() => new Promise((r) => setTimeout(r, ms ?? 0)));
 const button = (text) =>

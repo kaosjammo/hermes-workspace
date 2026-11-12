@@ -2,8 +2,18 @@ import { useId, useLayoutEffect, useRef, useState } from "react";
 import { h, Action, ActionMenu } from "./ui.jsx";
 import { locateAnchor, elementScale } from "./editor.mjs";
 
+/** Display ordinals are derived before filtering, never persisted as identity.
+ * Keep a supplied ordinal when a consumer receives an already filtered view. */
+export function numberComments(comments) {
+  return comments.map((comment, index) => ({
+    ...comment,
+    passageNumber: Number.isSafeInteger(comment.passageNumber) && comment.passageNumber > 0
+      ? comment.passageNumber : index + 1,
+  }));
+}
+
 /** Translate textContent offsets to live ranges without changing editor nodes. */
-export function anchorRange(root, anchor) {
+function textRange(root, anchor) {
   const location = locateAnchor(root.textContent, anchor);
   if (location.status !== "attached") return null;
   const walker = root.ownerDocument.createTreeWalker(root, 4);
@@ -28,6 +38,36 @@ export function anchorRange(root, anchor) {
   return range;
 }
 
+/** Addressed feedback paints complete reading blocks. Stored quotes stay exact. */
+export function anchorRanges(root, anchor) {
+  if (locateAnchor(root.textContent, anchor).status !== "attached") return [];
+  const ranges = (anchor.ranges ?? [anchor]).map(value => textRange(root, value));
+  if (!ranges.every(Boolean)) return [];
+  if (!anchor.paragraphs) return ranges;
+  const selector = "p,li,h1,h2,h3,h4,h5,h6,blockquote,pre,td,th";
+  const blocks = [...root.querySelectorAll(selector)].filter(block => !block.querySelector(selector));
+  const expanded = new Map(), loose = [];
+  for (const range of ranges) {
+    let found = false;
+    for (const block of blocks) {
+      const contents = root.ownerDocument.createRange();
+      contents.selectNodeContents(block);
+      // Strict intersection avoids painting an adjacent paragraph at a shared
+      // endpoint. Compare text ranges, so inline marks never split a paragraph.
+      if (!block.textContent || range.compareBoundaryPoints(range.END_TO_START, contents) >= 0 || range.compareBoundaryPoints(range.START_TO_END, contents) <= 0) continue;
+      expanded.set(block, contents);
+      found = true;
+    }
+    if (!found) loose.push(range);
+  }
+  return [...expanded.values(), ...loose].sort((a,b) => a.compareBoundaryPoints(0,b));
+}
+
+/** Navigation and inline discussion slots use the first highlighted paragraph. */
+export function anchorRange(root, anchor) {
+  return anchor?.paragraphs ? anchorRanges(root, anchor)[0] ?? null : textRange(root, anchor);
+}
+
 /** CSS highlights and gutter controls are presentation only, never saved HTML. */
 export function CommentHighlights({
   editorRef,
@@ -46,7 +86,7 @@ export function CommentHighlights({
     [openGroup, setOpenGroup] = useState(null);
   const selectedDiscussion = useRef(false);
   const signature = JSON.stringify(
-    comments.map((c) => [c.id, c.anchor, c.resolved]),
+    comments.map((c) => [c.id, c.anchor, c.resolved, c.passageNumber, c.text]),
   );
   useLayoutEffect(() => {
     const root = editorRef.current;
@@ -65,13 +105,12 @@ export function CommentHighlights({
       const base = root.parentElement.getBoundingClientRect();
       const layoutRoot = root.closest(".ws-layout") ?? root.parentElement;
       const layout = layoutRoot.getBoundingClientRect(), scale = elementScale(layoutRoot);
-      current = comments
+      current = numberComments(comments)
         .filter((c) => c.anchor)
-        .map((c, index) => ({
-          comment: c,
-          number: index + 1,
-          range: anchorRange(root, c.anchor),
-        }))
+        .map((c) => {
+          const ranges = anchorRanges(root, c.anchor);
+          return { comment: c, number: c.passageNumber, ranges, range: ranges[0] };
+        })
         .filter((c) => c.range);
       if (registry && globalThis.Highlight) {
         // Native ::selection paints the full line box, including space reserved
@@ -85,17 +124,17 @@ export function CommentHighlights({
         const selected = new Highlight(...(decoratedSelection ? [selection.getRangeAt(0).cloneRange()] : []));
         selected.priority = 10;
         registry.set(token + "-selection", selected);
-        registry.set(token, new Highlight(...current.map((c) => c.range)));
+        registry.set(token, new Highlight(...current.flatMap((c) => c.ranges)));
         registry.set(
           token + "-hover",
-          new Highlight(...current.filter(c => c.comment.id === hovered).map(c => c.range)),
+          new Highlight(...current.filter(c => c.comment.id === hovered).flatMap(c => c.ranges)),
         );
         registry.set(
           token + "-active",
           new Highlight(
             ...current
               .filter((c) => c.comment.id === active)
-              .map((c) => c.range),
+              .flatMap((c) => c.ranges),
           ),
         );
         const draft = pendingAnchor && anchorRange(root, pendingAnchor);
@@ -169,8 +208,8 @@ export function CommentHighlights({
     root.ownerDocument.addEventListener("selectionchange", schedule);
     root.addEventListener("load", schedule, true);
     const hit = (event) =>
-      current.filter(({ range }) =>
-        [...(range.getClientRects?.() ?? [])].some(
+      current.filter(({ ranges }) =>
+        ranges.flatMap(range => [...(range.getClientRects?.() ?? [])]).some(
           (r) =>
             event.clientX >= r.left &&
             event.clientX <= r.right &&
@@ -197,7 +236,7 @@ export function CommentHighlights({
       if (registry && globalThis.Highlight)
         registry.set(
           token + "-hover",
-          new Highlight(...(match ? [match.range] : [])),
+          new Highlight(...(match ? match.ranges : [])),
         );
     };
     root.addEventListener("click", click);

@@ -10,10 +10,11 @@ await esbuild.build({
   platform: "node",
   format: "esm",
   jsx: "automatic",
-  outfile: ".local/frontend/repair-1/native-runtime.mjs",
+  outfile: path.join(process.env.HWS_UI_RUNTIME_ROOT ?? ".local/frontend", "repair-1/native-runtime.mjs"),
   alias: {
     "@hermes/plugin-sdk": path.resolve("tests/ui/native-sdk-fixture.jsx"),
-    "@": path.resolve(".local/host/.build/webapp-workspace/apps/desktop/src"),
+    "@": path.resolve(process.env.HWS_NATIVE_DESKTOP_SOURCE ?? ".local/host/.build/webapp-workspace/apps/desktop/src"),
+    "@workspace-test-native": path.resolve(process.env.HWS_NATIVE_DESKTOP_SOURCE ?? ".local/host/.build/webapp-workspace/apps/desktop/src"),
     react: path.dirname(require.resolve("react/package.json")),
     "react-dom": path.dirname(require.resolve("react-dom/package.json")),
   },

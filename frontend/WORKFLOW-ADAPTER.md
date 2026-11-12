@@ -6,9 +6,9 @@ The owner agreed this contract through the coordinator. Async operations:
 - `listThreads()` -> bounded recent live + stored native rows. Rows retain private captured source/profile/activation-epoch bindings in an adapter WeakMap.
 - `bindThread(itemId, threadId, listedRow?)` -> validate the listed row binding, resume the native session, reject busy/non-native sessions, then persist canonical durable `stored_session_id`. Picker callers pass the exact listed row; legacy callers capture the current route.
 - `addressComments(itemId, explicitItemIds?, confirmedReview?)` -> prepare one native run over unresolved comments, with explicit related-item choices from the single run-review dialog.
-- `status(run)` -> reconcile native admission into durable run status.
+- `status(run)` -> read durable results from the public lifecycle hooks; polling never grants completion.
 - `recover(run)` -> explicit user-only local authority revocation; native terminal UNKNOWN.
-- `stop(run)` -> request native cancellation of the exact run.
+- `stop(run)` -> durably revoke Workspace saves and finish/unlock the local cancelled run, then request cancellation of its exact acknowledged native admission. Provider outcome can remain UNKNOWN.
 - `openThread(threadId)` -> open native linked session using supported host API.
 - `dispose()` -> remove adapter subscriptions on unmount/profile/source change.
 
@@ -45,3 +45,24 @@ The backend receipt is owner/private-scope/item/current-revision/comment-signatu
 Deletion calls only `command('delete_comment', {id})`. The normal client adds scope/revision fences. The integrated backend tombstones deleted discussions, hides their replies from current snapshots, preserves recovery provenance and refuses locked/stale/late run mutations. After a successful response, the UI drops only that discussion's retained reply, selection/hover and bubbles, preserving other drafts. Saved source state remains authoritative for document highlight/count updates. Synthetic browser/HTTP and backend receipts qualify these bounded behaviours; installed-native and provider execution remain separate gates.
 
 Ctrl+Enter belongs only to the focused new-comment textarea and calls its form's `requestSubmit()`. Composition, 229, repeat, empty, locked, busy and synchronous duplicate submission guards apply to the same form path as the labelled button. `Tip` is the public native hover/focus tooltip; the button retains its text and an `arrow-right` Codicon. No global shortcut contribution/remapping or event replay is used. A host-claimed/prevented event does not also post. Actual-host capture, running-chat queueing and installed-native qualification remain separate gates.
+
+## Public lifecycle and display metadata
+
+The authenticated server prepares a plugin-owned run and exact prompt. Public
+pre_llm_call binds session/task/turn; pre_tool_call mints a scoped one-use nonce
+in modified args. The ordinary handler receives only host session/task and must
+independently validate/consume that ticket. Scope, ticket consumption, revocation,
+effects and receipts share the Store transaction. Post text alone never proves
+completion; on_session_end completed/failed/interrupted/exit flags determine the
+terminal result. Accepted-before-revocation partial work and Restore remain.
+
+The adapter persists prompt.submit's exact admission_id through workflow/submitted
+only as a cancellation address. A late ACK after local Stop returns that address
+for exact native cancellation without restoring authority. Queued local Stop does
+not depend on a native turn-end callback and never claims provider confirmation.
+
+At preparation, profiles.list on the captured exact route supplies optional
+friendly display text for its backend targetProfile. The server validates/bounds
+that text and derives canonical profile/source/agent identity itself from its
+selected home. Missing/invalid text falls back to canonical profile; labels never
+select permissions, scope, origin or reply alignment. Saved names are retained.

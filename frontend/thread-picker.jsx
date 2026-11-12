@@ -1,5 +1,6 @@
+import { Dialog, DialogContent } from "./owned-popups.jsx";
 import { useEffect, useId, useRef, useState } from "react";
-import { SearchField, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@hermes/plugin-sdk";
+import { SearchField, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@hermes/plugin-sdk";
 import { h, Action, errorMessage, isSubmitEnter } from "./ui.jsx";
 
 /** Public primitive composition. This deliberately labels bounded coverage:

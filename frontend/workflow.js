@@ -80,6 +80,24 @@ export function createWorkflowAdapter(ctx) {
     if (result.running || result.pending?.length) throw new Error('This Hermes thread is busy. Wait or select another thread.');
     return result;
   };
+  const displayTitle = async (token, route) => {
+    // Optional inert display data. Identity and origin come from the server's
+    // selected home; never select an executor from this roster or its labels.
+    let result;
+    try {
+      result = await rpc(token, route, 'profiles.list', {include_sessions: false});
+    } catch {
+      check(token); // A route switch is not a missing optional title.
+      return undefined;
+    }
+    const rows = Array.isArray(result?.profiles)
+      ? result.profiles.filter(row => row?.name === route.targetProfile) : [];
+    if (rows.length !== 1) return undefined;
+    const title = rows[0].ui_meta?.['hermes-bots']?.title ?? rows[0].display_name;
+    // Bound transport too; the server independently validates plain text and
+    // falls back to its canonical profile. Never forward a metadata object.
+    return typeof title === 'string' && title.length <= 4096 ? title : undefined;
+  };
   const adapter = {
     async listThreads() {
       const token = capture();
@@ -115,7 +133,7 @@ export function createWorkflowAdapter(ctx) {
       const session = await snapshot(token, route, threadId);
       return post(token, '/workflow/bind', {item_id: itemId, thread_id: session.stored_session_id});
     },
-    async addressComments(itemId, explicitItemIds = [], confirmedReview = null) {
+    async addressComments(itemId, explicitItemIds = [], confirmedReview = null, onPrepared = null) {
       if (!Array.isArray(explicitItemIds) || explicitItemIds.some(id => typeof id !== 'string') ||
           new Set(explicitItemIds).size !== explicitItemIds.length)
         throw new Error('Select valid Workspace targets for this run.');
@@ -162,15 +180,30 @@ export function createWorkflowAdapter(ctx) {
       }
       // No Store bind/write between review and prepare. The server binds an
       // initially unbound matching thread atomically when consuming the review.
+      const title = await displayTitle(token, route);
       const prepared = await post(token, '/workflow/prepare', {
         item_id: itemId, session_id: session.stored_session_id, explicit_item_ids: targets,
+        ...(title === undefined ? {} : {display_title: title}),
         ...(reviewId ? {review_id: reviewId} : {}),
       });
       owners.set(prepared.run.id, {token, route});
       creations.delete(`${token.scope_id}:${itemId}`);
-      // submission_id is the server-issued run id. The tool checks the native
-      // admission ledger, so history/document text cannot grant another turn access.
-      await rpc(token, route, 'prompt.submit', {session_id: session.session_id, text: prepared.prompt, submission_id: prepared.submission_id, queued: true});
+      // Publish the persisted run/locks before waiting on native admission.
+      // This callback is UI observation only, never run authority.
+      await onPrepared?.();
+      check(token);
+      // submission_id is the server-issued run id. Public pre/turn/tool hooks
+      // bind the exact run and mint the independent one-use tool call ticket.
+      const admission = await rpc(token, route, 'prompt.submit', {session_id: session.session_id, text: prepared.prompt, submission_id: prepared.submission_id, queued: true});
+      if (!admission || typeof admission.admission_id !== 'string' || !admission.admission_id)
+        throw new Error('Native submission acknowledgement is unknown. Workspace will not guess a cancellation target; Stop revokes local saves and unlocks locally without proving provider cancellation.');
+      const submitted = await post(token, '/workflow/submitted', {run_id: prepared.run.id, admission_id: admission.admission_id});
+      // Stop can revoke while prompt.submit is awaiting its acknowledgement.
+      // The server returns only that run's saved exact cancellation address;
+      // this follow-up never grants or restores Workspace write authority.
+      if (submitted.control?.admission_id) {
+        await rpc(token, route, 'prompt.cancel', {session_id: submitted.control.session_id, admission_id: submitted.control.admission_id});
+      }
       await post(token, '/workflow/consume', {run_id: prepared.run.id});
       return (await post(token, '/workflow/status', {run_id: prepared.run.id})).run;
     },

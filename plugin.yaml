@@ -1,5 +1,5 @@
 name: workspace
-version: "0.1.0"
+version: "0.1.2"
 requires_hermes: ">=0.23.0"
 description: "Profile-local documents, typed tables and comment-driven native Hermes edits."
 author: Mike
@@ -7,7 +7,9 @@ provides_tools:
   - workspace_apply
 provides_hooks:
   - pre_llm_call
+  - pre_tool_call
   - post_llm_call
+  - on_session_end
 python_dependencies:
   - "pypdf==6.21.4"
   - "reportlab==5.1.0"

@@ -1,320 +1,163 @@
-"""Real native owners/Store with SYNTHETIC TERMINAL DATA fixtures, not inference.
+"""Public default-native outcomes; synthetic profile/session state, no provider.
 
-The fixture writes supported canonical ledger/transcript records and private
-server journal bindings as DATA. It does not manufacture a provider response,
-viewer ContextVar, PluginManager delivery or inference acceptance. Actual hook
-delivery is qualified separately with a legitimate native pre-LLM policy veto.
+This replaces private owner/row-journal mechanisms. Real outer executor/loader is
+in test_public_outer_executor; HTTP/IPC and a full native turn need separate proof.
 """
-import asyncio
-import faulthandler
-import json
-import os
-from pathlib import Path
-import sqlite3
-import tempfile
 import unittest
-from contextlib import closing
-
-from gateway.config import GatewayConfig
-from gateway.run import GatewayRunner
-from gateway.session_authority import initialize_session_authority
-from gateway.session_contract import SessionActor
-from gateway.session_local import create_local_session
-from gateway.owner_identity import host_owner_subject
-from gateway.run_runtime import _retire_profile_authority
-from gateway.runtime_ownership import process_ownership
-from hermes_state import SessionDB
-from hermes_state_runtime import admit_session_input, claim_session_input, settle_session_input
-from workspace_plugin.finalization import ProposalJournal
-from workspace_plugin.native import NativeSessions
-from workspace_plugin.workflow import Workflow
+from unittest.mock import patch
+from test_public_runs import PublicRunsFixture
+from workspace_plugin.public_runs import PublicRuns, PublicSessions
 
 
-class DefaultNativeDataLifecycle(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        faulthandler.dump_traceback_later(15, repeat=False)
-        self.tmp = tempfile.TemporaryDirectory(dir=os.environ['TMPDIR'])
-        self.home = Path(self.tmp.name).resolve()
-        process_ownership.reserve([self.home])
-        self.db = SessionDB(self.home / 'state.db')
-        self.runner = GatewayRunner(GatewayConfig(multiplex_profiles=False))
-        self.authority = await initialize_session_authority(self.runner,
-            profile_id=str(self.home), instance_id='synthetic-terminal-data-owner', db=self.db)
-        self.principal = host_owner_subject()
-        actor = SessionActor(self.principal, str(self.home),
-            frozenset({'session:create','session:read','session:submit','session:control'}), 'synthetic-framework-data')
-        self.ref = create_local_session(self.authority, actor, {'request_id': 'fixture-session',
-            'source': 'gui', 'cwd': str(self.home), 'model': 'synthetic-data-no-provider', 'toolsets': []})
-        self.flow = Workflow(self.home, native=NativeSessions(self.home, db=self.db))
-        self.store = self.flow.store
-        self.page = self.store.execute('create_item', {'kind': 'page', 'title': 'Fixture', 'content': 'Before'})
-        self.comment = self.store.execute('add_comment', {'item_id': self.page['id'], 'text': 'First unresolved'})
-        self.answered = self.store.execute('add_comment', {'item_id': self.page['id'], 'text': 'Answered unresolved'})
-        self.store.execute('reply_comment', {'id': self.answered['id'], 'text': 'Earlier reply'})
+class DefaultNativeDataLifecycle(PublicRunsFixture, unittest.TestCase):
+    def operation(self):
+        return {'run_id':self.run['id'], **self.proposal()}
 
-    async def asyncTearDown(self):
-        await _retire_profile_authority(self.authority, timeout=3)
-        await self.runner.stop()
-        self.db.close()
-        process_ownership.release(self.home)
-        self.tmp.cleanup()
-        faulthandler.cancel_dump_traceback_later()
+    def ticket(self, call='call-one'):
+        return self.flow.pre_tool(tool_name='workspace_apply', args=self.operation(), tool_call_id=call, **self.origin)['args']
 
-    async def prepared(self, **kwargs):
-        return await asyncio.to_thread(self.flow.prepare, self.page['id'], self.ref.session_id,
-            principal_id=self.principal, **kwargs)
+    def apply(self, args):
+        return self.flow.apply_call(args, session_id='thread-a', task_id=self.origin['task_id'])
 
-    def terminal_data(self, prepared, *, reason='text_response(finish_reason=stop)', outcome='completed', stage=True, missing_outcome=False, outside_item=None, patch=None):
-        """Supported native record DATA setup, explicitly not a real provider completion."""
-        proposal = {'edits': [{'item_id': self.page['id'], 'patch': patch if patch is not None else {'content': 'Saved fixture edit'}}],
-            'replies': [{'comment_id': cid, 'text': 'Synthetic final outcome DATA'} for cid in prepared['run']['comment_ids']]}
-        if missing_outcome:
-            proposal['replies'].pop()
-        if outside_item:
-            proposal['edits'].append({'item_id': outside_item, 'patch': {'content': 'Outside proposal must refuse'}})
-        text = json.dumps(proposal)
-        row = admit_session_input(self.db, epoch=self.authority.epoch, principal_id=self.principal,
-            session_id=self.ref.session_id, request_id=prepared['run']['id'], payload={'text': prepared['prompt']})
-        row = claim_session_input(self.db, epoch=self.authority.epoch, session_id=self.ref.session_id)
-        self.db.append_message(self.ref.session_id, 'user', prepared['prompt'])
-        self.db.append_message(self.ref.session_id, 'assistant', text)
-        with self.db._read_ctx() as conn:
-            ids = [r[0] for r in conn.execute('SELECT id FROM messages WHERE session_id=? ORDER BY id', (self.ref.session_id,))][-2:]
-        with self.flow._locked() as conn:
-            context = self.flow._context(conn, prepared['run']['id'])
-            grant = context['finalization']
-            grant['binding'] = {'turn_id': 'SYNTHETIC-LOCAL-ORIGIN-DATA', 'session_id': self.ref.session_id,
-                'admission_id': row['admission_id'], 'generation': row['generation']}
-            if stage:
-                value = ProposalJournal(self.home).stage(session_id=self.ref.session_id,
-                    turn_id='SYNTHETIC-LOCAL-ORIGIN-DATA', user_message=prepared['prompt'], assistant_response=text,
-                    conversation_history=[{'role': 'user', 'content': prepared['prompt'], '_row_id': ids[0], '_db_persisted': True},
-                        {'role': 'assistant', 'content': text, '_row_id': ids[1], '_db_persisted': True}])
-                grant['proposal_id'] = value['proposal_id']
-                grant['post_revision'] = self.db.get_session(self.ref.session_id)['runtime_revision']
-                grant['post_history'] = self.flow.native.history_fingerprint(self.ref.session_id)
-            self.flow._save(conn, prepared['run']['id'], context)
-        result = {'session_id': self.ref.session_id, 'final_response': text, 'completed': True,
-            'api_calls': 1, 'turn_exit_reason': reason, 'interrupted': outcome == 'interrupted', 'failed': False,
-            'persisted_turn': {'complete': True, 'user_row_id': ids[0], 'user_row_ids': [ids[0]],
-                'final_assistant_row_id': ids[1], 'row_ids': ids}}
-        settle_session_input(self.db, epoch=self.authority.epoch, admission_id=row['admission_id'],
-            generation=row['generation'], outcome=outcome, result={'result': result})
-        return proposal
+    def test_positive_terminal_data_all_unresolved_restore_and_idempotence(self):
+        self.bind(); self.post(); self.assertEqual(self.end()['run']['status'], 'completed')
+        before = self.store.backup_snapshot(); self.end()
+        self.assertEqual(self.store.backup_snapshot(), before)
+        self.assertTrue(all(c['replies'] for c in before['comments'] if c['id'] in self.run['comment_ids']))
+        version = next(v for v in before['versions'] if v['run_id']==self.run['id'])
+        self.store.execute('restore_version', {'id':version['id']})
+        self.assertEqual(self.store.snapshot()['items'][0]['content'], '<p>Before.</p>')
 
-    async def consume(self, prepared, **kwargs):
-        return await asyncio.to_thread(self.flow.consume, prepared['run']['id'],
-            principal_id=kwargs.get('principal_id', self.principal))
+    def test_foreign_principal_and_scope_change_refuse_without_effect(self):
+        self.bind(); before = self.store.backup_snapshot()
+        with self.assertRaises(ValueError): self.flow.consume(self.run['id'], principal_id='foreign')
+        from workspace_plugin.store import Store
+        with self.assertRaises(ValueError): PublicRuns(self.home, store=Store(self.home/'other'), native=PublicSessions(self.home))
+        self.assertEqual(self.store.backup_snapshot(), before)
 
-    def content(self):
-        return next(x for x in self.store.snapshot()['items'] if x['id'] == self.page['id'])['content']
+    def test_policy_veto_completed_true_is_not_success(self):
+        self.bind(); self.post()
+        result = self.flow.end(**self.origin, completed=True, interrupted=False, failed=False,
+            turn_exit_reason='blocked_by_plugin_pre_llm_call')
+        self.assertEqual(result['run']['status'], 'error')
+        self.assertEqual(self.store.snapshot()['items'][0]['content'], '<p>Before.</p>')
 
-    async def test_targeted_final_proposal_data_keeps_owner_consume_receipt_and_restore(self):
-        from workspace_plugin.targeted_edits import content_revision
-        prepared=await self.prepared()
-        item=next(i for i in self.store.snapshot()['items'] if i['id']==self.page['id'])
-        self.terminal_data(prepared,patch={'content_edits':{**content_revision(item),
-            'replacements':[{'before':'Before','after':'Saved targeted fixture edit'}]}})
-        result=await self.consume(prepared)
-        self.assertEqual(result['run']['status'],'completed')
-        self.assertEqual(self.content(),'Saved targeted fixture edit')
-        before=self.store.backup_snapshot();await self.consume(prepared);self.assertEqual(self.store.backup_snapshot(),before)
-        self.assertFalse(any(c['resolved'] for c in self.store.snapshot()['comments']))
-        self.store.execute('restore_version',{'id':prepared['run']['version_ids'][0]})
-        self.assertEqual(self.content(),'Before')
+    def test_interrupted_even_with_completed_true_never_applies_staged_data(self):
+        self.bind(); self.post()
+        result = self.flow.end(**self.origin, completed=True, interrupted=True, failed=False, turn_exit_reason='text_response(finish_reason=stop)')
+        self.assertEqual(result['run']['status'], 'cancelled')
+        self.assertEqual(self.store.snapshot()['items'][0]['content'], '<p>Before.</p>')
 
-    async def test_real_owner_store_positive_data_receipt_all_unresolved_and_restore(self):
-        prepared = await self.prepared()
-        self.assertEqual(set(prepared['run']['comment_ids']), {self.comment['id'], self.answered['id']})
-        self.terminal_data(prepared)
-        result = await self.consume(prepared)
-        self.assertEqual(result['run']['status'], 'completed')
-        self.assertEqual(self.content(), 'Saved fixture edit')
-        again = await self.consume(prepared)
-        self.assertEqual(len(again['run']['operation_receipts']), 1)
-        for comment in self.store.snapshot()['comments']:
-            self.assertFalse(comment['resolved'])
-            self.assertEqual(len([r for r in comment['replies'] if r['author'] == 'agent']), 1)
-        self.store.execute('restore_version', {'id': prepared['run']['version_ids'][0]})
-        self.assertEqual(self.content(), 'Before')
+    def test_missing_hook_has_explicit_honest_recovery(self):
+        self.prepare(); result = self.flow.recover(self.run['id'])
+        self.assertEqual(result['native_terminal'], 'UNKNOWN')
+        self.assertEqual(result['run']['status'], 'error')
+        self.store.execute('update_item', {'id':self.page['id'], 'patch':{'title':'Recovered'}})
 
-    async def test_foreign_principal_and_scope_change_refuse(self):
-        prepared = await self.prepared(); self.terminal_data(prepared)
-        with self.assertRaises(ValueError):
-            await self.consume(prepared, principal_id='uid:foreign-data')
-        with closing(sqlite3.connect(self.store.db_path)) as conn, conn:
-            conn.execute("UPDATE metadata SET value='changed-fixture-scope' WHERE key='scope_id'")
-        with self.assertRaises(ValueError):
-            await self.consume(prepared)
-        self.assertEqual(self.content(), 'Before')
+    def test_same_session_task_successor_cannot_reuse_old_turn_ticket(self):
+        self.bind(); args = self.ticket()
+        with self.assertRaises(ValueError): self.flow.pre(**{**self.origin, 'turn_id':'successor'}, user_message='Later user turn')
+        with self.assertRaises(ValueError): self.apply(args)
+        self.assertEqual(self.store.snapshot()['items'][0]['content'], '<p>Before.</p>')
 
-    async def test_policy_veto_completed_true_and_interrupted_data_never_commit(self):
-        prepared = await self.prepared()
-        self.terminal_data(prepared, reason='blocked_by_plugin_pre_llm_call')
-        with self.assertRaises(ValueError): await self.consume(prepared)
-        self.assertEqual(self.content(), 'Before')
+    def test_missing_comment_outcome_is_denied(self):
+        self.bind()
+        with self.assertRaises(ValueError): self.post(self.proposal(replies=[]))
+        self.assertEqual(self.end()['run']['status'], 'error')
+
+    def test_model_proposal_cannot_widen_user_selected_scope(self):
+        self.bind(); before = self.store.backup_snapshot()
+        with self.assertRaises(ValueError): self.post(self.proposal(edits=[{'item_id':self.other['id'], 'patch':{'title':'Injected'}}]))
+        self.assertEqual(self.store.backup_snapshot(), before)
+
+    def test_related_scope_requires_fresh_explicit_selection(self):
+        self.store.execute('add_comment', {'item_id':self.page['id'], 'text':'Related', 'target_item_ids':[self.other['id']]})
+        self.prepare()
+        self.assertNotIn(self.other['id'], self.run['allowed_item_ids'])
+
+    def test_authenticated_single_use_review_new_related_item_and_exact_scope(self):
+        revision = self.store.snapshot()['revision']
+        review = self.flow.review_scope(self.page['id'], [self.other['id']], expected_revision=revision, principal_id='actor')
+        prepared = self.flow.prepare(self.page['id'], 'thread-a', [self.other['id']], principal_id='actor', review_id=review['review_id'])
+        self.assertIn(self.other['id'], prepared['run']['allowed_item_ids'])
         self.flow.recover(prepared['run']['id'])
+        with self.assertRaises(ValueError): self.flow.prepare(self.page['id'], 'thread-a', [self.other['id']], principal_id='actor', review_id=review['review_id'])
 
-    async def test_missing_hook_has_explicit_honest_recovery(self):
-        prepared = await self.prepared(); self.terminal_data(prepared, stage=False)
-        with self.assertRaises(ValueError): await self.consume(prepared)
-        recovered = self.flow.recover(prepared['run']['id'])
-        self.assertEqual(recovered['native_terminal'], 'UNKNOWN')
-        self.store.execute('update_item', {'id': self.page['id'], 'patch': {'title': 'Unlocked'}})
-        self.assertEqual(self.content(), 'Before')
-
-    async def test_native_history_change_compaction_or_new_generation_refuses(self):
-        prepared = await self.prepared(); self.terminal_data(prepared)
-        self.db.append_message(self.ref.session_id, 'user', 'Later synthetic native user row')
-        with self.assertRaises(ValueError): await self.consume(prepared)
-        self.assertEqual(self.content(), 'Before')
-
-    async def test_interrupted_canonical_data_completed_flag_never_commits(self):
-        prepared = await self.prepared(); self.terminal_data(prepared, outcome='interrupted')
-        with self.assertRaises(ValueError): await self.consume(prepared)
-        self.assertEqual(self.content(), 'Before')
-
-    async def test_actual_native_epoch_change_refuses(self):
-        prepared = await self.prepared(); self.terminal_data(prepared)
-        from hermes_state_runtime import begin_runtime_epoch
-        begin_runtime_epoch(self.db, instance_id='synthetic-data-successor-epoch')
-        with self.assertRaises(ValueError): await self.consume(prepared)
-        self.assertEqual(self.content(), 'Before')
-
-    async def test_missing_comment_outcome_is_denied(self):
-        prepared = await self.prepared(); self.terminal_data(prepared, missing_outcome=True)
-        with self.assertRaises(ValueError): await self.consume(prepared)
-        self.assertEqual(self.content(), 'Before')
-
-    async def test_model_proposal_cannot_widen_user_selected_scope(self):
-        other = self.store.execute('create_item', {'kind': 'page', 'title': 'Outside', 'content': 'Outside before'})
-        prepared = await self.prepared(); self.terminal_data(prepared, outside_item=other['id'])
-        with self.assertRaises(ValueError): await self.consume(prepared)
-        self.assertEqual(self.content(), 'Before')
-        self.assertEqual(next(i for i in self.store.snapshot()['items'] if i['id'] == other['id'])['content'], 'Outside before')
-
-    async def test_real_authenticated_candidate_http_to_owner_store_data(self):
-        """Real production guard/API/owner/Store; only terminal completion is synthetic DATA."""
-        import importlib.util
-        import sys
-        from fastapi import FastAPI
-        import httpx
-        from hermes_cli import web_server
-        api_path = Path(__file__).resolve().parents[1] / 'dashboard/plugin_api.py'
-        spec = importlib.util.spec_from_file_location('candidate_default_native_api', api_path)
-        api = importlib.util.module_from_spec(spec); sys.modules[spec.name] = api
-        spec.loader.exec_module(api)
-        self.assertEqual(Path(api.__file__).resolve(), api_path)
-        app = FastAPI(); app.include_router(api.create_router(owner_home=lambda: self.home))
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url='http://fixture') as client:
-            body = {'item_id': self.page['id'], 'session_id': self.ref.session_id, 'expected_scope': self.store.scope_id}
-            denied = await client.post('/workflow/prepare', json=body)
-            self.assertEqual(denied.status_code, 401)
-            headers = {web_server._SESSION_HEADER_NAME: web_server._SESSION_TOKEN}
-            prepared_reply = await client.post('/workflow/prepare', headers=headers, json=body)
-            self.assertEqual(prepared_reply.status_code, 200, prepared_reply.text)
-            prepared = prepared_reply.json()
-            self.terminal_data(prepared)
-            consume_body = {'run_id': prepared['run']['id'], 'expected_scope': self.store.scope_id}
-            denied = await client.post('/workflow/consume', headers=headers, json={**consume_body, 'principal_id': self.principal})
-            self.assertEqual(denied.status_code, 400)
-            consumed = await client.post('/workflow/consume', headers=headers, json=consume_body)
-            self.assertEqual(consumed.status_code, 200, consumed.text)
-            self.assertEqual(consumed.json()['run']['status'], 'completed')
-            self.assertEqual(self.content(), 'Saved fixture edit')
-
-    async def test_related_scope_requires_fresh_explicit_selection(self):
-        other = self.store.execute('create_item', {'kind': 'page', 'title': 'Outside'})
-        with self.assertRaises(ValueError):
-            await self.prepared(explicit_item_ids=[other['id']])
+    def test_review_stale_expired_spoofed_principal_and_ids_never_lock(self):
+        revision = self.store.snapshot()['revision']
+        review = self.flow.review_scope(self.page['id'], [], expected_revision=revision, principal_id='actor')
+        for actor, ident in [('foreign',review['review_id']), ('actor','guessed')]:
+            with self.assertRaises(ValueError): self.flow.prepare(self.page['id'],'thread-a', principal_id=actor, review_id=ident)
+        with patch('workspace_plugin.run_journal.time.time', return_value=10**12):
+            with self.assertRaises(ValueError): self.flow.prepare(self.page['id'],'thread-a', principal_id='actor', review_id=review['review_id'])
         self.assertEqual(self.store.snapshot()['runs'], [])
+        self.store.execute('update_item', {'id':self.page['id'], 'patch':{'title':'Still editable'}})
+        with self.assertRaises(ValueError): self.flow.prepare(self.page['id'],'thread-a', principal_id='actor', review_id=review['review_id'])
 
-    async def test_authenticated_single_use_review_new_related_item_and_exact_scope(self):
-        other=self.store.execute('create_item',{'kind':'page','title':'Explicit reviewed item'})
-        before=self.store.snapshot()
-        reviewed=self.flow.review_scope(self.page['id'],[other['id']],expected_revision=before['revision'],principal_id=self.principal)
-        self.assertEqual(self.store.snapshot(),before)
-        prepared=await self.prepared(explicit_item_ids=[other['id']],review_id=reviewed['review_id'])
-        self.assertIn('related items explicitly selected and approved by the user',prepared['prompt'])
-        self.assertEqual(set(prepared['run']['allowed_item_ids']),{self.page['id'],other['id']})
-        self.assertEqual(self.store.snapshot()['comments'][0]['target_item_ids'],[])
-        with self.assertRaises(ValueError):
-            await self.prepared(explicit_item_ids=[other['id']],review_id=reviewed['review_id'])
-        self.flow.recover(prepared['run']['id'])
+    def test_stop_revokes_before_effect_and_unqualified_tool_cannot_bypass(self):
+        self.bind(); args = self.ticket(); self.flow.stop(self.run['id'])
+        before = self.store.backup_snapshot()
+        for value in (args, self.operation()):
+            with self.assertRaises(ValueError): self.apply(value)
+        self.assertEqual(self.store.backup_snapshot(), before)
 
-    async def test_review_stale_expired_spoofed_principal_and_ids_never_lock(self):
-        from unittest.mock import patch
-        import workspace_plugin.workflow as workflow_module
-        other=self.store.execute('create_item',{'kind':'page','title':'Explicit related'})
-        revision=self.store.snapshot()['revision']
-        reviewed=self.flow.review_scope(self.page['id'],[other['id']],expected_revision=revision,principal_id=self.principal)
-        with self.assertRaises(ValueError):
-            await self.prepared(explicit_item_ids=[],review_id=reviewed['review_id'])
-        self.assertEqual(self.store.snapshot()['runs'],[])
-        self.assertIsNone(self.store.snapshot()['items'][0]['thread_id'])
-        with patch.object(workflow_module.time,'time',return_value=reviewed['expires_at']+1):
-            with self.assertRaisesRegex(ValueError,'expired'):
-                await self.prepared(explicit_item_ids=[other['id']],review_id=reviewed['review_id'])
-        self.store.execute('reply_comment',{'id':self.comment['id'],'text':'Changed after review'})
-        before=self.store.snapshot()
-        with self.assertRaises(ValueError):
-            await self.prepared(explicit_item_ids=[other['id']],review_id=reviewed['review_id'])
-        self.assertEqual(self.store.snapshot(),before)
-        with self.assertRaises(ValueError):
-            self.flow.prepare(self.page['id'],self.ref.session_id,[other['id']],review_id=reviewed['review_id'])
-        with self.assertRaises(ValueError):
-            self.flow.review_scope(self.page['id'],[],expected_revision=before['revision'],principal_id=None)
+    def test_post_store_pre_journal_failure_rolls_back_and_retry_is_atomic(self):
+        self.bind(); args = self.ticket(); before = self.store.backup_snapshot()
+        with patch.object(self.flow, '_save', side_effect=ValueError('Journal fault')):
+            with self.assertRaises(ValueError): self.apply(args)
+        self.assertEqual(self.store.backup_snapshot(), before)
+        self.apply(args)
+        self.assertEqual(self.store.snapshot()['items'][0]['content'], '<p>After.</p>')
 
-    async def test_stop_revokes_before_effect_and_tool_cannot_bypass_final_mode(self):
-        prepared = await self.prepared(); self.terminal_data(prepared)
-        self.flow.stop(prepared['run']['id'])
-        self.assertEqual((await self.consume(prepared))['run']['status'], 'cancelled')
-        with self.assertRaises(ValueError):
-            self.flow.apply(prepared['run']['id'], session_id=self.ref.session_id,
-                task_id=self.ref.session_id, admission_id='model-owned', edits=[], replies=[])
-        self.assertEqual(self.content(), 'Before')
+    def test_failed_journal_then_recovery_cannot_overwrite_intervening_edit(self):
+        self.bind(); args = self.ticket()
+        with patch.object(self.flow, '_save', side_effect=ValueError('Journal fault')):
+            with self.assertRaises(ValueError): self.apply(args)
+        self.flow.recover(self.run['id'])
+        self.store.execute('update_item', {'id':self.page['id'], 'patch':{'content':'<p>Human recovery edit.</p>'}})
+        before = self.store.backup_snapshot()
+        with self.assertRaises(ValueError): self.apply(args)
+        self.assertEqual(self.store.backup_snapshot(), before)
 
-    async def test_real_post_store_pre_journal_failure_retry_is_atomic(self):
-        prepared = await self.prepared(); self.terminal_data(prepared)
-        with closing(sqlite3.connect(self.flow.journal_path)) as conn, conn:
-            conn.execute("CREATE TRIGGER fixture_fail BEFORE INSERT ON run_context BEGIN SELECT RAISE(ABORT,'fixture journal failure'); END")
-        with self.assertRaises(sqlite3.Error): await self.consume(prepared)
-        self.assertEqual(self.content(), 'Saved fixture edit')
-        with closing(sqlite3.connect(self.flow.journal_path)) as conn, conn:
-            conn.execute('DROP TRIGGER fixture_fail')
-        result = await self.consume(prepared)
-        self.assertEqual(result['run']['status'], 'completed')
-        self.assertEqual(len(result['run']['operation_receipts']), 1)
-        for c in self.store.snapshot()['comments']:
-            self.assertEqual(len([r for r in c['replies'] if r['author'] == 'agent']), 1)
+    def test_native_failure_keeps_accepted_partial_work_and_restore(self):
+        self.bind(); self.apply(self.ticket())
+        result = self.flow.end(**self.origin, completed=False, interrupted=False, failed=True, turn_exit_reason='error')
+        self.assertEqual(result['run']['status'], 'error')
+        self.assertEqual(self.store.snapshot()['items'][0]['content'], '<p>After.</p>')
+        self.assertTrue(self.store.snapshot()['versions'])
 
-    async def test_failed_journal_retry_cannot_overwrite_intervening_edit(self):
-        prepared = await self.prepared(); self.terminal_data(prepared)
-        with closing(sqlite3.connect(self.flow.journal_path)) as conn, conn:
-            conn.execute("CREATE TRIGGER fixture_fail BEFORE INSERT ON run_context BEGIN SELECT RAISE(ABORT,'fixture journal failure'); END")
-        with self.assertRaises(sqlite3.Error): await self.consume(prepared)
-        self.store.finish_run(prepared['run']['id'], 'error', 'Fixture explicit recovery after committed receipt')
-        self.store.execute('update_item', {'id': self.page['id'], 'patch': {'content': 'Intervening user edit'}})
-        with closing(sqlite3.connect(self.flow.journal_path)) as conn, conn:
-            conn.execute('DROP TRIGGER fixture_fail')
-        self.assertEqual((await self.consume(prepared))['run']['status'], 'error')
-        self.assertEqual(self.content(), 'Intervening user edit')
-        for c in self.store.snapshot()['comments']:
-            self.assertEqual(len([r for r in c['replies'] if r['author'] == 'agent']), 1)
+    def test_terminal_target_conflict_unlocks_and_does_not_retry(self):
+        self.bind(); self.post(self.proposal(edits=[{'item_id':self.page['id'], 'patch':{'properties':{'unknown':'x'}}}]))
+        self.assertEqual(self.end()['run']['status'], 'error')
+        self.store.execute('update_item', {'id':self.page['id'], 'patch':{'title':'Unlocked'}})
+        before = self.store.backup_snapshot(); self.end()
+        self.assertEqual(self.store.backup_snapshot(), before)
 
-    async def test_actual_retirement_after_store_writer_wait_refuses(self):
-        prepared = await self.prepared(); self.terminal_data(prepared)
-        blocker = sqlite3.connect(self.store.db_path); blocker.execute('BEGIN IMMEDIATE')
-        task = asyncio.create_task(self.consume(prepared))
-        await asyncio.sleep(.1)
-        retiring = asyncio.create_task(_retire_profile_authority(self.authority, timeout=3))
-        await asyncio.sleep(.1)
-        self.assertTrue(self.authority.retiring)
-        blocker.rollback(); blocker.close()
-        with self.assertRaises(Exception): await asyncio.wait_for(task, 4)
-        self.assertTrue(await retiring)
-        self.assertEqual(self.content(), 'Before')
+    def test_submission_address_is_durable_and_never_grants_tool_authority(self):
+        self.prepare(); self.flow.record_submission(self.run['id'], 'exact-admission')
+        restarted = PublicRuns(self.home)
+        self.assertEqual(restarted.stop(self.run['id'])['control'], {'session_id':'thread-a','admission_id':'exact-admission'})
+        with self.assertRaises(ValueError): restarted.record_submission(self.run['id'], 'conflicting')
+        with self.assertRaises(ValueError): self.apply(self.operation())
 
+    def test_targeted_final_data_preserves_unrelated_paragraph(self):
+        self.store.execute('update_item', {'id':self.page['id'], 'patch':{'content':'<p>Before.</p><p>Keep.</p>'}})
+        self.bind()
+        item = self.store.snapshot(include_content_revisions=True)['items'][0]
+        revision = item['content_revision']
+        proposal = self.proposal(edits=[{'item_id':self.page['id'], 'patch':{'content_edits':{**revision, 'replacements':[{'before':'Before.', 'after':'After.'}]}}}])
+        self.post(proposal); self.assertEqual(self.end()['run']['status'], 'completed')
+        self.assertEqual(self.store.snapshot()['items'][0]['content'], '<p>After.</p><p>Keep.</p>')
 
-if __name__ == '__main__': unittest.main()
+    def test_prompt_after_manual_edit_captures_current_revision_and_full_context(self):
+        self.store.execute('update_item', {'id':self.page['id'], 'patch':{'content':'<p>Current manually saved context.</p>'}})
+        self.prepare()
+        self.assertIn('Current manually saved context.', self.prompt)
+        self.assertIn('content_revision', self.prompt)
+        self.assertIn(self.comments[1]['id'], self.prompt)
+
+    def test_resolution_binding_identity_and_extra_fields_are_not_model_mutations(self):
+        self.bind(); before = self.store.backup_snapshot()
+        for key in ('resolved','thread_id','author_identity','executor'):
+            with self.subTest(key=key), self.assertRaises(ValueError): self.post(self.proposal(edits=[{'item_id':self.page['id'], 'patch':{key:True}}]))
+        self.assertEqual(self.store.backup_snapshot(), before)

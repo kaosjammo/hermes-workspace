@@ -1,5 +1,7 @@
+import { PopoverTrigger, Popover, PopoverContent } from "./owned-popups.jsx";
+import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Popover, PopoverTrigger, PopoverContent } from "@hermes/plugin-sdk";
+
 import { editorStyles } from "./editor-styles.mjs";
 import {
   EditorHistory,
@@ -33,6 +35,8 @@ import {
 /** Native editing retains browser selection/undo; persisted and pasted HTML crosses one allowlist. */
 export function RichEditor({
   item,
+  formatTarget = null,
+  toolbarTarget = null,
   locked: authorityLocked,
   interactionBlocked = false,
   onSave,
@@ -349,6 +353,7 @@ export function RichEditor({
           Math.max(
             0,
             bounds.top,
+            pane.querySelector(".ws-page-controls")?.getBoundingClientRect().bottom ?? 0,
             banner && banner.top <= bounds.top + 1 ? banner.bottom : 0,
           ) +
           12 * scale;
@@ -531,70 +536,14 @@ export function RichEditor({
       bottom: bottom - bottom / selectionScale + 8,
     };
   }
-  return h(
-    "section",
-    { className: "ws-rich-editor", "aria-label": "Visual editor" },
-    h("style", null, editorStyles),
-    recovery &&
-      h(
-        "div",
-        { className: "ws-banner", role: "status" },
-        h(
-          "span",
-          null,
-          "Recoverable draft retained for this source. Recovering replaces the editor text and autosaves it. ",
-          recovery.base_html !== item.content
-            ? "The saved page has also changed; review before recovering."
-            : "",
-        ),
-        h(
-          Action,
-          {
-            disabled: locked,
-            onClick: () => {
-              root.current.innerHTML = sanitizeHTML(recovery.html);
-              recoveryRef.current = null;
-              setRecovery(null);
-              draft.current = editorHTML(root.current);
-              editRevision.current++;
-              decorate();
-              history.current.reset(root.current);
-              try {
-                retained.current =
-                  draftBuffer?.put(draft.current, item.content) ?? null;
-              } catch (error) {
-                onError(error);
-              }
-              onText(root.current.textContent);
-              setStatus("Unsaved recovered draft");
-              clearTimeout(timer.current);
-              timer.current = setTimeout(
-                () => void flush().catch(onError),
-                650,
-              );
-            },
-          },
-          "Recover draft",
-        ),
-        h(
-          Action,
-          {
-            onClick: () => {
-              draftBuffer?.discard();
-              setRecovery(null);
-            },
-          },
-          "Discard retained draft",
-        ),
-      ),
-    h(
+  const formatControl = h(
       "div",
       { className: "ws-editor-heading" },
       h(
         Action,
         {
           variant: "secondary",
-          className: "ws-format-toggle",
+          className: "ws-format-toggle ws-page-control",
           disabled: locked || Boolean(recovery),
           "aria-expanded": formatting,
           "aria-controls": `ws-format-${item.id}`,
@@ -608,8 +557,8 @@ export function RichEditor({
           "aria-hidden": true,
         }),
       ),
-    ),
-    h(
+    );
+  const formatToolbar = h(
       "div",
       {
         id: `ws-format-${item.id}`,
@@ -749,7 +698,65 @@ export function RichEditor({
           ),
         ),
       ),
-    ),
+    );
+  return h(
+    "section",
+    { className: "ws-rich-editor", "aria-label": "Visual editor" },
+    h("style", null, editorStyles),
+    recovery &&
+      h(
+        "div",
+        { className: "ws-banner", role: "status" },
+        h(
+          "span",
+          null,
+          "Recoverable draft retained for this source. Recovering replaces the editor text and autosaves it. ",
+          recovery.base_html !== item.content
+            ? "The saved page has also changed; review before recovering."
+            : "",
+        ),
+        h(
+          Action,
+          {
+            disabled: locked,
+            onClick: () => {
+              root.current.innerHTML = sanitizeHTML(recovery.html);
+              recoveryRef.current = null;
+              setRecovery(null);
+              draft.current = editorHTML(root.current);
+              editRevision.current++;
+              decorate();
+              history.current.reset(root.current);
+              try {
+                retained.current =
+                  draftBuffer?.put(draft.current, item.content) ?? null;
+              } catch (error) {
+                onError(error);
+              }
+              onText(root.current.textContent);
+              setStatus("Unsaved recovered draft");
+              clearTimeout(timer.current);
+              timer.current = setTimeout(
+                () => void flush().catch(onError),
+                650,
+              );
+            },
+          },
+          "Recover draft",
+        ),
+        h(
+          Action,
+          {
+            onClick: () => {
+              draftBuffer?.discard();
+              setRecovery(null);
+            },
+          },
+          "Discard retained draft",
+        ),
+      ),
+    formatTarget ? createPortal(formatControl, formatTarget) : formatControl,
+    toolbarTarget ? createPortal(formatToolbar, toolbarTarget) : formatToolbar,
     h(
       "div",
       { className: "ws-editor-canvas" },
