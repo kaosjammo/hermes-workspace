@@ -1,4 +1,5 @@
 """Real command router/Store, synthetic user admission and simulated agent writes."""
+from runtime_paths import fixture_root, node_command
 from pathlib import Path
 import tempfile
 import unittest
@@ -10,7 +11,7 @@ from workspace_plugin.store import Store
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURES = ROOT / '.local' / 'section-api-tests'
+FIXTURES = fixture_root('section-api-tests')
 FIXTURES.mkdir(parents=True,exist_ok=True)
 
 

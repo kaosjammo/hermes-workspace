@@ -27,6 +27,12 @@ class SharedTests(unittest.TestCase):
     def snapshot(self, actor=None):
         return self.service.snapshot(actor or self.alice, self.pid)
 
+    def assert_viewer_identity(self, state, actor):
+        self.assertEqual(state['identity'], {
+            'human': {'kind': 'human', 'id': actor, 'name': 'user'},
+            'source_id': profile_key(self.service._store(self.pid).profile_home),
+        })
+
     def command(self, op, payload, actor=None, view=None):
         view = view or self.snapshot(actor)
         return self.service.execute(actor or self.alice, self.pid, op,
@@ -54,7 +60,13 @@ class SharedTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 403)
         saved = self.command('create_item', {'kind': 'page', 'title': 'Intentionally shared'})
         reopened = SharedWorkspaces(self.root / 'shared').snapshot(self.bob, self.pid)
-        self.assertEqual(saved['state'], reopened['state'])
+        self.assert_viewer_identity(saved['state'], self.alice)
+        self.assert_viewer_identity(reopened['state'], self.bob)
+        # The complete stored graph is shared; only the admitted viewer's
+        # identity projection differs between these two response envelopes.
+        self.assertEqual({k: v for k, v in saved['state'].items() if k != 'identity'},
+                         {k: v for k, v in reopened['state'].items() if k != 'identity'})
+        self.assertEqual(self.snapshot()['state'], saved['state'])
         self.assertEqual(self.private.backup_snapshot(), private)
         self.assertNotIn(secret['id'], [p['id'] for p in reopened['state']['items']])
         self.assertEqual(self.bob_private.snapshot()['items'], [])
@@ -64,6 +76,8 @@ class SharedTests(unittest.TestCase):
         page = self.command('create_item', {'kind': 'page', 'title': 'Shared'})['result']
         self.service.set_member(self.alice, self.pid, self.bob, role='read_only', membership_revision=1)
         before = self.snapshot()['state']
+        bob_before = self.snapshot(self.bob)['state']
+        stored_before = self.service._store(self.pid).backup_snapshot()
         for op, payload in [('update_item', {'id': page['id'], 'patch': {'title': 'Forbidden'}}),
                             ('add_comment', {'item_id': page['id'], 'text': 'Forbidden'}),
                             ('trash', {'id': page['id']}), ('create_item', {'kind': 'page', 'title': 'Forbidden'})]:
@@ -71,10 +85,19 @@ class SharedTests(unittest.TestCase):
                 with self.subTest(op=op, actor=actor), self.assertRaises(StoreError) as error:
                     self.command(op, payload, actor, view=self.snapshot())
                 self.assertEqual(error.exception.status_code, 403)
-        self.assertEqual(self.snapshot(self.bob)['state'], before)
+                self.assertEqual(self.snapshot()['state'], before)
+                self.assertEqual(self.snapshot(self.bob)['state'], bob_before)
+                self.assertEqual(self.service._store(self.pid).backup_snapshot(), stored_before)
+        self.assert_viewer_identity(before, self.alice)
+        self.assert_viewer_identity(bob_before, self.bob)
+        self.assertEqual({k: v for k, v in bob_before.items() if k != 'identity'},
+                         {k: v for k, v in before.items() if k != 'identity'})
         result = self.service.execute(self.bob, self.pid, 'search', {'query': 'Shared'},
             membership_revision=2, expected_scope=before['scope_id'])
         self.assertEqual(result['result'][0]['id'], page['id'])
+        self.assert_viewer_identity(result['state'], self.bob)
+        self.assertEqual(result['state'], bob_before)
+        self.assertEqual(self.service._store(self.pid).backup_snapshot(), stored_before)
 
     def test_stale_revoked_readded_and_missing_membership_revision(self):
         old = self.snapshot(self.bob)
@@ -234,8 +257,8 @@ class SharedTests(unittest.TestCase):
         self.private.remember_executor(page['id'], binding, expected_revision=before['revision'], validate=lambda b: b)
         self.assertEqual(Store(self.private.profile_home).snapshot()['items'][0]['executor'], binding)
         flow = Workflow(self.private.profile_home, store=self.private, native=NativeSessions(self.private.profile_home))
-        with self.assertRaisesRegex(ValueError, 'qualified native source'):
-            flow.prepare(page['id'], binding['thread_id'])
+        with self.assertRaisesRegex(ValueError, '^Saved cross-owner executor binding is not qualified$'):
+            flow.prepare(page['id'], binding['thread_id'], principal_id='synthetic-owner')
         destination = Store(self.root / 'restore-private')
         destination.restore_snapshot(self.private.backup_snapshot())
         self.assertNotIn('executor', destination.snapshot()['items'][0])

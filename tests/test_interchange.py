@@ -5,13 +5,14 @@ import importlib.util
 import io
 import json
 import os
+from runtime_paths import fixture_root, node_command
 from pathlib import Path
 import unittest
 import zipfile
 
 from workspace_plugin import interchange as api
 
-FIXTURES = Path(__file__).resolve().parents[1] / '.local/conversion/fixtures'
+FIXTURES = fixture_root('conversion/fixtures')
 FIXTURES.mkdir(parents=True, exist_ok=True)
 
 
@@ -367,7 +368,7 @@ const dom=new JSDOM('<div id="app"></div>',{url:'https://workspace.test'});
 for(const key of ['window','document','HTMLElement','Node','FileReader','Blob','File','Event','MouseEvent','InputEvent']) globalThis[key]=dom.window[key];
 globalThis.getSelection=()=>dom.window.getSelection();
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
-await require('esbuild').build({entryPoints:['tests/ui/runtime-entry.jsx'],bundle:true,platform:'node',format:'esm',outfile:'.local/conversion/r1/ui-runtime.mjs',alias:{'@hermes/plugin-sdk':path.resolve('tests/ui/sdk-fixture.jsx'),react:path.dirname(require.resolve('react/package.json')),'react-dom':path.dirname(require.resolve('react-dom/package.json'))},define:{'process.env.NODE_ENV':'"development"'}});
+await require('esbuild').build({entryPoints:['tests/ui/runtime-entry.jsx'],bundle:true,platform:'node',format:'esm',outfile:path.join(process.env.HWS_QUALIFICATION_HOME,'conversion/r1/ui-runtime.mjs'),alias:{'@hermes/plugin-sdk':path.resolve('tests/ui/sdk-fixture.jsx'),react:path.dirname(require.resolve('react/package.json')),'react-dom':path.dirname(require.resolve('react-dom/package.json'))},define:{'process.env.NODE_ENV':'"development"'}});
 const {RichEditor,createElement:h,createRoot,act}=await import('./ui-runtime.mjs');
 let flush;
 document.execCommand=(command,_ui,value)=>{
@@ -381,8 +382,9 @@ await act(async()=>root.render(h(RichEditor,{item:{id:'source',content:''},works
 await act(async()=>[...document.querySelectorAll('button')].find(n=>n.textContent==='Format text').click());
 await act(async()=>[...document.querySelectorAll('button')].find(n=>n.textContent==='Workspace link').click());
 const picker=document.querySelector('select[aria-label="Workspace item"]');
-if(![...picker.options].some(option=>option.value===process.argv[2]&&option.textContent.includes('Tasks')))throw Error('Named Workspace item missing');
-await act(async()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype,'value').set.call(picker,process.argv[2]);picker.dispatchEvent(new Event('change',{bubbles:true}));});
+const targetOption=[...picker.options].find(option=>option.textContent.includes('Tasks'));
+if(!targetOption)throw Error('Named Workspace item missing');
+await act(async()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype,'value').set.call(picker,targetOption.value);picker.dispatchEvent(new Event('change',{bubbles:true}));});
 for(const [label,value] of [['Link text','Tasks']]) {
  const node=document.querySelector(`input[aria-label="${label}"]`);
  await act(async()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));node.dispatchEvent(new Event('change',{bubbles:true}));});
@@ -411,13 +413,13 @@ class RepairRoundOneTests(unittest.TestCase):
     def test_r1_production_ui_link_store_backup_and_markdown(self):
         import subprocess
         root=Path(__file__).resolve().parents[1]
-        node=root/'.local/toolchain/node-v26.0.0-linux-x64/bin/node'
-        script=root/'.local/conversion/r1/ui-link.mjs'
+        node=node_command()
+        script=fixture_root('conversion/r1')/'ui-link.mjs'
         script.parent.mkdir(parents=True,exist_ok=True)
         script.write_text(UI_LINK_SCRIPT)
         if not node.is_file(): self.fail('R1 UI-output qualification requires provisioned Node26')
         store=self.store(); db=store.execute('create_item',{'kind':'database','title':'Tasks'})
-        result=subprocess.run([str(node),str(root/'.local/conversion/r1/ui-link.mjs'),db['id']],cwd=root,capture_output=True,text=True,timeout=20)
+        result=subprocess.run([str(node),str(script),db['id']],cwd=root,capture_output=True,text=True,timeout=20)
         self.assertEqual(result.returncode,0,result.stderr)
         ui=json.loads(result.stdout); self.assertIn('#workspace/'+db['id'],ui['content'])
         self.assertEqual(ui['navigated'],db['id'])

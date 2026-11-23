@@ -3,10 +3,10 @@ import path from "node:path";
 import { mkdtempSync } from "node:fs";
 /** Production HTTP + Store; only native admission is a synthetic fixture. */
 export function httpFixture() {
-  const owner = mkdtempSync(path.resolve(".local/frontend/http-repair1-"));
+  const owner = mkdtempSync(path.join(process.env.HWS_QUALIFICATION_HOME, "http-repair1-"));
   const rest = async (url, options) => {
     const result = spawnSync(
-      path.resolve(".local/qualification-venv/bin/python"),
+      process.env.HWS_PYTHON ?? "python3",
       ["tests/ui/api-bridge.py"],
       {
         cwd: process.cwd(),
@@ -18,9 +18,9 @@ export function httpFixture() {
           }) + "\n",
         env: {
           ...process.env,
-          HOME: path.resolve(".local/frontend/home"),
+          HOME: process.env.HOME,
           HERMES_HOME: owner,
-          TMPDIR: path.resolve(".local/frontend/tmp"),
+          TMPDIR: process.env.TMPDIR,
           UI_TEST_OWNER: owner,
           PYTHONDONTWRITEBYTECODE: "1",
         },
@@ -30,7 +30,7 @@ export function httpFixture() {
     );
     if (result.status !== 0)
       throw new Error(
-        `HTTP fixture process failed ${result.status}: ${result.stderr}`,
+        `HTTP fixture process failed ${result.status}: ${result.error?.message ?? result.stderr}`,
       );
     const response = JSON.parse(result.stdout);
     if (response.status >= 400)

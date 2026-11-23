@@ -5,10 +5,10 @@ import path from "node:path";
 import { mkdtempSync } from "node:fs";
 import { WorkspaceClient } from "../../frontend/client.mjs";
 import { propertyPatch } from "../../frontend/database.mjs";
-const owner = mkdtempSync(path.resolve(".local/frontend/http-profile-"));
+const owner = mkdtempSync(path.join(process.env.HWS_QUALIFICATION_HOME, "http-profile-"));
 const rest = async (url, options) => {
   const result = spawnSync(
-    path.resolve(".local/qualification-venv/bin/python"),
+    process.env.HWS_PYTHON ?? "python3",
     ["tests/ui/api-bridge.py"],
     {
       cwd: process.cwd(),
@@ -20,9 +20,9 @@ const rest = async (url, options) => {
         }) + "\n",
       env: {
         ...process.env,
-        HOME: path.resolve(".local/frontend/home"),
+        HOME: process.env.HOME,
         HERMES_HOME: owner,
-        TMPDIR: path.resolve(".local/frontend/tmp"),
+        TMPDIR: process.env.TMPDIR,
         UI_TEST_OWNER: owner,
         PYTHONDONTWRITEBYTECODE: "1",
       },

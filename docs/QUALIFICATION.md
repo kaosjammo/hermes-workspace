@@ -1,3 +1,7 @@
+> This page records the published snapshot. The uncommitted public-contract successor and its fresh qualification limits are described in [local maintainer repair](LOCAL-MAINTAINER-REPAIR.md); these historical receipts do not qualify that successor.
+
+> **Historical initial-submission document.** For this production-derived replacement, use [current release status](RELEASE-STATUS.md), the [current README](../README.md) and [production feature audit](PRODUCTION-FEATURES.md). Old source identities, backlog labels and check totals below are preserved history, not qualification of the new pin.
+
 # Qualification, scope and publication gates
 
 This is the evidence boundary for the public development preview, feature guide and catalog PR. Source publication and a successful catalog probe are not native-runtime acceptance or maintainer approval.

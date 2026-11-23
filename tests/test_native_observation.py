@@ -1,51 +1,59 @@
-"""Synthetic canonical-record DATA tests; actual gateway checkpoint is separate."""
-import json
-from pathlib import Path
-import tempfile
+"""Public native session observations are not plugin write authority.
+
+Private row-join/owner-epoch mechanisms were replaced by originating public turn
+binding, one-use call tickets and the Store's durable revocation ordering point.
+"""
 import unittest
+from test_public_runs import PublicRunsFixture
 from workspace_plugin.native import NativeSessions
-from workspace_plugin.finalization import ProposalJournal
-from hermes_state import SessionDB
-from hermes_state_runtime import begin_runtime_epoch,admit_session_input,claim_session_input,settle_session_input
 
-class NativeObservationTests(unittest.TestCase):
-    def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]/'.local/workflow/tmp')
-        self.home=Path(self.tmp.name);self.db=SessionDB(self.home/'state.db')
-        self.db.create_session('fixture-session',source='local')
-        self.epoch=begin_runtime_epoch(self.db,instance_id='fixture-owner')
-        self.native=NativeSessions(self.home,db=self.db)
-        self.journal=ProposalJournal(self.home)
-        self.prompt='Fixture exact prompt; not authority'
-        self.proposal={'edits':[],'replies':[]};self.text=json.dumps(self.proposal)
-        self.row=admit_session_input(self.db,epoch=self.epoch,principal_id='fixture-principal',session_id='fixture-session',request_id='fixture-run',payload={'text':self.prompt})
-        self.row=claim_session_input(self.db,epoch=self.epoch,session_id='fixture-session')
-        self.result={'session_id':'fixture-session','persisted_turn':{'complete':True,'user_row_id':1,'user_row_ids':[1],'final_assistant_row_id':2,'row_ids':[1,2]},'messages':[],'final_response':self.text,'turn_exit_reason':'fixture-data-only'}
-    def tearDown(self):self.db.close();self.tmp.cleanup()
-    def settle(self):settle_session_input(self.db,epoch=self.epoch,admission_id=self.row['admission_id'],generation=self.row['generation'],outcome='completed',result={'result':self.result})
-    def args(self):return dict(session_id='fixture-session',request_id='fixture-run',principal_id='fixture-principal',prompt=self.prompt,expected_epoch=self.epoch)
-    def stage(self,turn='fixture-turn'):
-        return self.journal.stage(session_id='fixture-session',turn_id=turn,user_message=self.prompt,assistant_response=self.text,conversation_history=[{'role':'user','content':self.prompt,'_row_id':1,'_db_persisted':True},{'role':'assistant','content':self.text,'_row_id':2,'_db_persisted':True}])
-    def test_exact_row_join_is_observation_without_commit_authority(self):
-        self.settle();self.stage()
-        joined=self.journal.inspect_join(self.native,**self.args())
-        self.assertFalse(joined['commit_authority']);self.assertFalse(joined['native_record']['live_owner_verified'])
-    def test_copy_nonce_foreign_principal_prompt_session_and_epoch_refuse(self):
-        self.settle()
-        for key,value in (('principal_id','foreign'),('request_id','copied-other'),('session_id','wrong'),('prompt','copied prose'),('expected_epoch',2)):
-            with self.subTest(key=key),self.assertRaises(ValueError):self.native.terminal_snapshot(**{**self.args(),key:value})
-    def test_started_or_missing_terminal_result_has_no_row_join(self):
-        with self.assertRaises(ValueError):self.native.terminal_snapshot(**self.args())
-        settle_session_input(self.db,epoch=self.epoch,admission_id=self.row['admission_id'],generation=self.row['generation'],outcome='completed')
-        with self.assertRaises(ValueError):self.native.terminal_snapshot(**self.args())
-    def test_two_local_turns_claiming_same_rows_refuse_instead_of_first_bind(self):
-        self.settle();self.stage();self.stage('different-local-turn')
-        with self.assertRaises(ValueError):self.journal.inspect_join(self.native,**self.args())
-    def test_compaction_or_incomplete_native_continuity_refuses(self):
-        self.result['persisted_turn']['complete']=False;self.settle();self.stage()
-        with self.assertRaises(ValueError):self.journal.inspect_join(self.native,**self.args())
-    def test_owner_replacement_invalidates_observation(self):
-        self.settle();begin_runtime_epoch(self.db,instance_id='fixture-replacement')
-        with self.assertRaises(ValueError):self.native.terminal_snapshot(**self.args())
 
-if __name__=='__main__':unittest.main()
+class NativeObservationTests(PublicRunsFixture, unittest.TestCase):
+    def test_public_session_observation_without_binding_never_grants_commit_authority(self):
+        self.prepare(); before = self.store.backup_snapshot()
+        self.assertEqual(self.flow.native.require_session('thread-a'), 'thread-a')
+        with self.assertRaises(ValueError): self.post()
+        self.assertEqual(self.store.backup_snapshot(), before)
+
+    def test_copied_prompt_foreign_task_session_and_turn_refuse(self):
+        self.bind(); before = self.store.backup_snapshot()
+        for key in ('session_id', 'task_id', 'turn_id'):
+            with self.subTest(key=key), self.assertRaises(ValueError): self.post(**{key:'foreign'})
+        with self.assertRaises(ValueError): self.flow.pre(**self.origin, user_message='Copied '+self.prompt)
+        self.assertEqual(self.store.backup_snapshot(), before)
+
+    def test_started_or_missing_terminal_result_never_finalizes_proposed_effects(self):
+        self.bind(); self.post(); before = self.store.backup_snapshot()
+        with self.assertRaises(ValueError): self.flow.end(**self.origin, completed=True)
+        self.assertEqual(self.store.backup_snapshot(), before)
+        self.assertEqual(self.flow.status(self.run['id'])['run']['status'], 'running')
+
+    def test_two_native_turns_cannot_claim_the_same_plugin_run(self):
+        self.bind(); before = self.store.snapshot()['items']
+        with self.assertRaises(ValueError):
+            self.flow.pre(**{**self.origin,'turn_id':'successor'}, user_message=self.prompt)
+        with self.assertRaises(ValueError): self.post()
+        self.assertEqual(self.store.snapshot()['items'], before)
+
+    def test_public_compression_lineage_preserves_thread_but_explicit_forks_are_not_authority(self):
+        self.bind()
+        self.db.publish_compression_child(parent_session_id='thread-a', child_session_id='compressed', source='local',
+            messages=[{'role':'user','content':'Synthetic compressed context'}], require_compression_lease=False)
+        self.assertEqual(self.flow.native.require_session('compressed'), 'thread-a')
+        self.post(session_id='compressed')
+        self.db.create_session('fork', source='local', parent_session_id='thread-a')
+        self.assertEqual(self.flow.native.require_session('fork'), 'fork')
+        with self.assertRaises(ValueError): self.post(session_id='fork')
+        self.assertEqual(self.end()['run']['status'], 'completed')
+
+    def test_wrong_profile_database_and_replaced_scope_refuse(self):
+        from workspace_plugin.store import Store
+        with self.assertRaises(ValueError): NativeSessions(self.home/'foreign', db=self.db).require_session('thread-a')
+        self.bind(); self.post()
+        state = self.store.backup_snapshot()
+        # Public backup restore rotates scope and detaches native authority.
+        with self.assertRaises(ValueError): self.store.restore_snapshot(state)
+        self.flow.recover(self.run['id'])
+        self.store.restore_snapshot(state)
+        with self.assertRaises(ValueError): self.end()
+        self.assertFalse(self.store.snapshot()['runs'])

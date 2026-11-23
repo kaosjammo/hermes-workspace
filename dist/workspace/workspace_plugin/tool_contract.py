@@ -1,0 +1,23 @@
+"""Model-facing Workspace edit contract (internal call tickets are not model inputs)."""
+TOOL_SCHEMA = {
+    'name': 'workspace_apply',
+    'description': 'Apply scoped Workspace edits and per-comment outcomes. Prefer revision-bound patch.content_edits with exact unique before/after ranges for local fixes; full patch.content is for genuinely page-wide changes. Never resolves comments or widens captured item scope.',
+    'parameters': {'type': 'object', 'additionalProperties': False,
+        'properties': {'run_id': {'type': 'string'},
+            'edits': {'type': 'array', 'maxItems': 100, 'items': {'type': 'object', 'additionalProperties': False,
+                'properties': {'item_id': {'type': 'string'}, 'patch': {'type': 'object', 'additionalProperties': False,
+                    'description': 'Use content_edits for local fixes. Copy exact content_revision fields from captured context; never combine content and content_edits.',
+                    'properties': {'title': {'type':'string'}, 'content': {'type':'string'},
+                        'properties': {'type':'object'}, 'columns': {'type':'array','items':{'type':'object'}},
+                        'content_edits': {'type':'object','additionalProperties':False,
+                            'properties': {'expected_sha256':{'type':'string','pattern':'^[a-f0-9]{64}$'},
+                                'expected_updated_at':{'type':'string','minLength':1,'maxLength':80},
+                                'expected_manual_revision':{'type':'integer','minimum':0},
+                                'replacements':{'type':'array','minItems':1,'maxItems':100,
+                                    'items':{'type':'object','additionalProperties':False,
+                                        'properties':{'before':{'type':'string','minLength':1},'after':{'type':'string'}},
+                                        'required':['before','after']}}},
+                            'required':['expected_sha256','expected_updated_at','expected_manual_revision','replacements']}}}}, 'required': ['item_id', 'patch']}},
+            'replies': {'type': 'array', 'items': {'type': 'object', 'additionalProperties': False,
+                'properties': {'comment_id': {'type': 'string'}, 'text': {'type': 'string'}}, 'required': ['comment_id', 'text']}}},
+        'required': ['run_id']}}

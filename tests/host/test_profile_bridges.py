@@ -1,7 +1,7 @@
 """Actual upstream native HTTP/profile/plugin-host bridges with synthetic state.
 
-Run through scripts/run_tests.sh in the pinned copied host, with the explicit
-project-scratch shim. The daemon carries a real TicketStore and synthetic runner;
+Run with the pinned host's normal pytest fixtures and an isolated output root.
+The daemon carries a real TicketStore and synthetic runner;
 no real gateway owner, private profile or provider is used.
 """
 from pathlib import Path
@@ -58,6 +58,11 @@ def test_actual_native_profile_bridge_and_hosted_storage_isolation(daemon, monke
                 'payload': {'kind': 'page', 'title': 'forged'}})
         assert unauthorized.status_code == 401
         after = daemon.client.get('/api/plugins/workspace/state', headers=daemon.beta_ticket()).json()
-        assert after == b['state']
+        # /state adds server identity; command.state is the Store snapshot.
+        # Compare every persisted field, and independently require the real
+        # authenticated route's human identity instead of dropping authority.
+        assert after['identity']['human']['kind'] == 'human'
+        assert after['identity']['source_id'] == after['identity']['human']['id']
+        assert {key: value for key, value in after.items() if key != 'identity'} == b['state']
     finally:
         secondary._shutdown_hosts()

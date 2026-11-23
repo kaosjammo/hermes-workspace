@@ -1,3 +1,4 @@
+import { SelectTrigger, DropdownMenuTrigger, PopoverTrigger, Select, SelectContent, Dialog, DialogContent, DropdownMenu, DropdownMenuContent, Popover, PopoverContent } from "./owned-popups.jsx";
 import { createElement as h, cloneElement, Children, useState, useRef, useLayoutEffect } from "react";
 import * as nativeSdk from "@hermes/plugin-sdk";
 import { elementScale } from "./editor.mjs";
@@ -5,24 +6,13 @@ import {
   Button,
   Input,
   Textarea,
-  Select,
-  SelectTrigger,
   SelectValue,
-  SelectContent,
   SelectItem,
-  Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
   DropdownMenuItem,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
   Tip,
   Codicon,
 } from "@hermes/plugin-sdk";

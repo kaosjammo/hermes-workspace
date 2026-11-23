@@ -1,3 +1,4 @@
+from runtime_paths import fixture_root, node_command
 import base64
 import concurrent.futures
 import json
@@ -12,7 +13,7 @@ import unittest
 from workspace_plugin.store import Store, StoreError
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURES = ROOT / '.local' / 'store' / 'tmp'
+FIXTURES = fixture_root('store/tmp')
 FIXTURES.mkdir(parents=True, exist_ok=True)
 
 

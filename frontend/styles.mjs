@@ -1033,5 +1033,71 @@ export const styles = `
     scroll-behavior: auto !important;
   }
 }
+/* The page pane owns these breakpoints: sidebar resizing must not squeeze controls. */
+.ws-work { container: workspace-page / inline-size; }
+/* Page and tree controls share the quiet outline used by discussion actions. */
+.ws-page-controls {
+  position:sticky; top:0; z-index:20;
+  display:grid; grid-template-columns:auto auto auto minmax(0,1fr) auto;
+  grid-template-areas:"format open resolved address page"; align-items:center;
+  gap:8px; padding:12px clamp(16px,2vw,28px);
+  background:var(--ui-bg-editor, var(--ui-bg-primary));
+  border-bottom:1px solid var(--ui-stroke-tertiary);
+  max-height:min(50vh,320px); overflow:auto; overscroll-behavior:contain;
+}
+.ws-page-controls .ws-page-actions, .ws-root .ws-page-controls .ws-editor-heading { margin:0; }
+.ws-page-controls > .ws-page-actions { grid-area:page; justify-self:end; display:flex; flex-direction:row; align-items:center; gap:8px; }
+.ws-page-format-slot { min-width:0; grid-area:format; }
+.ws-page-comment-controls, .ws-page-controls .ws-page-comment-row, .ws-page-controls .ws-comment-totals { display:contents; }
+.ws-page-comment-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0; }
+.ws-page-controls .ws-comments-heading { grid-area:open; display:flex; align-items:center; gap:6px; margin:0; min-height:28px; color:var(--ui-text-secondary); white-space:nowrap; }
+.ws-page-controls .ws-comments-heading h2 { margin:0; font:inherit; font-size:12px; font-weight:500; color:inherit; }
+.ws-page-controls .ws-resolved-comment-total { grid-area:resolved; justify-self:start; }
+.ws-page-controls .ws-page-comment-row > .ws-actions { grid-area:address; justify-self:end; margin:0; gap:8px; }
+.ws-page-label-short { display:none; }
+.ws-folder-layout .ws-page-controls { display:flex; justify-content:flex-end; }
+.ws-page-controls .ws-comment-count { font-size:11px; line-height:1; }
+.ws-root :is(.ws-page-controls .ws-page-control, .ws-tree-actions > [data-slot="button"]) {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  height:28px; min-height:28px; padding:0 9px; margin:0;
+  border:1px solid var(--ui-stroke-secondary); border-radius:var(--radius-sm,4px);
+  background:var(--ui-bg-editor); color:var(--ui-text-secondary); box-shadow:none;
+  font:inherit; font-size:12px; font-weight:500; line-height:1; white-space:nowrap;
+}
+.ws-root :is(.ws-page-controls .ws-page-control, .ws-tree-actions > [data-slot="button"]):not(:disabled):hover,
+.ws-root :is(.ws-page-controls .ws-page-control, .ws-tree-actions > [data-slot="button"])[aria-expanded=true],
+.ws-root .ws-tree-actions > [data-slot="button"][aria-pressed=true] { background:var(--ui-bg-hover); color:var(--ui-text-primary); }
+.ws-root :is(.ws-page-controls .ws-page-control, .ws-tree-actions > [data-slot="button"]):focus-visible { outline:2px solid var(--ui-accent); outline-offset:2px; }
+.ws-root .ws-page-controls .ws-page-menu-control { width:28px; min-width:28px; padding:0; }
+.ws-page-toolbar-slot { grid-column:1 / -1; min-width:0; }
+.ws-page-toolbar-slot:empty, .ws-page-toolbar-slot:has(> [hidden]) { display:none; }
+.ws-page-controls .ws-format-toolbar { margin:0; }
+.ws-page-controls .ws-format-toolbar[hidden] { display:none; }
+.ws-page-thread-info { width:300px; max-width:calc(100vw - 32px); overflow-wrap:anywhere; }
+.ws-page-thread-info h3 { font-size:13px; font-weight:600; margin:0 0 8px; }
+.ws-page-thread-info p { font-size:12px; line-height:1.5; margin:8px 0; }
+.ws-page-thread-info .ws-actions { gap:6px; }
+@container workspace-page (max-width:800px) {
+  .ws-page-controls {
+    grid-template-columns:max-content minmax(0,1fr) auto;
+    grid-template-areas:"format . page" "open resolved address";
+  }
+}
+@container workspace-page (max-width:520px) {
+  .ws-page-controls {
+    padding:12px 16px;
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"format page" "open resolved" "address address";
+  }
+  .ws-page-controls .ws-resolved-comment-total { justify-self:end; }
+  .ws-page-controls .ws-page-comment-row > .ws-actions { justify-self:stretch; }
+  .ws-page-controls .ws-page-comment-row > .ws-actions > button { width:100%; }
+  .ws-page-controls .ws-page-label-full { display:none; }
+  .ws-page-controls .ws-page-label-short { display:inline; }
+}
+@media (pointer:coarse) {
+  .ws-root :is(.ws-page-controls .ws-page-control, .ws-tree-actions > [data-slot="button"]) { height:40px; min-height:40px; }
+  .ws-root .ws-page-controls .ws-page-menu-control { width:40px; min-width:40px; }
+}
 ${workspaceNavigationStyles}
 `;

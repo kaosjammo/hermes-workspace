@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -6,7 +7,7 @@ const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<div></div>', { url: 'https://workspace.test' });
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
-const { plugin, host } = await import('../../.local/frontend/ui-runtime.mjs');
+const { plugin, host, advanceEpoch } = await import(process.env.WORKSPACE_REGISTRATION_RUNTIME ?? frontendRuntime());
 
 async function withBackend(request, check) {
   const original = { request: host.requestProfile, decisions: host.pluginDecisions };
@@ -42,6 +43,66 @@ test('production Desktop registration enables backend before publishing route an
     assert.ok(calls.every(call => call.route.profile === 'synthetic-a' && call.params.profile === 'synthetic-a'));
     assert.deepEqual(contributions.map(c => c.area).sort(), ['routes', 'sidebar.nav']);
   });
+});
+
+test('saved enabled Workspace registers its sidebar after cold startup without toggling', async () => {
+  const initial = { profile: host.state.profile.get(), connection: host.state.connectionId.get(), gateway: host.state.gateway.get() };
+  try {
+    for (let restart = 0; restart < 2; restart++) {
+      const calls = [], contributions = [], disposers = [];
+      host.state.gateway.set('idle');
+      host.state.profile.set('');
+      host.state.connectionId.set(null);
+      await withBackend(async (_route, _method, params) => {
+        calls.push(params);
+        return { plugins: [{ key: 'workspace', status: 'enabled' }] };
+      }, async () => {
+        const activation = plugin.register({ register: c => contributions.push(c), onDispose: fn => disposers.push(fn) });
+        await Promise.resolve();
+        assert.deepEqual(calls, []);
+        assert.deepEqual(contributions, []);
+        host.state.connectionId.set('local');
+        host.state.profile.set('synthetic-a');
+        host.state.gateway.set('connecting');
+        await Promise.resolve();
+        assert.deepEqual(calls, []);
+        host.state.gateway.set('open');
+        await activation;
+        assert.deepEqual(calls.map(call => call.action), ['list']);
+        assert.deepEqual(contributions.map(c => c.area).sort(), ['routes', 'sidebar.nav']);
+        disposers.forEach(fn => fn());
+      });
+    }
+  } finally {
+    host.state.profile.set(initial.profile);
+    host.state.connectionId.set(initial.connection);
+    host.state.gateway.set(initial.gateway);
+  }
+});
+
+test('startup route replacement during profile discovery still publishes the production sidebar', async () => {
+  const originalRoutes = host.profileRoutes;
+  let discoveries = 0;
+  const contributions = [], disposers = [], calls = [];
+  host.profileRoutes = async () => {
+    const routes = await originalRoutes();
+    if (++discoveries === 1) advanceEpoch();
+    return routes;
+  };
+  try {
+    await withBackend(async (_route, _method, params) => {
+      calls.push(params.action);
+      return { plugins: [{ key: 'workspace', status: 'enabled' }] };
+    }, async () => {
+      await plugin.register({ register: c => contributions.push(c), onDispose: fn => disposers.push(fn) });
+    });
+    assert.equal(discoveries, 2);
+    assert.deepEqual(calls, ['list']);
+    assert.deepEqual(contributions.map(c => c.area).sort(), ['routes', 'sidebar.nav']);
+  } finally {
+    host.profileRoutes = originalRoutes;
+    disposers.forEach(fn => fn());
+  }
 });
 
 test('production registration rejects refused backend activation without publishing Workspace', async () => {

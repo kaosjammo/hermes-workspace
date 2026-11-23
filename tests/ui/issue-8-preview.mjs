@@ -1,0 +1,21 @@
+/** Build and serve only this isolated synthetic issue-8 preview. */
+import { createRequire } from 'node:module';
+import { mkdir,readFile,writeFile,copyFile } from 'node:fs/promises';
+import path from 'node:path';
+import http from 'node:http';
+import { createHash } from 'node:crypto';
+const out=process.env.ISSUE8_EVIDENCE;
+if(!out)throw Error('ISSUE8_EVIDENCE is required');
+for(const key of ['HOME','HERMES_HOME','TMPDIR'])if(!process.env[key]?.startsWith(out))throw Error('Task-owned '+key+' is required');
+const require=createRequire(new URL('../../.local/toolchain/package.json',import.meta.url));
+const host=path.resolve('.local/host/.build/webapp-workspace/apps/desktop');
+const buildName=process.env.ISSUE8_PREVIEW_RUN??'browser';
+const output=path.join(out,buildName);await mkdir(output,{recursive:true});
+await require('esbuild').build({entryPoints:['tests/ui/issue-8-browser.jsx'],outfile:path.join(output,'fixture.js'),bundle:true,platform:'browser',format:'esm',jsx:'automatic',nodePaths:[path.join(host,'node_modules'),path.resolve('.local/toolchain/node_modules')],alias:{'@hermes/plugin-sdk':path.resolve('tests/ui/issue-8-native-sdk.jsx'),'@':path.join(host,'src'),react:path.dirname(require.resolve('react/package.json')),'react-dom':path.dirname(require.resolve('react-dom/package.json'))},define:{'process.env.NODE_ENV':'"development"'}});
+const assets=path.resolve('.local/host/apps/desktop/dist-webapp/assets');
+await copyFile(path.join(assets,'main-BFSOWZ0n.css'),path.join(output,'host.css'));
+const html='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Issue 8 synthetic comment review</title><link rel="stylesheet" href="/host.css"><link rel="stylesheet" href="/fixture.css"><style>html,body,#app{height:100%;margin:0}body{font-family:var(--font-sans,Arial,sans-serif);background:var(--ui-bg-editor);color:var(--ui-text-primary)}</style></head><body><div id="app"></div><script type="module" src="/fixture.js"></script></body></html>';
+await writeFile(path.join(output,'index.html'),html);
+const hashes={};for(const file of ['fixture.js','fixture.css','host.css','index.html'])hashes[file]=createHash('sha256').update(await readFile(path.join(output,file))).digest('hex');
+await writeFile(path.join(out,buildName+'-build.json'),JSON.stringify({scope:'Pinned host UI controls, production RichEditor/Comments, synthetic transport/data, parent-accepted numbering owner seam. Not full Workspace/native/provider acceptance.',hashes},null,2));
+http.createServer(async(req,res)=>{const name=({'/':'index.html','/fixture.js':'fixture.js','/fixture.css':'fixture.css','/host.css':'host.css'})[req.url];if(!name){res.writeHead(404);res.end();return;}res.setHeader('Content-Type',name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html');res.end(await readFile(path.join(output,name)));}).listen(4188,'0.0.0.0',()=>console.log('ISSUE8_SYNTHETIC_PREVIEW http://127.0.0.1:4188'));

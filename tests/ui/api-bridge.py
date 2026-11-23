@@ -1,6 +1,6 @@
 """Synthetic admitted HTTP fixture; production router, Store and SQLite.
 
-No Hermes execution/auth/native state. All owner data is under .local/frontend.
+No Hermes execution/auth/native state. All owner data is under the explicitly isolated qualification root.
 One process per call avoids sharing process-global profile state with other lanes.
 """
 import json
@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from dashboard.plugin_api import create_router
 
 owner = Path(os.environ['UI_TEST_OWNER']).resolve()
-if not owner.is_relative_to(ROOT / '.local' / 'frontend'):
+if not owner.is_relative_to(Path(os.environ['HWS_QUALIFICATION_HOME']).resolve()):
     raise RuntimeError('Fixture owner must be UI-lane local synthetic state')
 app = FastAPI()
 app.include_router(create_router(lambda: owner, authorize=lambda: None))

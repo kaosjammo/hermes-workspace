@@ -1,7 +1,6 @@
+import { Dialog, DialogContent } from "./owned-popups.jsx";
 import { useRef, useState } from "react";
 import {
-  Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,

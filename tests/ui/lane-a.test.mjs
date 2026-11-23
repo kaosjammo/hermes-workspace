@@ -510,7 +510,7 @@ try {
     if(phase==='comment-fixes'){
       const position=()=>page.locator('.ws-work').evaluate(e=>({top:e.scrollTop,left:e.scrollLeft}));
       await check('comment-fixes-explicit-passage-navigation-and-user-scroll',async()=>{
-        const bubble=page.locator('#ws-bubble-'+f.commentFix.first.id);await bubble.scrollIntoViewIfNeeded();await bubble.click();const action=page.getByRole('button',{name:'Show passage',exact:true});await action.click();const selected=await page.evaluate(()=>({text:getSelection()?.toString(),focused:document.activeElement?.getAttribute('aria-label'),top:document.querySelector('.ws-work').scrollTop}));assert.equal(selected.text,'addressed');assert.equal(selected.focused,'Page content');assert.ok(selected.top>0);await page.getByRole('textbox',{name:'Page content',exact:true}).hover();const before=await position();await page.mouse.wheel(0,350);await page.waitForFunction(n=>document.querySelector('.ws-work').scrollTop>n,before.top);const after=await position();await page.evaluate(async()=>{for(let i=0;i<6;i++)await new Promise(requestAnimationFrame);});assert.ok((await position()).top>=after.top);receipt.deliberateNavigation={selected,before,after};
+        const bubble=page.locator('#ws-bubble-'+f.commentFix.first.id);await bubble.scrollIntoViewIfNeeded();await bubble.click();const action=page.locator('#ws-discussion-'+f.commentFix.first.id).getByRole('button',{name:/^Show passage for comment \d+$/});await action.click();const selected=await page.evaluate(()=>({text:getSelection()?.toString(),focused:document.activeElement?.getAttribute('aria-label'),top:document.querySelector('.ws-work').scrollTop}));assert.equal(selected.text,'addressed');assert.equal(selected.focused,'Page content');assert.ok(selected.top>0);await page.getByRole('textbox',{name:'Page content',exact:true}).hover();const before=await position();await page.mouse.wheel(0,350);await page.waitForFunction(n=>document.querySelector('.ws-work').scrollTop>n,before.top);const after=await position();await page.evaluate(async()=>{for(let i=0;i<6;i++)await new Promise(requestAnimationFrame);});assert.ok((await position()).top>=after.top);receipt.deliberateNavigation={selected,before,after};
       });
     }
     if(phase==='review27'){
@@ -656,10 +656,10 @@ try {
           if(await bubble.getAttribute('aria-expanded')!=='true')await bubble.click();
           snapshot=await savedState();assert.equal(snapshot.comments.find(c=>c.id===added[0].id).resolved,true);
         }
-        const card=page.locator('#ws-discussion-'+added[0].id);await card.getByRole('button',{name:'Delete comment',exact:true}).click();
+        const commentActions=bubble.locator('..').locator('.ws-comment-actions');await commentActions.getByRole('button',{name:'delete comment: '+text,exact:true}).click();
         let dialog=page.getByRole('dialog',{name:'Delete comment?',exact:true});await dialog.waitFor();assert.match(await dialog.innerText(),/all its replies/);
         const unchanged=(await savedState()).revision;await dialog.getByRole('button',{name:'Cancel',exact:true}).click();assert.equal((await savedState()).revision,unchanged,'cancel deletes nothing');
-        await card.getByRole('button',{name:'Delete comment',exact:true}).click();dialog=page.getByRole('dialog',{name:'Delete comment?',exact:true});
+        await commentActions.getByRole('button',{name:'delete comment: '+text,exact:true}).click();dialog=page.getByRole('dialog',{name:'Delete comment?',exact:true});
         if(resolved)await shot('resolved-delete-'+kind);
         await dialog.getByRole('button',{name:'Delete comment',exact:true}).click();await dialog.waitFor({state:'hidden'});
         snapshot=await savedState();assert.equal(snapshot.comments.some(c=>c.id===added[0].id),false);assert.equal(snapshot.items.find(i=>i.id===itemId).content,original);
@@ -681,8 +681,8 @@ try {
       await dialog.getByRole('button',{name:'Restore pre-run version',exact:true}).click();await dialog.waitFor({state:'hidden'});assert.match(await editor.innerText(),/Original passage/);assert.match(await editor.innerText(),/Outside content/);
       await open(f.section.item.title);await editor.focus();await editor.press('Control+End');await page.keyboard.type(' Later manual note.');await page.getByText('Content saved',{exact:true}).waitFor();
       const sectionBubble=page.locator('#ws-bubble-'+f.section.comment.id);if(await sectionBubble.getAttribute('aria-expanded')!=='true')await sectionBubble.click();
-      await page.locator('#ws-discussion-'+f.section.comment.id).getByRole('button',{name:'Revert section',exact:true}).click();
-      dialog=page.getByRole('dialog',{name:'Revert section after manual edits?',exact:true});await dialog.waitFor();assert.match(await dialog.innerText(),/unrelated change stays intact/);await shot('section-later-edit-confirm');
+      await sectionBubble.locator('..').getByRole('button',{name:'Revert changes: '+f.section.comment.text,exact:true}).click();
+      dialog=page.getByRole('dialog',{name:'Revert section after manual edits?',exact:true});await dialog.waitFor();assert.match(await dialog.innerText(),/every unrelated change and human reply stays intact/);await shot('section-later-edit-confirm');
       await dialog.getByRole('button',{name:'Revert section',exact:true}).click();await dialog.waitFor({state:'hidden'});
       const final=(await savedState()).items.find(i=>i.id===f.section.item.id);assert.match(final.content,/Original passage/);assert.match(final.content,/Outside content.*Later manual note/);assert.doesNotMatch(final.content,/Agent passage/);await shot('section-restored');
       receipt.recovery={positiveAttachmentUploadAndByteIdenticalDownload:true,preRunRestoreThroughPageActions:true,sectionOnlyRevertAfterExplicitLaterEditConfirmation:true,laterManualOutsideEditPreserved:true,scope:'Actual browser UI -> production HTTP/API/Store under synthetic owner admission; seeded saved runs are synthetic data, not native/provider execution.'};

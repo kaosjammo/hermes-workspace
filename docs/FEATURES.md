@@ -1,3 +1,5 @@
+> **Historical initial-submission document.** For this production-derived replacement, use [current release status](RELEASE-STATUS.md), the [current README](../README.md) and [production feature audit](PRODUCTION-FEATURES.md). Old source identities, backlog labels and check totals below are preserved history, not qualification of the new pin.
+
 # Workspace feature guide
 
 This guide groups the maintained source inventory by what a user is trying to do. It covers implemented surfaces, qualification limits and unfinished work without treating them as one completed release. Consult [qualification](QUALIFICATION.md) before making installation or native-runtime claims.

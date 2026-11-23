@@ -9,7 +9,7 @@ await esbuild.build({
   bundle: true,
   platform: "node",
   format: "esm",
-  outfile: ".local/frontend/ui-runtime.mjs",
+  outfile: path.join(process.env.HWS_UI_RUNTIME_ROOT ?? ".local/frontend", "ui-runtime.mjs"),
   alias: {
     "@hermes/plugin-sdk": path.resolve("tests/ui/sdk-fixture.jsx"),
     react: path.dirname(require.resolve("react/package.json")),

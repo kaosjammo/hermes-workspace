@@ -1,5 +1,6 @@
 """Production Store UI02 paths with explicitly simulated agent writes."""
 import copy
+from runtime_paths import fixture_root, node_command
 from pathlib import Path
 import tempfile
 import unittest
@@ -8,7 +9,7 @@ from workspace_plugin.store import Store, StoreError, _plain
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURES = ROOT / '.local' / 'section-store-tests'
+FIXTURES = fixture_root('section-store-tests')
 FIXTURES.mkdir(parents=True,exist_ok=True)
 
 
@@ -62,16 +63,26 @@ class SectionStore(unittest.TestCase):
         self.assertEqual(self.saved()['content'],self.after.replace('trees sheltered','trees shaded'))
         self.assertEqual(self.saved()['title'],self.page['title'])
         after = self.store.snapshot()
-        for category in ('attachments','comments','runs'):
-            if category=='comments':
-                # Derived section presentation changes; stored discussion bytes do not.
-                old = [{k:v for k,v in c.items() if k not in ('section_change','anchor_status')} for c in before[category]]
-                new = [{k:v for k,v in c.items() if k not in ('section_change','anchor_status')} for c in after[category]]
-                self.assertEqual(old,new)
-            else:
-                self.assertEqual(before[category],after[category])
+        for category in ('attachments','runs'):
+            self.assertEqual(before[category],after[category])
+        original_a = next(c for c in before['comments'] if c['id']==self.a['id'])
+        expected_removed = original_a['replies']
+        self.assertEqual(len(expected_removed),1)
+        self.assertEqual(expected_removed[0]['author'],'agent')
+        self.assertEqual(result['removed_reply_ids'],[r['id'] for r in expected_removed])
+        self.assertEqual([c['id'] for c in after['comments']],[c['id'] for c in before['comments']])
+        for old,new in zip(before['comments'],after['comments']):
+            # Only the addressed outcome is removed; every stored human field and
+            # the other section's complete reply objects remain unchanged.
+            self.assertEqual({k:v for k,v in old.items() if k not in ('section_change','anchor_status','replies')},
+                             {k:v for k,v in new.items() if k not in ('section_change','anchor_status','replies')})
+            self.assertEqual(new['replies'],[] if old['id']==self.a['id'] else old['replies'])
         checkpoint = next(v for v in after['versions'] if v['id']==result['recovery_version_id'])
         self.assertEqual(checkpoint['snapshot']['content'],self.after)
+        self.assertEqual(checkpoint['section_revert_receipt']['removed_reply_ids'],result['removed_reply_ids'])
+        raw_checkpoint = next(v for v in self.store.backup_snapshot()['versions'] if v['id']==checkpoint['id'])
+        self.assertEqual(raw_checkpoint['_removed_responses'],[{'comment_id':self.a['id'],'reply':r} for r in expected_removed])
+        self.assertEqual(Store(self.home).snapshot()['comments'],after['comments'])
         self.assertEqual(self.change()['status'],'reverted')
         self.assertEqual(self.change(self.b)['status'],'available')
         with self.assertRaises(StoreError):

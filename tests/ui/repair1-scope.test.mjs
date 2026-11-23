@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test, after, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -6,6 +7,7 @@ const require = createRequire(
 );
 const { JSDOM } = require("jsdom");
 const dom = new JSDOM('<div id="app"></div>', {
+  pretendToBeVisual: true,
   url: "https://workspace.test",
 });
 for (const key of [
@@ -27,7 +29,7 @@ const {
   createRoot,
   act,
   switchProfile,
-} = await import("../../.local/frontend/ui-runtime.mjs");
+} = await import(frontendRuntime('ui-runtime.mjs'));
 const root = createRoot(document.querySelector("#app"));
 const tick = () => act(() => new Promise((r) => setTimeout(r, 0)));
 const button = (text) =>
@@ -148,6 +150,12 @@ test("inert comment target refs require fresh unchecked per-run approval; defaul
           submission_id: lastRun.id,
         };
       }
+      if (path === "/workflow/submitted") {
+        assert.equal(opts.body.run_id,lastRun.id);
+        assert.equal(typeof opts.body.admission_id,'string');
+        assert.ok(opts.body.admission_id.length>0);
+        return {run:structuredClone(lastRun)};
+      }
       if (path === "/workflow/consume") {
         assert.equal(opts.method, "POST");
         assert.deepEqual(opts.body, {
@@ -176,7 +184,7 @@ test("inert comment target refs require fresh unchecked per-run approval; defaul
   );
   assert.ok(target);
   assert.equal(target.checked, false);
-  await click("Address selected scope");
+  await click("Address current page");
   assert.deepEqual(preparations[0].explicit_item_ids, []);
   assert.deepEqual(consumptions.map((body) => body.run_id), ["run1"]);
   assert.equal(Boolean(document.querySelector('[role="dialog"]')), false);

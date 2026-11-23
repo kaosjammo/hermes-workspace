@@ -50,13 +50,35 @@ def _tokens(document, plain):
     return result
 
 
-def _diff(before, after, plain):
+def _diff(before, after, plain, *, precise=False):
     left, right = _tokens(before, plain), _tokens(after, plain)
     def point(tokens, index, length, text_length):
         return (tokens[index][1], tokens[index][3]) if index < len(tokens) else (length, text_length)
     old_length, new_length = len(plain(before)), len(plain(after))
     result = []
-    for kind, i, end_i, j, end_j in SequenceMatcher(None, [t[0] for t in left], [t[0] for t in right], autojunk=True).get_opcodes():
+    old_tokens, new_tokens = [t[0] for t in left], [t[0] for t in right]
+    if precise:
+        # Popular words and paragraph tags are poor diff seeds in long prose.
+        # Trim identical surroundings before disabling that heuristic, and
+        # bound the remaining comparison work for snapshot-time recovery.
+        first = 0
+        while first < min(len(left), len(right)) and old_tokens[first] == new_tokens[first]:
+            first += 1
+        old_end, new_end = len(left), len(right)
+        while old_end > first and new_end > first and old_tokens[old_end-1] == new_tokens[new_end-1]:
+            old_end -= 1
+            new_end -= 1
+        if (old_end-first) * (new_end-first) > 4_000_000:
+            raise SectionUnavailable('This replacement is too complex for exact passage recovery.')
+        operations = [('equal', 0, first, 0, first)] if first else []
+        operations += [(kind, i+first, end_i+first, j+first, end_j+first)
+                       for kind, i, end_i, j, end_j in SequenceMatcher(
+                           None, old_tokens[first:old_end], new_tokens[first:new_end], autojunk=False).get_opcodes()]
+        if old_end < len(left):
+            operations.append(('equal', old_end, len(left), new_end, len(right)))
+    else:
+        operations = SequenceMatcher(None, old_tokens, new_tokens, autojunk=True).get_opcodes()
+    for kind, i, end_i, j, end_j in operations:
         start, text_start = point(left, i, len(before), old_length)
         end, text_end = point(left, end_i, len(before), old_length)
         new_start, _ = point(right, j, len(after), new_length)
@@ -70,8 +92,15 @@ def _diff(before, after, plain):
     return left, result
 
 
-def _raw_position(tokens, offset, end=False):
+def _raw_position(tokens, offset, end=False, exact_edges=False):
     text = [token for token in tokens if token[4] > token[3]]
+    if exact_edges:
+        # At adjacent text-node boundaries a selection starts at the NEXT
+        # visible token and ends at the PREVIOUS one. Historical captures used
+        # the opposite bias and could include a neighbouring paragraph's tags.
+        exact = [t for t in text if t[4 if end else 3] == offset]
+        if exact:
+            return exact[-1][2] if end else exact[0][1]
     ordered = reversed(text) if end else text
     for raw, start, finish, a, b in ordered:
         if a <= offset <= b:
@@ -112,7 +141,7 @@ def _anchor(document, start, end, plain):
     return value
 
 
-def capture_sections(before, after, anchors, plain):
+def capture_sections(before, after, anchors, plain, *, exact_boundaries=False, precise=False):
     """Return per-comment actual-change regions or explicit unavailable reasons.
 
     Unchanged anchors are omitted. Overlap and changes crossing a selection are
@@ -120,7 +149,7 @@ def capture_sections(before, after, anchors, plain):
     """
     if before == after:
         return {}
-    tokens, operations = _diff(before, after, plain)
+    tokens, operations = _diff(before, after, plain, precise=precise)
     text, selections, output = plain(before), {}, {}
     for ident, anchor in anchors.items():
         try:
@@ -128,18 +157,21 @@ def capture_sections(before, after, anchors, plain):
         except SectionUnavailable as error:
             output[ident] = {'status': 'unavailable', 'reason': str(error)}
     for ident, (start, end) in selections.items():
-        changes = [op for op in operations if op[0] != 'equal' and
-                   (op[5] < end and op[6] > start or op[5] == op[6] and start <= op[5] <= end)]
-        if not changes:
-            continue
         try:
+            raw_selection_start = _raw_position(tokens,start,exact_edges=exact_boundaries)
+            raw_selection_end = _raw_position(tokens,end,True,exact_edges=exact_boundaries)
+            changes = [op for op in operations if op[0] != 'equal' and
+                       (op[5] < end and op[6] > start or op[5] == op[6] and start <= op[5] <= end) and
+                       (not exact_boundaries or op[1] != op[2] or raw_selection_start <= op[1] <= raw_selection_end)]
+            if not changes:
+                continue
             if any(max(start, other_start) < min(end, other_end)
                    for other_id, (other_start, other_end) in selections.items() if other_id != ident):
                 raise SectionUnavailable('Overlapping highlighted sections cannot be reverted independently.')
             if any(op[5] < start or op[6] > end for op in changes):
                 raise SectionUnavailable('The agent change crosses this highlighted section; review the saved version.')
-            raw_start = min(_raw_position(tokens, start), *(op[1] for op in changes))
-            raw_end = max(_raw_position(tokens, end, True), *(op[2] for op in changes))
+            raw_start = min(raw_selection_start, *(op[1] for op in changes))
+            raw_end = max(raw_selection_end, *(op[2] for op in changes))
             post_start = _mapped_position(operations, raw_start)
             post_end = _mapped_position(operations, raw_end, True)
             old, new = before[raw_start:raw_end], after[post_start:post_end]
@@ -155,11 +187,63 @@ def capture_sections(before, after, anchors, plain):
 
 
 
-def addressed_anchor(change, plan, current_document, plain):
+def paragraph_replacement_anchor(before, after, current, anchors, ident, plain, sanitize):
+    """Recover display-only links for overlapping or merged paragraphs.
+
+    Revert receipts and response-cleanup authority remain untouched. Adjacent
+    selections may share a replacement only when their paragraphs actually merge.
+    """
+    regions = [(m.start(1), m.end(1), len(plain(before[:m.start(1)])), len(plain(before[:m.end(1)])))
+               for m in re.finditer(r'<p\b[^>]*>(.*?)</p>', before, re.S | re.I)]
+    selected, covered = {}, set()
+    for cid, anchor in anchors.items():
+        try:
+            start, end = locate_anchor(plain(before), anchor)
+        except SectionUnavailable:
+            continue
+        indices = {i for i, (_, _, a, b) in enumerate(regions) if start < b and end > a}
+        if indices:
+            selected[cid] = indices
+            covered.update(indices)
+    if ident not in selected:
+        raise SectionUnavailable('No exact original paragraph remains for this discussion.')
+    own = selected[ident]
+    left, right = min(own), max(own)
+    while left-1 in covered:
+        left -= 1
+    while right+1 in covered:
+        right += 1
+    choices = [(min(own), max(own))]
+    if (left, right) != choices[0]:
+        choices.append((left, right))
+    for first, last in choices:
+        try:
+            anchor = _anchor(before, regions[first][0], regions[last][1], plain)
+            change = capture_sections(before, after, {ident: anchor}, plain,
+                                      exact_boundaries=True, precise=True).get(ident)
+            if not change or change['status'] != 'available':
+                continue
+            if (first, last) != choices[0]:
+                count = sum(m.start(1) < change['after_end'] and m.end(1) > change['after_start']
+                            for m in re.finditer(r'<p\b[^>]*>(.*?)</p>', after, re.S | re.I))
+                if count >= last-first+1:
+                    continue  # Separate edited paragraphs keep separate links.
+                _, edits = _diff(change['before'], change['after'], plain, precise=True)
+                added_text = any(kind != 'equal' and plain(change['after'][a:b]).strip()
+                                 for kind, _, _, a, b, _, _ in edits)
+                if not added_text and anchors[ident]['quote'] not in plain(change['after']):
+                    continue  # Deleting one paragraph does not link it to its neighbour.
+            return plan_revert(change, after, current, plain, sanitize, precise=True)['anchor']
+        except SectionUnavailable:
+            continue
+    raise SectionUnavailable('The replacement paragraph cannot be linked unambiguously.')
+
+
+def addressed_anchors(change, plan, current_document, plain):
     """Paint actual changed words, independently of the saved revert boundary.
 
-    Stored section provenance remains unchanged. Disjoint changed passages or
-    unmappable later edits have no guessed union highlight.
+    Stored section provenance remains unchanged. Disjoint replacements retain
+    separate exact ranges, without painting the unchanged words between them.
     """
     before, after = change['before'], change['after']
     _, operations = _diff(before, after, plain)
@@ -199,29 +283,58 @@ def addressed_anchor(change, plan, current_document, plain):
                 spans[-1] = (spans[-1][0], max(b,spans[-1][1]))
             else:
                 spans.append((a,b))
-    if len(spans) != 1 or spans[0][0] == spans[0][1]:
-        raise SectionUnavailable('This feedback changed separate or removed passages; an exact highlight is unavailable.')
+    if not spans:
+        raise SectionUnavailable('This feedback removed the passage; no replacement text remains to highlight.')
     tokens = _tokens(after,plain)
-    a, b = _raw_position(tokens,spans[0][0]), _raw_position(tokens,spans[0][1],True)
     _, later = _diff(after,plan['current'],plain)
-    start = plan['current_start'] + _mapped_position(later,a)
-    end = plan['current_start'] + _mapped_position(later,b,True)
-    return _anchor(current_document,start,end,plain)
+    anchors = []
+    for left,right in spans:
+        a, b = _raw_position(tokens,left), _raw_position(tokens,right,True)
+        start = plan['current_start'] + _mapped_position(later,a)
+        end = plan['current_start'] + _mapped_position(later,b,True)
+        anchors.append(_anchor(current_document,start,end,plain))
+    return anchors
 
 
-def plan_revert(change, post_document, current_document, plain, sanitize):
+def addressed_anchor(change, plan, current_document, plain):
+    """Single-range consumers must never widen disjoint changes into a union."""
+    anchors = addressed_anchors(change,plan,current_document,plain)
+    if len(anchors) != 1:
+        raise SectionUnavailable('This feedback changed separate passages; multiple exact highlights are required.')
+    return anchors[0]
+
+
+def map_anchor(document, current_document, anchor, plain, sanitize):
+    """Map the exact selection through edits without stale prefix guessing."""
+    start,end = locate_anchor(plain(document),anchor)
+    tokens = _tokens(document,plain)
+    a,b = _raw_position(tokens,start),_raw_position(tokens,end,True)
+    region = document[a:b]
+    change = {'status':'available','before':region,'after':region,'after_start':a,'after_end':b}
+    return plan_revert(change,document,current_document,plain,sanitize)['anchor']
+
+
+def plan_revert(change, post_document, current_document, plain, sanitize, *, precise=False):
     """Map the same section through later edits; retain every outside byte."""
     if change.get('status') != 'available':
         raise SectionUnavailable(change.get('reason', 'This section is unavailable.'))
     start, end = change['after_start'], change['after_end']
     if post_document[start:end] != change['after']:
         raise SectionUnavailable('Saved section provenance no longer matches its agent version.')
-    _, operations = _diff(post_document, current_document, plain)
-    for kind, a, b, _, _, _, _ in operations:
+    tokens, operations = _diff(post_document, current_document, plain, precise=precise)
+    replaced_edge = False
+    for kind, a, b, c, d, _, _ in operations:
         if kind == 'equal':
             continue
         if a < start < b or a < end < b or a == b and a in (start, end):
             raise SectionUnavailable('A later edit changed the section boundary; review the saved version.')
+        replaced_edge |= kind in ('replace','delete') and (a <= start < b or a < end <= b)
+        if (a <= start <= b or a <= end <= b) and '<' in post_document[a:b] + current_document[c:d]:
+            raise SectionUnavailable('A later structural edit removed the section boundary; review the saved version.')
+    if replaced_edge and not any(start <= a < b <= end and re.fullmatch(r'\w+',raw) and
+                                 any(kind == 'equal' and left <= a and b <= right for kind,left,right,*_ in operations)
+                                 for raw,a,b,*_ in tokens):
+        raise SectionUnavailable('The original section text is missing or ambiguous after replacement; review the saved version.')
     current_start = _mapped_position(operations, start)
     current_end = _mapped_position(operations, end, True)
     candidate = current_document[:current_start] + change['before'] + current_document[current_end:]

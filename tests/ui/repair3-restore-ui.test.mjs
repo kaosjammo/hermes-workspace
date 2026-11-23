@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -27,7 +28,7 @@ const {
   createElement: h,
   createRoot,
   act,
-} = await import("../../.local/frontend/ui-runtime.mjs");
+} = await import(frontendRuntime('ui-runtime.mjs'));
 const root = createRoot(document.querySelector("#app"));
 const tick = async () => act(() => new Promise((r) => setTimeout(r, 15)));
 const button = (t) =>

@@ -1,3 +1,4 @@
+import {frontendRuntime} from './runtime-path.mjs';
 import { test, after, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -13,7 +14,7 @@ globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.win
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const { Comments, ThreadPicker, reviewScope, ScopeReviewDialog, createWorkflowAdapter, host,
   switchProfile, advanceEpoch, createElement: h, createRoot, act, useState } = await import(
-    process.env.LANE_B_RUNTIME ?? new URL('../../.local/frontend/ui-runtime.mjs', import.meta.url));
+    process.env.LANE_B_RUNTIME ?? frontendRuntime());
 const root = createRoot(document.querySelector("#app"));
 const tick = () => act(() => new Promise(r => setTimeout(r, 0)));
 const buttons = (name, scope = document) => [...scope.querySelectorAll("button")].filter(b => (b.getAttribute("aria-label") ?? b.textContent.trim()) === name);
@@ -114,15 +115,15 @@ test("delete unresolved/resolved anchored/whole page/database/record only after 
     for (const anchored of [false, true]) {
       await render({ kind, comments: [comment("c1", { resolved, anchor: anchored ? { quote: "Synthetic", start: 0, end: 9 } : null, replies: [{ id: "reply", author: "agent", text: "Synthetic reply" }] }), comment("c2")],
         retained: { replies: { c1: "Remove this draft only", c2: "Keep other draft" } } });
-      await click("Delete comment"); let dialog = document.querySelector('[role="dialog"]');
+      await click("delete comment: Feedback c1"); let dialog = document.querySelector('[role="dialog"]');
       assert.match(dialog.textContent, /all its replies/); await click("Cancel", dialog); assert.equal(current.calls.length, 0);
-      await click("Delete comment"); dialog = document.querySelector('[role="dialog"]');
+      await click("delete comment: Feedback c1"); dialog = document.querySelector('[role="dialog"]');
       await click("Delete comment", dialog);
       assert.deepEqual(current.calls, [{ op: "delete_comment", payload: { id: "c1" } }]);
       assert.deepEqual(current.state.comments.map(c => c.id), ["c2"]);
       assert.equal(current.retained.replies.c1, undefined); assert.equal(current.retained.replies.c2, "Keep other draft");
       assert.notEqual(current.active, "c1"); assert.notEqual(current.hovered, "c1");
-      assert.equal(document.querySelector('[aria-label="1 unresolved comments"]').textContent, "1");
+      assert.equal(document.querySelector('[aria-label="1 open comments"]').textContent, "1");
       await act(async () => root.render(null));
     }
   }
@@ -130,7 +131,7 @@ test("delete unresolved/resolved anchored/whole page/database/record only after 
 
 test("delete refusal keeps saved discussion, replies and retained reply; locked blocks confirmation", async () => {
   await render({ fail: true, comments: [comment("c1")], retained: { replies: { c1: "Retry draft" } } });
-  await click("Delete comment"); await click("Delete comment", document.querySelector('[role="dialog"]'));
+  await click("delete comment: Feedback c1"); await click("Delete comment", document.querySelector('[role="dialog"]'));
   assert.ok(document.querySelector('[role="dialog"]')); assert.match(document.querySelector('[role="alert"]').textContent, /Synthetic refusal/);
   assert.equal(current.state.comments.length, 1); assert.equal(current.retained.replies.c1, "Retry draft");
   await act(async () => root.render(h(Harness, { locked: true, fail: true, comments: [comment("c1")], retained: current.retained })));
@@ -152,7 +153,7 @@ test("picker labels bounded coverage; keyboard chooses exact duplicate-title row
   const rows = [{ id: "durable-a", title: "Same" }, { id: "durable-b", title: "Same" }, { id: "busy", title: "Busy", running: true }];
   const bound = []; const workflow = { listThreads: async () => rows, bindThread: async (...args) => bound.push(args) };
   await act(async () => root.render(h(ThreadPicker, { workflow, itemId: "p", onBound: () => {}, onClose: () => {}, locked: false }))); await tick();
-  assert.match(document.body.textContent, /older history has not been searched/i);
+  assert.match(document.body.textContent, /older history (?:is not|has not been) searched/i);
   const search = document.querySelector('input[aria-label="Search recent native threads"]');
   await type(search, "Same"); await key(search, { key: "ArrowDown" }); await key(search);
   assert.deepEqual(bound, [["p", "durable-b", rows[1]]]);
@@ -222,7 +223,7 @@ test("confirmed review is issued before native creation and consumed without an 
     if(path==='/workflow/review-scope') return {review_id:'one-use-review',scope_id:saved.scope_id,
       revision:saved.revision,item_id:'p',selected_item_ids:['q']};
     if(path==='/workflow/prepare') return {run,prompt:'Synthetic feedback',submission_id:run.id};
-    if(path==='/workflow/consume'||path==='/workflow/status') return {run};
+    if(path==='/workflow/submitted'||path==='/workflow/consume'||path==='/workflow/status') return {run};
     throw new Error(path);
   }});
   try {
@@ -236,14 +237,20 @@ test("confirmed review is issued before native creation and consumed without an 
     assert.deepEqual(events[prepare].body.explicit_item_ids,['q']);
     assert.equal(events.filter(x=>x.path==='/workflow/review-scope').length,1);
     assert.equal(events.some(x=>x.body?.reviewed_item_ids),false);
+    const submitted=events.find(x=>x.path==='/workflow/submitted');
+    assert.equal(submitted.body.run_id,run.id);
+    assert.equal(typeof submitted.body.admission_id,'string');
+    assert.ok(submitted.body.admission_id.length>0);
+    assert.ok(events.findIndex(x=>x.path==='/workflow/submitted')>events.findIndex(x=>x.native==='prompt.submit'));
   } finally {adapter.dispose();host.requestProfile=original;}
 });
 
 test("stale or mismatched review ends before native effects; prepare failure never renews consent", async () => {
   await switchProfile('review-stale');
   const original=host.requestProfile;
-  let native=0, issued=0, prepares=0, badResponse=false;
-  host.requestProfile=async(route,method,params)=>{native++;return original(route,method,params);};
+  const native=[];
+  let issued=0, prepares=0, badResponse=false;
+  host.requestProfile=async(route,method,params)=>{native.push(method);return original(route,method,params);};
   const saved={scope_id:'review-scope',revision:7,items:[item('p'),item('q')],comments:[comment('c1')]};
   const adapter=createWorkflowAdapter({rest:async(path,opts)=>{
     if(path==='/state')return structuredClone(saved);
@@ -254,13 +261,14 @@ test("stale or mismatched review ends before native effects; prepare failure nev
   }});
   try {
     await assert.rejects(adapter.addressComments('p',['q'],{scope_id:saved.scope_id,revision:6}),/review.*again/i);
-    assert.equal(issued,0);assert.equal(native,0);
+    assert.equal(issued,0);assert.deepEqual(native,[]);
     badResponse=true;
     await assert.rejects(adapter.addressComments('p',['q'],{scope_id:saved.scope_id,revision:7}),/verify.*review/i);
-    assert.equal(issued,1);assert.equal(native,0);
+    assert.equal(issued,1);assert.deepEqual(native,[]);
     badResponse=false;
     await assert.rejects(adapter.addressComments('p',['q'],{scope_id:saved.scope_id,revision:7}),/expired/);
-    assert.equal(issued,2);assert.equal(prepares,1);assert.equal(native,1);
+    assert.equal(issued,2);assert.equal(prepares,1);
+    assert.deepEqual(native,['session.create','profiles.list']);
   } finally {adapter.dispose();host.requestProfile=original;}
 });
 
